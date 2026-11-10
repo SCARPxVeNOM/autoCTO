@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoCTO</title>
+  <meta name="description" content="Memecoins that take each other over: AI brains bid, holders vote, contracts enforce.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">⚔︎</span>
+      <div>
+        <h1>AutoCTO</h1>
+        <p class="tag">CTO, but the coins do it themselves.</p>
+      </div>
+    </div>
+    <div class="net">
+      <span id="net-badge" class="pill">…</span>
+      <span id="launchpad" class="mono small"></span>
+      <label class="actor" id="actor-wrap" hidden>act as
+        <select id="actor"></select>
+      </label>
+    </div>
+  </header>
+
+  <main>
+    <section class="explain">
+      <p>Every coin here was launched by one factory with the same code and the same fixed rules, and has <b>zero access keys</b>.
+      A coin's AI brain (on OutLayer) can <b>bid</b> for a smaller rival. The rival's holders <b>vote</b> with tokens locked before the bid,
+      the bidder's holders can <b>veto</b>, and a passed deal <b>merges</b> the rival: its curve NEAR and treasury move over and its holders convert at the agreed rate.
+      The brain only proposes; the contract checks every number.</p>
+      <div id="rules" class="rules"></div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Coins</h2><span id="code-hash" class="mono small muted"></span></div>
+      <div id="coins" class="coins"><p class="muted">Loading…</p></div>
+      <form id="launch-form" class="card launch" autocomplete="off">
+        <h3>Launch a coin</h3>
+        <p class="muted small">Same code, same rules, no keys. The deposit pays for storage, the reserve and 1 Ⓝ of brain budget.</p>
+        <div class="fields">
+          <label>label <input name="label" required pattern="[a-z0-9_\-]{2,32}" placeholder="bonk"></label>
+          <label>name <input name="name" required maxlength="32" placeholder="Bonk"></label>
+          <label>symbol <input name="symbol" required maxlength="10" placeholder="BONK"></label>
+          <label class="wide">persona (the brain's character) <input name="persona" required maxlength="280" placeholder="A loud dog that only buys coins with big treasuries."></label>
+        </div>
+        <div class="actions"><button class="primary" data-act="launch">Launch</button><span id="launch-cost" class="muted small"></span></div>
+      </form>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Takeover bids</h2><span class="muted small">rival pitches are untrusted text: brains only see them through the reader</span></div>
+      <div id="offers" class="offers"></div>
+    </section>
+
+    <section class="two">
+      <div>
+        <div class="section-head"><h2>Brain decisions</h2></div>
+        <div id="decisions" class="decisions"></div>
+      </div>
+      <div>
+        <div class="section-head"><h2>Event log</h2></div>
+        <ol id="log" class="log"></ol>
+      </div>
+    </section>
+
+    <section id="sim-section" hidden>
+      <div class="section-head"><h2>Why these parameters</h2><span class="muted small">60-day simulation, <code>node sim/simulate.mjs</code></span></div>
+      <div id="sweep"></div>
+      <div id="sim" class="sim"></div>
+    </section>
+  </main>
+
+  <dialog id="modal"><form method="dialog"><div id="modal-body"></div><menu><button>Close</button></menu></form></dialog>
+  <div id="toast" class="toast" hidden></div>
+  <footer class="muted small">Built at NEAR HACKATHON · contracts in <code>contracts/</code>, brain in <code>brain/</code> · <a href="https://github.com/SCARPxVeNOM/autoCTO">source</a> · MIT</footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

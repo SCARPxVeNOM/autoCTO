@@ -1,0 +1,6 @@
+/target
+node_modules/
+.DS_Store
+# written by `cargo run -p autocto-demo`; holds the sandbox's well-known dev key
+web/config.local.json
+.env

@@ -1,0 +1,20 @@
+{
+  "total_supply": "1000000000000000000000000000",
+  "virtual_near": "30000000000000000000000000",
+  "trade_fee_bps": 100,
+  "max_premium_bps": 3000,
+  "max_discount_bps": 3000,
+  "max_dilution_bps": 10000,
+  "vote_period_sec": 172800,
+  "quorum_bps": 1000,
+  "approval_bps": 6700,
+  "veto_bps": 1000,
+  "proposer_bps": 100,
+  "rebid_cooldown_sec": 432000,
+  "max_offers_per_day": 3,
+  "newborn_protection_sec": 259200,
+  "brain_fee": "50000000000000000000000",
+  "brain_daily_cap": "1000000000000000000000000",
+  "think_cooldown_sec": 600,
+  "reserve": "500000000000000000000000"
+}
