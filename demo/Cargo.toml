@@ -1,5 +1,6 @@
 [package]
 name = "autocto-demo"
+default-run = "autocto-demo"
 description = "Runs the whole AutoCTO world in a local NEAR sandbox: launchpad, coins, holders and a local OutLayer worker"
 version.workspace = true
 edition.workspace = true
@@ -17,3 +18,5 @@ near-api = "0.8"
 tokio = { version = "1.12.0", features = ["full"] }
 serde_json = "1"
 anyhow = "1"
+borsh = "1"
+base64 = "0.22"

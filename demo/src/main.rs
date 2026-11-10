@@ -8,7 +8,10 @@
 //! otherwise they use the deterministic rules in `brain/`.
 
 use anyhow::Result;
+use autocto_demo::gasless::{self, Relayer};
 use autocto_demo::{ONE_NEAR, World, demo_params, u128_of};
+
+const RELAYER_PORT: u16 = 3040;
 use near_api::AccountId;
 use serde_json::{Value, json};
 
@@ -76,8 +79,12 @@ async fn main() -> Result<()> {
     let carol = w.new_account("carol", 200).await?;
     let erin = w.new_account("erin", 200).await?;
     let mallory = w.new_account("mallory", 200).await?;
+    // zed will hold tokens but not a single NEAR: a relayer pays zed's gas.
+    let zed = w.new_account("zed", 0).await?;
     let c = w.caller.clone();
-    write_web_config(&w, &[&alice, &bob, &carol, &erin, &mallory, &dev])?;
+    let relayer = std::sync::Arc::new(Relayer { caller: c.clone(), account: dev.clone(), launchpad: w.launchpad.clone() });
+    write_web_config(&w, &[&alice, &bob, &carol, &erin, &mallory, &zed, &dev], RELAYER_PORT)?;
+    tokio::spawn(gasless::serve_http(relayer.clone(), RELAYER_PORT));
 
     say("Launching three coins from the same factory (same code, same rules, zero keys)");
     let pepe = w.launch(&dev, "pepe", "Pepe", "PEPE", "A smug frog. Wants to own every meme on NEAR. Pays fair, never overpays.", 2 * ONE_NEAR).await?;
@@ -93,11 +100,20 @@ async fn main() -> Result<()> {
     c.ok(&carol, &doge, "buy", json!({}), 3 * ONE_NEAR).await?;
     c.ok(&mallory, &wojak, "buy", json!({}), 22 * ONE_NEAR).await?;
     c.ok(&erin, &wojak, "buy", json!({}), 6 * ONE_NEAR).await?;
+    let gift = w.balance(&doge, &carol).await? / 4;
+    c.ok(&carol, &doge, "storage_deposit", json!({ "account_id": zed, "registration_only": true }), ONE_NEAR / 100).await?;
+    c.ok(&carol, &doge, "ft_transfer", json!({ "receiver_id": zed, "amount": gift.to_string() }), 1).await?;
+    let signed = gasless::sign(&c, &zed, &doge, "lock", json!({ "amount": gift.to_string() }), 0).await?;
+    relayer.relay(signed).await?.assert_success();
+    println!("  zed (0 NEAR, DOGE from carol) locked {} DOGE: zed signed, the relayer paid the gas", tokens(&json!(gift.to_string())));
     for (who, coin, share) in [(&alice, &pepe, 5), (&bob, &doge, 1), (&carol, &doge, 1), (&mallory, &wojak, 1)] {
         let bal = w.balance(coin, who).await?;
         c.ok(who, coin, "lock", json!({ "amount": (bal / share).to_string() }), 0).await?;
         println!("  {who} locked {} {}", tokens(&json!((bal / share).to_string())), coin.as_str().split('.').next().unwrap().to_uppercase());
     }
+    // Some free WOJAK for zed too, to try gasless actions on the page later.
+    c.ok(&erin, &wojak, "storage_deposit", json!({ "account_id": zed, "registration_only": true }), ONE_NEAR / 100).await?;
+    c.ok(&erin, &wojak, "ft_transfer", json!({ "receiver_id": zed, "amount": (w.balance(&wojak, &erin).await? / 10).to_string() }), 1).await?;
     for coin in [&pepe, &doge, &wojak] {
         println!("{}", coin_line(&w, coin).await?);
     }
@@ -149,6 +165,11 @@ async fn main() -> Result<()> {
         println!("  {who} votes YES with {} tokens", tokens(&weight));
     }
 
+    let signed = gasless::sign(&c, &zed, &target, "vote", json!({ "offer": key, "support": true }), 0).await?;
+    let r = relayer.relay(signed).await?;
+    anyhow::ensure!(r.is_success() && r.receipt_failures().is_empty(), "zed's relayed vote failed: {:?}", r.receipt_failures());
+    println!("  zed votes YES through the relayer with {} tokens; zed's balance is still {} NEAR", tokens(&json!(gift.to_string())), c.near_balance(&zed).await?);
+
     say("The vote period ends; anyone can finalize");
     w.wait_secs(61).await?;
     let passed = c.ok(&dev, &target, "finalize", json!({ "offer": key }), 0).await?;
@@ -162,6 +183,36 @@ async fn main() -> Result<()> {
         let minted = c.ok(who, &target, "convert", json!({}), 1).await?;
         println!("  {who} converted → {} PEPE", tokens(&minted));
     }
+
+    say("An outside token: WOJAK's holders nominate two old memecoins that know nothing about AutoCTO");
+    let supply = 1_000_000_000 * autocto_demo::ONE_TOKEN;
+    let rugcat = w.deploy_token("rugcat", &erin, supply, false).await?;
+    let oldcat = w.deploy_token("oldcat", &erin, supply, true).await?;
+    c.ok(&mallory, &wojak, "nominate", json!({ "token": rugcat }), 0).await?;
+    w.wait_secs(6).await?;
+    let (out, d) = w.think(&dev, &wojak, ONE_NEAR / 10).await?;
+    show_brain("WOJAK", &out, &d);
+    println!("  (rugcat's developer still holds a full-access key, so the brain refuses to bid)");
+
+    say("WOJAK's brain opens an all-or-nothing tender for the keyless one");
+    c.ok(&mallory, &wojak, "nominate", json!({ "token": oldcat }), 0).await?;
+    w.wait_secs(6).await?;
+    let (out, d) = w.think(&dev, &wojak, ONE_NEAR / 10).await?;
+    show_brain("WOJAK", &out, &d);
+    let t = c.view(&wojak, "get_tender", json!({ "tender_id": 0 })).await?;
+    println!(
+        "  on-chain tender #0: rate {} WOJAK per OLDCAT, needs {} of the supply deposited in 60 s",
+        u128_of(&t["rate_ppm"]) as f64 / 1e6,
+        format!("{}%", u128_of(&t["threshold"]) * 100 / supply)
+    );
+
+    say("erin tenders half of all OLDCAT; the deadline passes; anyone settles");
+    c.ok(&erin, &oldcat, "ft_transfer_call", json!({ "receiver_id": wojak, "amount": (supply / 2).to_string(), "msg": "0" }), 1).await?;
+    w.wait_secs(61).await?;
+    let ok = c.ok(&dev, &wojak, "settle_tender", json!({ "tender_id": 0 }), 0).await?;
+    println!("  settle → succeeded: {ok} (50% deposited, threshold 40%)");
+    let minted = c.ok(&erin, &wojak, "claim_tender", json!({ "tender_id": 0 }), 0).await?;
+    println!("  erin claimed → {} WOJAK; WOJAK now holds {} OLDCAT", tokens(&minted), tokens(&json!(w.balance(&oldcat, &wojak).await?.to_string())));
 
     say("Final state");
     for coin in [&pepe, &doge, &wojak] {
@@ -177,7 +228,7 @@ async fn main() -> Result<()> {
     }
     say("The chain keeps running. Open the page:");
     println!("  python3 -m http.server 8080 -d web   →   http://localhost:8080/?network=local");
-    println!("  (this process also answers brain runs: press `think` on the page, Ctrl-C to stop)");
+    println!("  (this process also answers brain runs and relays gasless calls: act as zed with `gasless` ticked; Ctrl-C to stop)");
     loop {
         tokio::time::sleep(std::time::Duration::from_millis(700)).await;
         if let Ok(outs) = w.work().await {
@@ -190,13 +241,14 @@ async fn main() -> Result<()> {
 
 /// Lets the page read the sandbox and sign as the demo accounts. The key is
 /// the sandbox's public, well-known genesis key: local use only.
-fn write_web_config(w: &World, accounts: &[&AccountId]) -> Result<()> {
+fn write_web_config(w: &World, accounts: &[&AccountId], relayer_port: u16) -> Result<()> {
     let cfg = json!({
         "network": "local",
         "rpc": w.rpc_url(),
         "launchpad": w.launchpad,
         "explorer": null,
         "accounts": accounts,
+        "relayer": format!("http://127.0.0.1:{relayer_port}/relay"),
         "dev_key": near_sandbox::config::DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY,
         "note": "written by autocto-demo; the sandbox lives as long as the demo process"
     });

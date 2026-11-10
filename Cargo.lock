@@ -92,6 +92,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "autocto-brain",
+ "base64 0.22.1",
+ "borsh",
  "near-api",
  "near-sandbox",
  "serde_json",
@@ -1828,6 +1830,14 @@ dependencies = [
  "libc",
  "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "mock-ft"
+version = "0.1.0"
+dependencies = [
+ "near-contract-standards",
+ "near-sdk",
 ]
 
 [[package]]

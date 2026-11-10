@@ -47,6 +47,9 @@ pub struct Params {
     pub brain_daily_cap: U128,
     pub think_cooldown_sec: u64,
     pub reserve: U128,
+    pub tender_period_sec: u64,
+    pub tender_threshold_bps: u32,
+    pub tender_max_dilution_bps: u32,
 }
 
 /// Same JSON shape as the coin's `BrainConfig`.
@@ -277,6 +280,8 @@ fn validate(p: &Params) {
         p.approval_bps,
         p.veto_bps,
         p.proposer_bps,
+        p.tender_threshold_bps,
+        p.tender_max_dilution_bps,
     ];
     require!(bps.iter().all(|b| *b <= 10_000), "a bps value is above 10000");
     require!(p.approval_bps > 5_000, "approval must be a majority");
@@ -284,6 +289,7 @@ fn validate(p: &Params) {
     require!(p.max_premium_bps <= 100_000, "premium cap above 1000%");
     require!(p.max_dilution_bps <= 100_000, "dilution cap above 1000%");
     require!(p.vote_period_sec > 0 && p.max_offers_per_day > 0, "zero period or offer cap");
+    require!(p.tender_period_sec > 0 && p.tender_threshold_bps > 0, "zero tender period or threshold");
     require!(p.total_supply.0 > 0 && p.virtual_near.0 > 0, "empty curve");
     require!(p.brain_daily_cap.0 >= p.brain_fee.0, "brain cap below one think");
 }

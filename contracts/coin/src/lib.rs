@@ -13,6 +13,7 @@ mod brain;
 mod market;
 mod math;
 mod takeover;
+mod tender;
 pub mod types;
 
 use near_contract_standards::fungible_token::events::{FtBurn, FtMint};
@@ -52,6 +53,9 @@ enum Key {
     Absorbed,
     Decisions,
     History,
+    Tenders,
+    TenderDeposits,
+    TenderByToken,
 }
 
 #[near(contract_state)]
@@ -99,6 +103,16 @@ pub struct Coin {
 
     history: Vector<HistoryEntry>,
     history_head: u32,
+
+    // Tender offers for tokens from outside the launchpad.
+    next_tender_id: u64,
+    tenders: IterableMap<u64, Tender>,
+    /// Outside tokens deposited, by "tender id|account".
+    tender_deposits: LookupMap<String, u128>,
+    tender_by_token: LookupMap<AccountId, u64>,
+    /// Our tokens still to be minted for depositors of succeeded tenders.
+    tender_owed: u128,
+    watchlist: Vec<AccountId>,
 }
 
 /// "pepe.autocto.testnet" -> "autocto.testnet"
@@ -182,6 +196,12 @@ impl Coin {
             decisions: Vector::new(Key::Decisions),
             history: Vector::new(Key::History),
             history_head: 0,
+            next_tender_id: 0,
+            tenders: IterableMap::new(Key::Tenders),
+            tender_deposits: LookupMap::new(Key::TenderDeposits),
+            tender_by_token: LookupMap::new(Key::TenderByToken),
+            tender_owed: 0,
+            watchlist: Vec::new(),
         };
         this.token.internal_register_account(&me);
         this.token.internal_deposit(&me, this.params.total_supply.0);
@@ -228,6 +248,7 @@ impl Coin {
             last_think: self.last_think,
             decisions: self.decisions.len() as u64,
             absorbed: self.absorbed.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+            watchlist: self.watchlist.clone(),
         }
     }
 
@@ -298,13 +319,15 @@ impl Coin {
         self.token.total_supply - self.amm_tokens
     }
 
-    /// Tokens we will still mint for holders of coins we absorbed. One floor
+    /// Tokens we will still mint for holders of coins we absorbed and for
+    /// depositors of succeeded tenders. One floor
     /// over the total is never below the sum of per-conversion floors.
     fn owed(&self) -> u128 {
         self.absorbed
             .values()
             .map(|a| mul_div(a.max_target_amount.0 - a.converted.0, a.rate_ppm.0, RATE_SCALE))
-            .sum()
+            .sum::<u128>()
+            + self.tender_owed
     }
 
     fn price_yocto(&self) -> u128 {

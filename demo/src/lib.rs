@@ -5,6 +5,8 @@
 //! OutLayer worker: it picks up pending brain runs, runs the brain natively
 //! and resumes the yielded call with the brain's answer.
 
+pub mod gasless;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -47,6 +49,9 @@ pub fn demo_params() -> Value {
         "brain_daily_cap": ONE_NEAR.to_string(),
         "think_cooldown_sec": 5,
         "reserve": (ONE_NEAR / 2).to_string(),
+        "tender_period_sec": 60,
+        "tender_threshold_bps": 4000,
+        "tender_max_dilution_bps": 2000,
     })
 }
 
@@ -239,6 +244,30 @@ impl World {
         Ok(format!("{label}.{}", self.launchpad).parse()?)
     }
 
+    /// Deploy a plain NEP-141 token that knows nothing about AutoCTO, with the
+    /// whole supply at `owner`. `keyless` deletes its access key, like a token
+    /// whose developer has given up control.
+    pub async fn deploy_token(&mut self, name: &str, owner: &AccountId, supply: u128, keyless: bool) -> Result<AccountId> {
+        let id = self.new_account(name, 10).await?;
+        Contract::deploy(id.clone())
+            .use_code(read_res("mock_ft.wasm")?)
+            .with_init_call("new", json!({ "owner": owner, "total_supply": supply.to_string(), "name": name, "symbol": name.to_uppercase() }))?
+            .with_signer(self.caller.signer.clone())
+            .send_to(&self.caller.net)
+            .await?
+            .assert_success();
+        if keyless {
+            let key = self.caller.signer.get_public_key().await?;
+            near_api::Account(id.clone())
+                .delete_key(key)
+                .with_signer(self.caller.signer.clone())
+                .send_to(&self.caller.net)
+                .await?
+                .assert_success();
+        }
+        Ok(id)
+    }
+
     pub async fn info(&self, coin: &AccountId) -> Result<Value> {
         self.caller.view(coin, "coin_info", json!({})).await
     }
@@ -334,6 +363,20 @@ impl World {
         let last = info["decisions"].as_u64().unwrap_or(1) - 1;
         let decision = self.caller.view(coin, "get_decision", json!({ "id": last })).await?;
         Ok((outs.pop().unwrap_or(Value::Null), decision))
+    }
+}
+
+/// The signing key for `owner`: NEAR_PRIVATE_KEY, or else the near-cli
+/// credentials file ~/.near-credentials/<network>/<owner>.json.
+pub fn load_signer(network: &str, owner: &AccountId) -> Result<Arc<Signer>> {
+    match std::env::var("NEAR_PRIVATE_KEY") {
+        Ok(k) if !k.is_empty() => Ok(Signer::from_secret_key(k.trim().parse()?)?),
+        _ => {
+            let home = std::env::var("HOME").context("HOME is not set")?;
+            let path = PathBuf::from(home).join(format!(".near-credentials/{network}/{owner}.json"));
+            Signer::from_access_keyfile(path.clone())
+                .map_err(|e| anyhow!("no NEAR_PRIVATE_KEY and cannot read {}: {e}", path.display()))
+        }
     }
 }
 

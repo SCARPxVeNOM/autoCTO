@@ -555,7 +555,7 @@ impl Coin {
 }
 
 impl Coin {
-    fn assert_proposer(&self) -> AccountId {
+    pub(crate) fn assert_proposer(&self) -> AccountId {
         let who = env::predecessor_account_id();
         let need = bps_of(self.circulating(), self.params.proposer_bps).max(1);
         require!(
@@ -565,7 +565,7 @@ impl Coin {
         who
     }
 
-    fn extend_vote_lock(&mut self, who: &AccountId, until: u64) {
+    pub(crate) fn extend_vote_lock(&mut self, who: &AccountId, until: u64) {
         let cur = self.vote_lock_until.get(who).copied().unwrap_or(0);
         if until > cur {
             self.vote_lock_until.insert(who.clone(), until);
@@ -641,15 +641,7 @@ impl Coin {
         if self.out_by_target.contains_key(&target) || self.in_by_buyer.contains_key(&target) {
             return Err("one open offer per pair".into());
         }
-        let day = self.now() / DAY_NS;
-        if day != self.offer_day {
-            self.offer_day = day;
-            self.offers_today = 0;
-        }
-        if self.offers_today >= self.params.max_offers_per_day {
-            return Err("daily offer cap reached".into());
-        }
-        self.offers_today += 1;
+        self.count_offer()?;
         let id = self.next_offer_id;
         self.next_offer_id += 1;
         let market = self.market();
@@ -685,6 +677,20 @@ impl Coin {
             .with_static_gas(GAS_RECEIVE_OFFER)
             .receive_offer(id, U128(rate_ppm), pitch, proposer, market)
             .then(Self::ext(self.me()).with_static_gas(GAS_ON_OFFER_SENT).on_offer_sent(id)))
+    }
+
+    /// Bids and tenders share one daily cap.
+    pub(crate) fn count_offer(&mut self) -> Result<(), String> {
+        let day = self.now() / DAY_NS;
+        if day != self.offer_day {
+            self.offer_day = day;
+            self.offers_today = 0;
+        }
+        if self.offers_today >= self.params.max_offers_per_day {
+            return Err("daily offer cap reached".into());
+        }
+        self.offers_today += 1;
+        Ok(())
     }
 
     pub(crate) fn try_accept_counter(&mut self, offer_id: u64) -> Result<Promise, String> {

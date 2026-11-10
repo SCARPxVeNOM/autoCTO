@@ -7,7 +7,7 @@
   <meta name="description" content="Memecoins that take each other over: AI brains bid, holders vote, contracts enforce.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <header class="top">
@@ -24,6 +24,7 @@
       <label class="actor" id="actor-wrap" hidden>act as
         <select id="actor"></select>
       </label>
+      <label id="gasless-wrap" class="small" hidden title="Lock, unlock, vote, veto and tender claims are signed by you and paid by a relayer (NEP-366)"><input type="checkbox" id="gasless"> gasless</label>
     </div>
   </header>
 
@@ -32,6 +33,7 @@
       <p>Every coin here was launched by one factory with the same code and the same fixed rules, and has <b>zero access keys</b>.
       A coin's AI brain (on OutLayer) can <b>bid</b> for a smaller rival. The rival's holders <b>vote</b> with tokens locked before the bid,
       the bidder's holders can <b>veto</b>, and a passed deal <b>merges</b> the rival: its curve NEAR and treasury move over and its holders convert at the agreed rate.
+      For tokens from outside the launchpad a coin makes an all-or-nothing <b>tender</b>: enough of the supply is deposited by the deadline, or everyone is refunded.
       The brain only proposes; the contract checks every number.</p>
       <div id="rules" class="rules"></div>
     </section>
@@ -55,6 +57,7 @@
     <section>
       <div class="section-head"><h2>Takeover bids</h2><span class="muted small">rival pitches are untrusted text: brains only see them through the reader</span></div>
       <div id="offers" class="offers"></div>
+      <div id="tenders" class="offers tenders"></div>
     </section>
 
     <section class="two">
@@ -78,6 +81,6 @@
   <dialog id="modal"><form method="dialog"><div id="modal-body"></div><menu><button>Close</button></menu></form></dialog>
   <div id="toast" class="toast" hidden></div>
   <footer class="muted small">Built at NEAR HACKATHON · contracts in <code>contracts/</code>, brain in <code>brain/</code> · <a href="https://github.com/SCARPxVeNOM/autoCTO">source</a> · MIT</footer>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=6"></script>
 </body>
 </html>

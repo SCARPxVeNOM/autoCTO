@@ -177,6 +177,8 @@ impl Coin {
             "info": self.coin_info(),
             "params": self.params,
             "offers": live,
+            "watchlist": self.watchlist,
+            "tenders": self.list_tenders(Some(true)),
         })
     }
 
@@ -197,6 +199,14 @@ impl Coin {
             BrainAction::AcceptCounter { offer_id } => {
                 self.try_accept_counter(offer_id)?.detach();
                 Ok(format!("accepted the counter on bid #{offer_id}"))
+            }
+            BrainAction::Tender { token, rate_ppm, pitch } => {
+                if !self.watchlist.contains(&token) {
+                    return Err(format!("{token} is not on the holders' watchlist"));
+                }
+                let desc = format!("opened a tender for {token}");
+                self.try_open_tender(token, rate_ppm.0, pitch, by)?.detach();
+                Ok(desc)
             }
             BrainAction::Stance { offer, support, pitch } => {
                 let known = self.incoming.contains_key(&offer)

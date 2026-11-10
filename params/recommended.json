@@ -16,5 +16,8 @@
   "brain_fee": "50000000000000000000000",
   "brain_daily_cap": "1000000000000000000000000",
   "think_cooldown_sec": 600,
-  "reserve": "500000000000000000000000"
+  "reserve": "500000000000000000000000",
+  "tender_period_sec": 259200,
+  "tender_threshold_bps": 4000,
+  "tender_max_dilution_bps": 2000
 }

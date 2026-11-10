@@ -23,8 +23,8 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, anyhow, bail};
-use autocto_demo::{ONE_NEAR, read_res, res_dir, sha256_hex, u128_of};
-use near_api::{Account, AccountId, Contract, CryptoHash, NearToken, NetworkConfig, Signer};
+use autocto_demo::{ONE_NEAR, load_signer, read_res, res_dir, sha256_hex, u128_of};
+use near_api::{Account, AccountId, Contract, CryptoHash, NearToken, NetworkConfig};
 use serde_json::{Value, json};
 
 fn arg(args: &[String], name: &str) -> Option<String> {
@@ -52,15 +52,7 @@ async fn main() -> Result<()> {
         bail!("{launchpad} must be a sub-account of {owner}");
     }
 
-    let signer = match std::env::var("NEAR_PRIVATE_KEY") {
-        Ok(k) if !k.is_empty() => Signer::from_secret_key(k.trim().parse()?)?,
-        _ => {
-            let home = std::env::var("HOME").context("HOME is not set")?;
-            let path = PathBuf::from(home).join(format!(".near-credentials/{net_name}/{owner}.json"));
-            Signer::from_access_keyfile(path.clone())
-                .map_err(|e| anyhow!("no NEAR_PRIVATE_KEY and cannot read {}: {e}", path.display()))?
-        }
-    };
+    let signer = load_signer(net_name, &owner)?;
     let public_key = signer.get_public_key().await?;
 
     // Rules and brain are fixed at deploy time; the launchpad has no setters.

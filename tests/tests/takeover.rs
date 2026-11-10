@@ -392,3 +392,166 @@ async fn a_lying_brain_is_refused_and_coins_have_no_keys() -> Result<()> {
     }
     Ok(())
 }
+
+/// Rate at which exactly the 40% threshold mints 10% of PEPE's supply.
+async fn tender_rate(c: &Cast, old_supply: u128) -> Result<u128> {
+    let circ = u128_of(&c.w.info(&c.pepe).await?["circulating"]);
+    Ok((circ / 10) * 1_000_000 / (old_supply / 10 * 4))
+}
+
+async fn deposit(c: &Cast, who: &AccountId, old: &AccountId, amount: u128, tender: u64) -> Result<()> {
+    c.w.caller
+        .ok(who, old, "ft_transfer_call",
+            json!({ "receiver_id": c.pepe, "amount": amount.to_string(), "msg": tender.to_string() }), 1)
+        .await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn tender_for_an_outside_token_swaps_everyone_or_refunds_everyone() -> Result<()> {
+    let mut c = cast(false).await?;
+    let supply = 1_000_000_000 * autocto_demo::ONE_TOKEN;
+    let old = c.w.deploy_token("old", &c.dave, supply, true).await?;
+    let w = &c.w;
+    let rate = tender_rate(&c, supply).await?;
+    let tender = json!({ "token": old, "rate_ppm": rate.to_string(), "pitch": "OLD holders, swap into PEPE" });
+
+    // A sibling coin cannot be tendered for.
+    assert!(w.caller.call(&c.alice, &c.pepe, "propose_tender",
+        json!({ "token": c.doge, "rate_ppm": "1", "pitch": "x" }), 0).await?.is_failure());
+
+    // Tender 0: only 35% of OLD shows up, below the 40% threshold. Everyone is refunded.
+    assert_eq!(w.caller.ok(&c.alice, &c.pepe, "propose_tender", tender.clone(), 0).await?, Value::Bool(true));
+    let t = w.caller.view(&c.pepe, "get_tender", json!({ "tender_id": 0 })).await?;
+    assert_eq!(t["status"], "Open");
+    assert_eq!(u128_of(&t["threshold"]), supply / 10 * 4);
+    deposit(&c, &c.dave, &old, supply / 100 * 35, 0).await?;
+    assert!(w.caller.call(&c.dave, &c.pepe, "claim_tender", json!({ "tender_id": 0 }), 0).await?.is_failure(), "not settled yet");
+    assert!(w.caller.call(&c.dev, &c.pepe, "settle_tender", json!({ "tender_id": 0 }), 0).await?.is_failure(), "too early");
+    w.wait_secs(61).await?;
+    assert_eq!(w.caller.ok(&c.dev, &c.pepe, "settle_tender", json!({ "tender_id": 0 }), 0).await?, Value::Bool(false));
+    w.caller.ok(&c.dave, &c.pepe, "claim_tender", json!({ "tender_id": 0 }), 0).await?;
+    assert_eq!(w.balance(&old, &c.dave).await?, supply, "refund returns exactly what was deposited");
+    assert_eq!(w.balance(&c.pepe, &c.dave).await?, 0);
+    assert!(w.caller.call(&c.dave, &c.pepe, "claim_tender", json!({ "tender_id": 0 }), 0).await?.is_failure(), "double claim");
+
+    // Tender 1: dave sends 90%; the dilution cap accepts 80% and returns the rest.
+    assert_eq!(w.caller.ok(&c.alice, &c.pepe, "propose_tender", tender.clone(), 0).await?, Value::Bool(true));
+    deposit(&c, &c.dave, &old, supply / 100 * 90, 1).await?;
+    let t = w.caller.view(&c.pepe, "get_tender", json!({ "tender_id": 1 })).await?;
+    let accepted = u128_of(&t["deposited"]);
+    assert_eq!(accepted, u128_of(&t["max_deposit"]));
+    assert_eq!(w.balance(&old, &c.dave).await?, supply - accepted);
+    w.wait_secs(61).await?;
+    let before = w.info(&c.pepe).await?;
+    assert_eq!(w.caller.ok(&c.dev, &c.pepe, "settle_tender", json!({ "tender_id": 1 }), 0).await?, Value::Bool(true));
+    let owed = u128_of(&w.info(&c.pepe).await?["owed"]);
+    assert_eq!(owed, accepted * rate / 1_000_000);
+    assert!(owed <= u128_of(&before["circulating"]) / 5, "one tender never mints more than 20% of supply");
+    let minted = u128_of(&w.caller.ok(&c.dave, &c.pepe, "claim_tender", json!({ "tender_id": 1 }), 0).await?);
+    assert_eq!(minted, owed);
+    assert_eq!(w.balance(&c.pepe, &c.dave).await?, minted);
+    let after = w.info(&c.pepe).await?;
+    assert_eq!(u128_of(&after["owed"]), 0);
+    assert_eq!(u128_of(&after["total_supply"]) - u128_of(&before["total_supply"]), minted, "supply grows only by the claim");
+    assert_eq!(w.balance(&old, &c.pepe).await?, accepted, "PEPE now holds the tendered OLD");
+
+    // Tender 2: PEPE's own holders veto it (alice locked 20% before; the line is 10%).
+    assert_eq!(w.caller.ok(&c.alice, &c.pepe, "propose_tender", tender, 0).await?, Value::Bool(true));
+    deposit(&c, &c.dave, &old, supply / 10, 2).await?;
+    w.caller.ok(&c.alice, &c.pepe, "veto_tender", json!({ "tender_id": 2 }), 0).await?;
+    w.wait_secs(61).await?;
+    assert_eq!(w.caller.ok(&c.dev, &c.pepe, "settle_tender", json!({ "tender_id": 2 }), 0).await?, Value::Bool(false));
+    let t = w.caller.view(&c.pepe, "get_tender", json!({ "tender_id": 2 })).await?;
+    assert_eq!(t["status"]["Failed"]["reason"], "vetoed by our holders");
+    w.caller.ok(&c.dave, &c.pepe, "claim_tender", json!({ "tender_id": 2 }), 0).await?;
+    assert_eq!(w.balance(&old, &c.dave).await?, supply - accepted);
+    Ok(())
+}
+
+#[tokio::test]
+async fn brain_tenders_for_nominated_tokens_and_refuses_ruggable_ones() -> Result<()> {
+    let mut c = cast(false).await?;
+    let supply = 1_000_000_000 * autocto_demo::ONE_TOKEN;
+    let rug = c.w.deploy_token("rug", &c.dave, supply, false).await?;
+    let old = c.w.deploy_token("old", &c.dave, supply, true).await?;
+    let w = &c.w;
+    // A live bid for DOGE, so the brain has no sibling left to hunt.
+    bid(&c, 0.20, "Merge with us.").await?;
+
+    // The brain cannot pick a token by itself: holders nominate, the brain prices.
+    let sneak = json!({ "action": { "type": "tender", "token": old, "rate_ppm": "1000", "pitch": "x" } });
+    let (_, d) = w.think_forced(&c.dev, &c.pepe, ONE_NEAR / 10, sneak).await?;
+    assert!(d["status"]["Refused"]["reason"].as_str().unwrap().contains("watchlist"), "{d}");
+
+    // rug's owner still holds a full-access key: the brain sees it and refuses.
+    w.caller.ok(&c.alice, &c.pepe, "nominate", json!({ "token": rug }), 0).await?;
+    w.wait_secs(6).await?;
+    let (out, _) = w.think(&c.dev, &c.pepe, ONE_NEAR / 10).await?;
+    assert_eq!(out["action"]["type"], "none", "{out}");
+    assert!(out["thought"].as_str().unwrap().contains("full-access key"), "{out}");
+
+    // old has no keys: the brain opens a tender within the caps.
+    w.caller.ok(&c.alice, &c.pepe, "nominate", json!({ "token": old }), 0).await?;
+    w.wait_secs(6).await?;
+    let (out, d) = w.think(&c.dev, &c.pepe, ONE_NEAR / 10).await?;
+    assert_eq!(out["action"]["type"], "tender", "{out}");
+    assert_eq!(out["action"]["token"], old.to_string());
+    assert_eq!(d["status"], "Applied");
+    let t = w.caller.view(&c.pepe, "get_tender", json!({ "tender_id": 0 })).await?;
+    assert_eq!(t["status"], "Open", "{t}");
+    assert!(t["proposer"]["Brain"]["decision_id"].is_u64());
+    assert!(u128_of(&t["max_deposit"]) >= u128_of(&t["threshold"]));
+
+    // By hand, a rate where the threshold alone would mint 30% of PEPE breaks the 20% cap.
+    let rate = tender_rate(&c, supply).await?;
+    let greedy = w.caller.ok(&c.alice, &c.pepe, "propose_tender",
+        json!({ "token": rug, "rate_ppm": (rate * 3).to_string(), "pitch": "x" }), 0).await?;
+    assert_eq!(greedy, Value::Bool(false));
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_holder_with_zero_near_votes_through_a_relayer() -> Result<()> {
+    use autocto_demo::gasless::{self, Relayer};
+    let mut c = cast(false).await?;
+    let zed = c.w.new_account("zed", 0).await?;
+    let w = &c.w;
+    assert_eq!(w.caller.near_balance(&zed).await?, 0);
+
+    // zed is given DOGE but has no NEAR at all: without a relayer, zed cannot act.
+    w.caller.ok(&c.dave, &c.doge, "buy", json!({}), 2 * ONE_NEAR).await?;
+    let gift = w.balance(&c.doge, &c.dave).await?;
+    w.caller.ok(&c.dave, &c.doge, "storage_deposit", json!({ "account_id": zed, "registration_only": true }), ONE_NEAR / 100).await?;
+    w.caller.ok(&c.dave, &c.doge, "ft_transfer", json!({ "receiver_id": zed, "amount": gift.to_string() }), 1).await?;
+    let direct = w.caller.call(&zed, &c.doge, "lock", json!({ "amount": gift.to_string() }), 0).await;
+    assert!(direct.is_err() || direct.unwrap().is_failure(), "zed cannot pay for gas");
+
+    // zed signs, the relayer (dev) pays. The call still runs as zed.
+    let relayer = Relayer { caller: w.caller.clone(), account: c.dev.clone(), launchpad: w.launchpad.clone() };
+    let signed = gasless::sign(&w.caller, &zed, &c.doge, "lock", json!({ "amount": gift.to_string() }), 0).await?;
+    let wire = gasless::encode(&signed)?;
+    let r = relayer.relay(gasless::decode(&wire)?).await?;
+    assert!(r.is_success() && r.receipt_failures().is_empty(), "{:?}", r.receipt_failures());
+    let locked = u128_of(&w.caller.view(&c.doge, "locks_of", json!({ "account_id": zed })).await?[0]["amount"]);
+    assert_eq!(locked, gift);
+
+    let (key, _) = bid(&c, 0.20, "Join the frog.").await?;
+    let signed = gasless::sign(&w.caller, &zed, &c.doge, "vote", json!({ "offer": key, "support": false }), 0).await?;
+    let r = relayer.relay(signed).await?;
+    assert!(r.is_success() && r.receipt_failures().is_empty(), "{:?}", r.receipt_failures());
+    let offer = w.caller.view(&c.doge, "get_incoming", json!({ "offer": key })).await?;
+    assert_eq!(u128_of(&offer["no"]), gift, "the vote counted with zed's own weight");
+    assert_eq!(w.caller.near_balance(&zed).await?, 0, "zed never held or spent NEAR");
+
+    // The relayer only forwards harmless calls to launchpad coins.
+    let sell = gasless::sign(&w.caller, &zed, &c.doge, "sell", json!({ "amount": "1" }), 1).await?;
+    assert!(relayer.relay(sell).await.unwrap_err().to_string().contains("not relayed"));
+    let elsewhere = gasless::sign(&w.caller, &zed, &c.bob, "vote", json!({ "offer": key, "support": true }), 0).await?;
+    assert!(relayer.relay(elsewhere).await.unwrap_err().to_string().contains("not a coin"));
+    // A relayed call is still subject to every rule: zed cannot vote twice.
+    let again = gasless::sign(&w.caller, &zed, &c.doge, "vote", json!({ "offer": key, "support": true }), 0).await?;
+    let r = relayer.relay(again).await?;
+    assert!(!r.receipt_failures().is_empty(), "double vote must fail");
+    Ok(())
+}

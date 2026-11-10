@@ -91,6 +91,7 @@ button.no { color: var(--no); }
 button:disabled { opacity: .5; cursor: progress; }
 
 .offers { display: grid; gap: 12px; }
+.tenders:not(:empty) { margin-top: 12px; }
 .offer { display: grid; gap: 8px; }
 .offer .route { font-weight: 700; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .offer .terms { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; }

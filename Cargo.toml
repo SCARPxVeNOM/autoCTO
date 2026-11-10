@@ -4,6 +4,7 @@ members = [
     "contracts/coin",
     "contracts/launchpad",
     "contracts/mock-outlayer",
+    "contracts/mock-ft",
     "brain",
     "demo",
     "tests",

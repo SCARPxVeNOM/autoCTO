@@ -8,10 +8,12 @@ const NETWORK = qs.get("network") || "local";
 const GAS = 300_000_000_000_000n;
 const YOCTO = 10n ** 24n;
 const UNIT = 10n ** 18n;
+// Calls the relayer forwards, so a holder with no NEAR can still make them.
+const GASLESS = ["lock", "unlock", "vote", "veto", "veto_tender", "claim_tender"];
 
 let cfg = {};
 let chainNow = 0n;
-const state = { coins: [], info: {}, offers: {}, history: {}, decisions: {}, account: {}, keys: {}, params: null, codeHash: null, codeMode: null, brain: null };
+const state = { coins: [], info: {}, offers: {}, tenders: {}, history: {}, decisions: {}, account: {}, keys: {}, params: null, codeHash: null, codeMode: null, brain: null };
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -74,6 +76,7 @@ async function loadConfig() {
   if (cfg.dev_key && cfg.accounts?.length) {
     $("actor-wrap").hidden = false;
     $("actor").innerHTML = cfg.accounts.map((a) => `<option>${esc(a)}</option>`).join("");
+    $("gasless-wrap").hidden = !cfg.relayer;
   }
 }
 
@@ -91,13 +94,14 @@ async function refresh() {
   }
   state.coins = (await view(cfg.launchpad, "list_coins", { limit: 100 })).filter((c) => c.state === "Live");
   await Promise.all(state.coins.map(async ({ account_id: a }) => {
-    const [info, offers, history, decisions, acct, keys] = await Promise.all([
+    const [info, offers, history, decisions, tenders, acct, keys] = await Promise.all([
       view(a, "coin_info"), view(a, "list_offers"), view(a, "history"), view(a, "list_decisions", { limit: 12 }),
+      view(a, "list_tenders").catch(() => []),
       rpc("query", { request_type: "view_account", finality: "optimistic", account_id: a }).catch(() => null),
       rpc("query", { request_type: "view_access_key_list", finality: "optimistic", account_id: a }).catch(() => null),
     ]);
     Object.assign(state.info, { [a]: info });
-    state.offers[a] = offers; state.history[a] = history; state.decisions[a] = decisions;
+    state.offers[a] = offers; state.history[a] = history; state.decisions[a] = decisions; state.tenders[a] = tenders;
     state.account[a] = acct; state.keys[a] = keys?.keys?.length ?? null;
   }));
   render();
@@ -112,6 +116,7 @@ function renderRules() {
     `dilution ≤ ${p.max_dilution_bps / 100}%`, `newborn protection ${p.newborn_protection_sec}s`,
     `rebid cooldown ${p.rebid_cooldown_sec}s`, `${p.max_offers_per_day} bids/day`,
     `brain ${fmtNear(p.brain_fee)}/think, ≤ ${fmtNear(p.brain_daily_cap)}/day`, `fee ${p.trade_fee_bps / 100}%`,
+    ...(p.tender_threshold_bps ? [`tender: ${p.tender_threshold_bps / 100}% of outside supply in ${p.tender_period_sec}s, mints ≤ ${p.tender_max_dilution_bps / 100}%`] : []),
   ];
   $("rules").innerHTML = items.map((t) => `<span>${esc(t)}</span>`).join("") + `<span>no owner · no setters</span>`;
   $("code-hash").textContent = `coin code ${state.codeHash} · ${typeof state.codeMode === "string" ? state.codeMode : "Global"}`;
@@ -160,6 +165,7 @@ function renderCoins() {
         <span class="badge ${state.keys[a] === 0 ? "ok" : "bad"}" title="access keys on the coin account">${state.keys[a] === 0 ? "🔒 0 keys" : `${state.keys[a] ?? "?"} keys`}</span>
         <span class="badge ${same ? "ok" : "bad"}" title="code hash equals the launchpad's coin code">${same ? "✔ launchpad code" : "code ?"}</span>
         ${i.absorbed.map(([t]) => `<span class="badge">ate $${esc(sym(t))}</span>`).join("")}
+        ${(i.watchlist || []).map((t) => `<span class="badge" title="outside token nominated by holders for a tender">👀 ${esc(short(t))}</span>`).join("")}
       </div>
       <div class="actions">${merged
         ? `<button data-act="convert" data-coin="${a}">Convert to $${esc(sym(i.status.Merged.into))}</button>`
@@ -239,7 +245,52 @@ function renderOffers() {
         ${open && ended ? `<button class="primary" data-act="finalize" data-coin="${o.target}" data-offer="${key}">Finalize</button>` : ""}
       </div>
     </article>`;
-  }).join("") || `<p class="muted">No bids yet. Press 🧠 Think on a coin.</p>`;
+  }).join("") || (Object.values(state.tenders).some((l) => l.length) ? "" : `<p class="muted">No bids yet. Press 🧠 Think on a coin.</p>`);
+}
+
+// Tender offers for tokens from outside the launchpad: deposits are the vote.
+function renderTenders() {
+  const p = state.params;
+  const rows = [];
+  for (const [coin, list] of Object.entries(state.tenders)) for (const t of list) rows.push({ coin, t });
+  rows.sort((a, b) => Number(BigInt(b.t.created_at) - BigInt(a.t.created_at)));
+  $("tenders").innerHTML = rows.map(({ coin, t }) => {
+    const st = statusName(t.status);
+    const cap = BigInt(t.max_deposit) || 1n;
+    const pct = (x) => Math.min(100, Number((BigInt(x) * 10000n) / cap) / 100);
+    const supply = BigInt(t.token_supply) || 1n;
+    const share = (x) => (Number((BigInt(x) * 10000n) / supply) / 100).toFixed(1) + "%";
+    const bsupply = BigInt(t.buyer_supply) || 1n;
+    const vetoPct = Math.min(100, Number((BigInt(t.veto) * 10000n) / bsupply) / 100);
+    const open = st === "Open";
+    const ended = open && BigInt(t.deadline) <= chainNow;
+    const cls = { Open: "active", Opening: "pending", Succeeded: "merged", Failed: "failed" }[st] || "";
+    const proposer = t.proposer.Brain ? `🧠 brain decision #${t.proposer.Brain.decision_id}` : `✋ ${esc(t.proposer.Holder?.account_id)}`;
+    return `<article class="card offer">
+      <div class="route">$${esc(sym(coin))} <span class="muted">tenders for outside token</span> <span class="mono">${esc(t.token)}</span>
+        <span class="pill ${cls}">${esc(st === "Failed" ? "failed: " + t.status.Failed.reason : st.toLowerCase())}</span>
+        <span class="muted small">${proposer} · ${ago(t.created_at)}</span></div>
+      <div class="terms">
+        <span>rate <b>${fmtRate(t.rate_ppm)}</b> $${esc(sym(coin))} per token</span>
+        <span>all or nothing at <b>${share(t.threshold)}</b> of its supply</span>
+        ${open && !ended ? `<span>${left(t.deadline)}</span>` : ""}
+      </div>
+      <div class="pitch"><div class="who">pitch from $${esc(sym(coin))}</div>“${esc(t.pitch)}”</div>
+      <div>
+        <div class="barlabel"><span>deposited ${share(t.deposited)} of supply</span><span>needs ${share(t.threshold)} · cap ${share(t.max_deposit)}</span></div>
+        <div class="bar"><div class="y" style="width:${pct(t.deposited)}%"></div><div class="q" style="left:${pct(t.threshold)}%"></div></div>
+      </div>
+      <div>
+        <div class="barlabel"><span>$${esc(sym(coin))} veto ${fmtTokens(t.veto)}</span><span>blocks at ${p.veto_bps / 100}%</span></div>
+        <div class="bar"><div class="n" style="left:0;width:${vetoPct}%"></div><div class="q" style="left:${p.veto_bps / 100}%"></div></div>
+      </div>
+      <div class="actions">
+        ${open && !ended ? `<button data-act="veto_tender" data-coin="${coin}" data-id="${t.id}">Veto (as $${esc(sym(coin))} holder)</button>` : ""}
+        ${ended ? `<button class="primary" data-act="settle_tender" data-coin="${coin}" data-id="${t.id}">Settle</button>` : ""}
+        ${st === "Succeeded" || st === "Failed" ? `<button data-act="claim_tender" data-coin="${coin}" data-id="${t.id}">${st === "Succeeded" ? "Claim $" + esc(sym(coin)) : "Claim refund"}</button>` : ""}
+      </div>
+    </article>`;
+  }).join("");
 }
 
 function renderDecisions() {
@@ -269,7 +320,7 @@ function renderLog() {
 }
 
 function render() {
-  renderCoins(); renderOffers(); renderDecisions(); renderLog();
+  renderCoins(); renderOffers(); renderTenders(); renderDecisions(); renderLog();
 }
 
 // ---------- verify ----------
@@ -311,10 +362,13 @@ async function act(btn) {
     finalize: () => ["finalize", { offer }, 0n],
     accept_counter: () => ["accept_counter", { offer_id: Number(id) }, 0n],
     convert: () => ["convert", {}, 1n],
+    veto_tender: () => ["veto_tender", { tender_id: Number(id) }, 0n],
+    settle_tender: () => ["settle_tender", { tender_id: Number(id) }, 0n],
+    claim_tender: () => ["claim_tender", { tender_id: Number(id) }, 0n],
   };
   let plan;
   try { plan = await plans[what](); } catch (e) { toast(`${what} ✘ ${e.message || e}`); return; }
-  const [method, args, deposit, contract = coin] = plan;
+  let [method, args, deposit, contract = coin] = plan;
   if (!cfg.dev_key) {
     const near = (Number(deposit / 10n ** 18n) / 1e6).toString();
     $("modal-body").innerHTML = `<h3>${esc(method)} on ${esc(contract)}</h3><p>Sign this with <a href="https://github.com/near/near-cli-rs">near-cli</a>:</p>
@@ -327,8 +381,24 @@ async function act(btn) {
   try {
     nearApi ??= await import("https://cdn.jsdelivr.net/npm/near-api-js@7.4.0/+esm");
     const account = new nearApi.Account(actor(), cfg.rpc, cfg.dev_key);
-    const r = await account.callFunction({ contractId: contract, methodName: method, args, deposit, gas: GAS });
-    toast(`${method} ✔ ${r === undefined ? "" : JSON.stringify(r).slice(0, 80)}`);
+    let r;
+    if (cfg.relayer && $("gasless").checked && GASLESS.includes(method)) {
+      // NEP-366: the actor signs, the relayer pays the gas. The call still runs as the actor.
+      const { signedDelegate } = await account.createSignedMetaTransaction({
+        receiverId: contract, actions: [nearApi.actions.functionCall(method, args, 100_000_000_000_000n, deposit)],
+      });
+      const res = await fetch(cfg.relayer, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signed_delegate_action: nearApi.base64Encode(nearApi.encodeSignedDelegate(signedDelegate)) }),
+      });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error);
+      r = j.result;
+      method += " (gasless)";
+    } else {
+      r = await account.callFunction({ contractId: contract, methodName: method, args, deposit, gas: GAS });
+    }
+    toast(`${method} ✔ ${r == null ? "" : JSON.stringify(r).slice(0, 80)}`);
   } catch (e) {
     toast(`${method} ✘ ${String(e.message || e).slice(0, 160)}`);
   } finally {

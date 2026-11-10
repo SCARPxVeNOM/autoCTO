@@ -8,6 +8,7 @@ pub const NS_PER_SEC: u64 = 1_000_000_000;
 pub const DAY_NS: u64 = 86_400 * NS_PER_SEC;
 pub const MAX_PITCH_LEN: usize = 500;
 pub const MAX_LOTS: usize = 8;
+pub const MAX_WATCHLIST: usize = 8;
 
 /// Every rule of the game. Fixed at launch by the launchpad, readable by anyone,
 /// and there is no method that changes it afterwards.
@@ -48,6 +49,13 @@ pub struct Params {
     pub think_cooldown_sec: u64,
     /// NEAR kept aside for storage growth; never counted as treasury.
     pub reserve: U128,
+    /// How long holders of an outside token can deposit into a tender offer.
+    pub tender_period_sec: u64,
+    /// A tender succeeds only if this share of the outside token's total
+    /// supply is deposited. It is the outside holders' vote.
+    pub tender_threshold_bps: u32,
+    /// Most tokens one tender may mint, as a share of our supply.
+    pub tender_max_dilution_bps: u32,
 }
 
 /// Where the brain lives. Pinned at launch: a project version (wasm hash) or a
@@ -222,6 +230,45 @@ pub struct Decision {
     pub status: DecisionStatus,
 }
 
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq)]
+pub enum TenderStatus {
+    /// Registering with the outside token and reading its supply.
+    Opening,
+    Open,
+    /// Depositors claim our tokens at the tender rate.
+    Succeeded,
+    /// Depositors claim their deposit back.
+    Failed { reason: String },
+}
+
+/// An all-or-nothing offer to holders of a token from outside the launchpad:
+/// "send me your OLD by the deadline and get `rate` of mine for each".
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Tender {
+    pub id: u64,
+    pub token: AccountId,
+    /// Our smallest units per one smallest unit of the outside token, x1e6.
+    pub rate_ppm: U128,
+    pub pitch: String,
+    pub proposer: Proposer,
+    /// Snapshot time for our holders' veto.
+    pub created_at: u64,
+    pub deadline: u64,
+    pub token_supply: U128,
+    /// Deposits needed for the tender to succeed.
+    pub threshold: U128,
+    /// Deposits accepted at most (the dilution cap, in outside tokens).
+    pub max_deposit: U128,
+    pub deposited: U128,
+    pub claimed: U128,
+    pub veto: U128,
+    /// Our circulating supply (plus owed) at the snapshot.
+    pub buyer_supply: U128,
+    pub status: TenderStatus,
+}
+
 /// Everything the brain may propose. It supplies names from the registry and
 /// numbers; the contract does the checking.
 #[near(serializers = [json])]
@@ -234,6 +281,8 @@ pub enum BrainAction {
     AcceptCounter { offer_id: u64 },
     /// Public opinion on an offer; carries no power.
     Stance { offer: String, support: bool, pitch: String },
+    /// Tender for an outside token. Only tokens holders put on the watchlist.
+    Tender { token: AccountId, rate_ppm: U128, pitch: String },
 }
 
 #[near(serializers = [json])]
@@ -280,4 +329,6 @@ pub struct CoinInfo {
     pub last_think: u64,
     pub decisions: u64,
     pub absorbed: Vec<(AccountId, Absorbed)>,
+    /// Outside tokens holders asked the brain to size up for a tender.
+    pub watchlist: Vec<AccountId>,
 }
