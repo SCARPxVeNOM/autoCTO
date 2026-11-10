@@ -16,9 +16,9 @@ You need Rust (`rust-toolchain.toml` pins 1.99.1; rustup installs it) and [cargo
 | `cargo test -p autocto-tests` | 14 end-to-end takeover, tender, gasless-voting and sealed-voting tests, plus an invariant fuzz run, pass in a local NEAR sandbox (~4 min) |
 | `cargo test -p autocto-coin -p autocto-brain` | 10 unit tests (curve math, brain reader and decider) |
 | `cargo run -p autocto-demo` | a narrated takeover and tender story (~4 min); it ends with "The chain keeps running" |
-| `python3 -m http.server 8080 -d web`, then open http://localhost:8080/?network=local | the live page: 3 coins, DOGE "merged → PEPE", the bids, brain decisions, event log, simulation |
-| on the page: pick a holder under "act as", press **🧠 Think** on WOJAK, or fill **Launch a coin** | the demo process answers the brain run; the new decision or coin appears within seconds |
-| on the page: act as **zed.sandbox** (holds 0 NEAR), press **Lock all** on WOJAK, then tick **gasless** and press it again | the first try fails (zed can't pay for gas), the second works: zed signs, the demo's relayer pays |
+| `python3 -m http.server 8080 -d web`, then open http://localhost:8080/?network=local | the trading page: market table, a coin panel with the bonding-curve chart and a buy/sell/lock ticket with live quotes, deals (bids and tenders), brain decisions, live feed, simulation |
+| on the page: pick a holder under "act as", buy or sell in the ticket, press **Think** on a coin, back or veto a deal, or fill **Launch a coin** | trades settle against the coin's curve; the demo process answers the brain run within seconds |
+| on the page: act as **zed.sandbox** (holds 0 NEAR), pick $WOJAK, open **Lock** in the trade ticket and lock some; then tick **gasless** and try again | the first try fails (zed can't pay for gas), the second works: zed signs, the demo's relayer pays |
 | with the demo running: `NEAR_PRIVATE_KEY=<dev_key from web/config.local.json> cargo run -p autocto-demo --bin keeper -- --owner dev.sandbox --network http://127.0.0.1:3030 --think --think-every 1 --interval 4` | the keeper wakes the brains and they negotiate by themselves: a bid, a counter, an accept, a stance |
 | `FUZZ_SEED=7 FUZZ_STEPS=120 cargo test -p autocto-tests --test invariants -- --nocapture` | random actions; "every invariant held after each one" |
 | `node sim/simulate.mjs` | regenerates `web/data/sim.json` and `sim/REPORT.md` |
