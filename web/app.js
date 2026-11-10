@@ -35,6 +35,35 @@ const store = {
   del(k) { try { localStorage.removeItem(k); } catch (_) {} },
 };
 
+// ---------- words explained ----------
+// One plain sentence per word. Shown on hover, focus or tap, and listed under "Words explained".
+const GLOSSARY = {
+  "bonding curve": "The coin's built-in market. You always buy from it and sell back to it, so there is always a price. Every buy pushes the price up, every sell pushes it down.",
+  lock: "Setting tokens aside so they count as votes. They stay yours and you can unlock them later. Only tokens locked before a bid was announced count for that bid.",
+  brain: "The coin's AI. It runs on OutLayer inside sealed hardware, reads the market and proposes moves. It can only propose: the contract checks every number.",
+  takeover: "One coin absorbs another. The smaller coin's NEAR and treasury move into the bigger one, and its holders swap their tokens at the agreed rate.",
+  bid: "A coin's offer to absorb a rival: so many of its tokens for each of the rival's.",
+  rate: "How many of the bidder's tokens you get for one of yours if the deal passes.",
+  "fair rate": "The rate at which nobody gains or loses, taken from both coins' prices right now.",
+  premium: "How much better than the fair rate the bid is. +10% means holders of the target get 10% more value than their coin trades at today.",
+  quorum: "The smallest share of a coin that must vote for the result to count.",
+  veto: "The bidder's own holders can block a bid, for example when their coin is overpaying.",
+  tender: "An offer to holders of a token from outside this launchpad: deposit it and get this coin back. All or nothing: if too little is deposited by the deadline, everyone is refunded.",
+  backing: "A tender also needs enough of the bidding coin's own holders behind it.",
+  treasury: "NEAR the coin has collected from trading fees. It pays for the brain and moves along in a takeover.",
+  liquidity: "The NEAR sitting in the coin's curve. It is what sellers get paid from.",
+  "market cap": "Price times the tokens in circulation: roughly what the whole coin is worth.",
+  slippage: "How much worse than the quoted price you accept if others trade just before you. Beyond it the trade is refused.",
+  gasless: "A relayer pays the network fee for you. You still sign, so it can only do what you approved.",
+  newborn: "A freshly launched coin cannot be bid for until its protection time ends.",
+  "0 keys": "Nobody holds a key to the coin's account, so nobody can change its code or take its funds. Not even the people who launched it.",
+  "launchpad code": "The coin runs exactly the code the launchpad ships, checked by its hash on chain.",
+  watchlist: "Outside tokens that holders have nominated for a tender. The brain only considers these.",
+  "sealed vote": "Votes are hidden until voting ends, so nobody can follow the crowd. You reveal yours afterwards.",
+  convert: "After a takeover, swap your tokens of the absorbed coin for the winner's at the agreed rate.",
+};
+const term = (key, label = key) => `<span class="term" tabindex="0" data-term="${esc(key)}">${esc(label)}</span>`;
+
 // ---------- formatting ----------
 const compact = (n, d = 2) => Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: d }).format(n);
 const tokNum = (u) => Number(BigInt(u || 0) / 10n ** 12n) / 1e6;
@@ -52,6 +81,8 @@ const fmtSig = (n) => {
 };
 // price_yocto is yoctoNEAR per whole token.
 const priceNum = (i) => Number(BigInt(i.price_yocto)) / 1e24;
+// A single token costs a tiny fraction of a NEAR, so prices are shown per 1M tokens.
+const fmtPrice = (p) => `${fmtSig(p * 1e6)} Ⓝ`;
 const fmtRate = (ppm) => (Number(ppm) / 1e6).toFixed(4);
 const fmtBps = (b) => (b >= 0 ? "+" : "") + (b / 100).toFixed(1) + "%";
 const fmtPct = (x) => (x >= 0 ? "+" : "") + (x * 100).toFixed(Math.abs(x) < 0.1 ? 2 : 1) + "%";
@@ -71,6 +102,20 @@ const left = (ns) => {
 // Relative times live in their own elements so a card's HTML stays the same between refreshes.
 const agoTag = (ns) => `<time data-ago="${esc(ns)}">${ago(ns)}</time>`;
 const leftTag = (ns) => `<span data-left="${esc(ns)}">${left(ns)}</span>`;
+// Contract texts carry raw integers and account ids: make them readable.
+function humanize(text) {
+  let t = String(text ?? "");
+  t = t.replace(/\b\d{20,}\b/g, (m) => fmtTokens(m));
+  t = t.replace(/\b(\d{5,}) tokens\b/g, (_, n) => `${compact(Number(n))} tokens`);
+  t = t.replace(/([+-]?\d+) bps/g, (_, n) => `${n.startsWith("+") ? "+" : ""}${(Number(n) / 100).toFixed(1)}%`);
+  for (const { account_id: a } of state.coins) if (state.info[a]) t = t.split(a).join(`$${state.info[a].symbol}`);
+  return t;
+}
+// The reason inside a contract panic, without the wrapping.
+function plainError(msg) {
+  const m = /Smart contract panicked: ([^"\\]+)/.exec(msg) || /"ExecutionError":"([^"]+)"/.exec(msg);
+  return (m ? m[1] : String(msg)).trim().slice(0, 180);
+}
 const statusName = (st) => (typeof st === "string" ? st : Object.keys(st || {})[0] || "?");
 
 // Decimal text <-> integer units, exact.
@@ -161,6 +206,12 @@ async function loadConfig() {
   }
   $("net-badge").textContent = NETWORK;
   $("launchpad").textContent = cfg.launchpad;
+  $("hero-eyebrow").lastChild.textContent = cfg.dev_key ? "Local demo · play money" : NETWORK === "testnet" ? "Live on NEAR testnet" : "Memecoins on NEAR";
+  $("mode-note").innerHTML = cfg.dev_key
+    ? `<b>Demo mode.</b><span>Everything here is play money on a local chain. Use “playing as” at the top to switch between demo holders and see every side of a deal.</span>`
+    : NETWORK === "testnet"
+      ? `<b>Testnet.</b><span>Test NEAR only: nothing here costs real money. Connect a testnet wallet to trade, or just look around.</span>`
+      : "";
   if (cfg.dev_key && cfg.accounts?.length) {
     $("actor-wrap").hidden = false;
     $("actor").innerHTML = cfg.accounts.map((a) => `<option>${esc(a)}</option>`).join("");
@@ -171,6 +222,8 @@ async function loadConfig() {
     // No dev key: actions open a near-cli command. An account can still be typed to see its balances.
     $("viewer-wrap").hidden = false;
     $("viewer").value = store.get(`autocto:viewer:${NETWORK}`) || "";
+    $("connect").hidden = !hasWallet();
+    if (hasWallet()) restoreWallet();
   }
   state.sel = store.get(`autocto:coin:${cfg.launchpad}`);
 }
@@ -262,6 +315,20 @@ function renderRules() {
     `brain ${fmtNear(p.brain_fee)}/think, ≤ ${fmtNear(p.brain_daily_cap)}/day`, `fee ${p.trade_fee_bps / 100}%`,
     ...(p.tender_threshold_bps ? [`tender: ${p.tender_threshold_bps / 100}% of outside supply in ${p.tender_period_sec}s, backed by ${p.quorum_bps / 100}% of holders, mints ≤ ${p.tender_max_dilution_bps / 100}%`] : []),
   ];
+  const mins = (sec) => (sec % 3600 === 0 ? `${sec / 3600} h` : sec >= 120 ? `${Math.round(sec / 60)} min` : `${sec} s`);
+  const cards = [
+    [mins(p.vote_period_sec), "to vote", "Each bid is open for this long. Nothing happens before the vote ends."],
+    [`${p.quorum_bps / 100}%`, "must take part", `At least this share of the target coin has to vote, or the bid fails.`],
+    [`${p.approval_bps / 100}%`, "must say yes", "Of the votes cast. A simple majority is not enough."],
+    [`${p.veto_bps / 100}%`, "can block", "If this share of the bidder's own holders vetoes, the bid is off."],
+    [`±${p.max_premium_bps / 100}%`, "price limit", "A bid can be at most this far above or below the fair rate, so nobody is robbed by a silly price."],
+    [mins(p.newborn_protection_sec), "newborn protection", "A new coin cannot be bid for until this much time has passed."],
+    [`${p.max_offers_per_day} a day`, "bids per coin", `And a ${mins(p.rebid_cooldown_sec)} wait before bidding for the same coin again. No spam.`],
+    [`${p.trade_fee_bps / 100}%`, "trading fee", "Goes to the coin's own treasury, which pays for its brain. No team cut."],
+    ...(p.tender_threshold_bps ? [[`${p.tender_threshold_bps / 100}%`, "for a tender", `A tender for an outside token only happens if this share of its supply is deposited within ${mins(p.tender_period_sec)}. Otherwise everyone is refunded.`]] : []),
+    ["0 keys", "no owner", "No account can change a coin's code, rules or funds after launch."],
+  ];
+  $("rules-cards").innerHTML = cards.map(([v, k, t]) => `<div><b>${esc(v)}</b><span>${esc(k)}</span><p>${esc(t)}</p></div>`).join("");
   $("rules-chips").innerHTML = items.map((t) => `<span>${esc(t)}</span>`).join("") + `<span>no owner · no setters</span>`;
   $("code-hash").textContent = `coin code ${state.codeHash} · ${typeof state.codeMode === "string" ? state.codeMode : "Global"}`;
 }
@@ -296,10 +363,10 @@ function renderTicker(offers) {
 // ---------- render: market ----------
 function coinStatus(info) {
   const st = statusName(info.status);
-  if (st === "Merged") return [`merged → $${esc(sym(info.status.Merged.into))}`, "merged"];
-  if (st === "MergePending") return ["merge pending", "pending"];
+  if (st === "Merged") return [`absorbed by $${esc(sym(info.status.Merged.into))}`, "merged"];
+  if (st === "MergePending") return ["merging…", "pending"];
   if (chainNow < BigInt(info.protected_until)) return [`newborn · ${leftTag(info.protected_until)}`, "newborn"];
-  return ["open to bids", "active"];
+  return ["trading", "active"];
 }
 
 function sameCode(a) {
@@ -312,10 +379,10 @@ function sameCode(a) {
 function badges(a) {
   const i = state.info[a];
   const same = sameCode(a);
-  return `<span class="badge ${state.keys[a] === 0 ? "ok" : "bad"}" title="access keys on the coin account">${state.keys[a] === 0 ? "🔒 0 keys" : `${esc(state.keys[a] ?? "?")} keys`}</span>
-    <span class="badge ${same ? "ok" : "bad"}" title="code hash equals the launchpad's coin code">${same ? "✔ launchpad code" : "code ?"}</span>
+  return `<span class="badge ${state.keys[a] === 0 ? "ok" : "bad"}" data-term="0 keys" tabindex="0">${state.keys[a] === 0 ? "🔒 0 keys" : `${esc(state.keys[a] ?? "?")} keys`}</span>
+    <span class="badge ${same ? "ok" : "bad"}" data-term="launchpad code" tabindex="0">${same ? "✔ launchpad code" : "code ?"}</span>
     ${i.absorbed.map(([t]) => `<span class="badge ate">ate $${esc(sym(t))}</span>`).join("")}
-    ${(i.watchlist || []).map((t) => `<span class="badge" title="outside token nominated by holders for a tender">👀 ${esc(short(t))}</span>`).join("")}`;
+    ${(i.watchlist || []).map((t) => `<span class="badge" data-term="watchlist" tabindex="0">👀 ${esc(short(t))}</span>`).join("")}`;
 }
 
 const hue = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
@@ -355,7 +422,7 @@ function renderCoins() {
       <div class="c-coin">${avatar(i)}
         <div class="who"><div class="nm"><b>$${esc(i.symbol)}</b> <span class="muted">${esc(i.name)}</span></div>
         <div class="badges">${badges(a)}</div></div></div>
-      <div class="c num${flash}" data-l="Price">${merged ? "–" : `${fmtSig(p)} Ⓝ`}</div>
+      <div class="c num${flash}" data-l="Price / 1M">${merged ? "–" : fmtPrice(p)}</div>
       <div class="c c-spark" data-l="Session">${merged ? "" : sparkline(a)}${ch == null || merged ? "" : `<span class="chg ${ch >= 0 ? "up" : "down"}">${fmtPct(ch)}</span>`}</div>
       <div class="c num" data-l="Market cap">${merged ? "–" : esc(fmtNear(marketCap(i)))}</div>
       <div class="c num" data-l="Liquidity">${esc(fmtNear(curveReal(i)))}</div>
@@ -364,7 +431,7 @@ function renderCoins() {
       <div class="c c-status"><span class="pill ${cls}">${label}</span></div>
     </article>`;
     return { key: a, html };
-  }), `<p class="muted pad">No coins yet. Launch the first one below.</p>`);
+  }), `<p class="muted pad">No coins yet. Be the first: <a href="#launch">launch one</a>.</p>`);
 
   setHTML($("coin-tabs"), state.coins.map(({ account_id: a }) =>
     `<button type="button" class="chip${a === state.sel ? " on" : ""}" data-select="${esc(a)}">$${esc(sym(a))}</button>`).join(""));
@@ -380,22 +447,20 @@ function renderDetail() {
   setHTML($("coin-head"), `<div class="ch-main">${avatar(i, "big")}
       <div class="ch-name"><h3>$${esc(i.symbol)} <span class="muted">${esc(i.name)}</span></h3>
         <div class="acct mono">${esc(a)}</div></div>
-      <div class="ch-price"><div class="bigprice mono">${merged ? "merged" : `${fmtSig(priceNum(i))} Ⓝ`}</div>
-        <div class="small">${ch == null || merged ? `<span class="muted">per token</span>` : `<span class="chg ${ch >= 0 ? "up" : "down"}">${fmtPct(ch)}</span> <span class="muted">since you opened this page</span>`}</div></div>
+      <div class="ch-price"><div class="bigprice mono">${merged ? "absorbed" : fmtPrice(priceNum(i))}</div>
+        <div class="small">${merged ? "" : `<span class="muted">per 1M $${esc(i.symbol)}</span>`}${ch == null || merged ? "" : ` · <span class="chg ${ch >= 0 ? "up" : "down"}">${fmtPct(ch)}</span> <span class="muted">since you opened this page</span>`}</div></div>
     </div>
     <p class="persona">${esc(i.persona)}</p>
     <div class="badges"><span class="pill ${cls}">${label}</span>${badges(a)}</div>`);
-  // price_yocto is per whole token; NEAR per 1M tokens is easier to read.
-  const perM = Number(BigInt(i.price_yocto) * 1_000_000n * 1_000_000n / YOCTO) / 1e6;
   const rows = [
-    ["price / 1M", `${perM.toFixed(4)} Ⓝ`], ["market cap", merged ? "–" : fmtNear(marketCap(i))],
-    ["circulating", fmtTokens(i.circulating)], ["locked", fmtTokens(i.total_locked)],
+    ["market cap", merged ? "–" : fmtNear(marketCap(i)), "market cap"], ["liquidity", fmtNear(curveReal(i)), "liquidity"],
+    ["treasury", fmtNear(i.treasury), "treasury"],
+    ["in circulation", fmtTokens(i.circulating)], ["locked for votes", fmtTokens(i.total_locked), "lock"],
     ["total supply", fmtTokens(i.total_supply)],
-    ...(BigInt(i.owed || 0) > 0n ? [["owed to converters", fmtTokens(i.owed), "still to be minted for holders of coins it absorbed"]] : []),
-    ["curve NEAR", fmtNear(curveReal(i))], ["treasury", fmtNear(i.treasury)],
-    ["brain spent", fmtNear(i.brain_spent_total)], ["decisions", String(i.decisions)],
+    ...(BigInt(i.owed || 0) > 0n ? [["owed to converters", fmtTokens(i.owed), "convert"]] : []),
+    ["brain spent", fmtNear(i.brain_spent_total), "brain"], ["brain decisions", String(i.decisions)],
   ];
-  setHTML($("coin-stats"), rows.map(([k, v, tip]) => `<div${tip ? ` title="${esc(tip)}"` : ""}><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")
+  setHTML($("coin-stats"), rows.map(([k, v, t]) => `<div><dt>${t ? term(t, k) : esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")
     + `<div><dt>born</dt><dd>${agoTag(i.born_at)}</dd></div>`);
   renderChart();
 }
@@ -444,7 +509,7 @@ function renderChart() {
       <circle class="after ${mv >= 0 ? "up" : "down"}" cx="${ax.toFixed(1)}" cy="${ay.toFixed(1)}" r="5"/>
       <text class="lbl ${mv >= 0 ? "up" : "down"}" x="${Math.min(W - R - 2, Math.max(L + 2, ax)).toFixed(1)}" y="${Math.max(12, ay - 10).toFixed(1)}" text-anchor="${ax > W * 0.6 ? "end" : "start"}">after this trade ${fmtPct(mv)}</text>`;
   }
-  $("chart-note").textContent = `price = NEAR in curve ÷ tokens in curve · ${fmtNear(state.params.virtual_near)} virtual · starts at ${fmtSig(price(0))} Ⓝ`;
+  $("chart-note").textContent = `Every buy moves the dot up the line, every sell moves it down · started at ${fmtPrice(price(0))} per 1M`;
   setHTML(box, `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Bonding curve of $${esc(i.symbol)} with the current price marked">
     ${grid}
     <line class="axis" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>
@@ -455,9 +520,9 @@ function renderChart() {
     ${prev}
     <circle class="pulse" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6"/>
     <circle class="now" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5"/>
-    <text class="lbl strong" x="${(cx + (leftSide ? -12 : 12)).toFixed(1)}" y="${(cy + (leftSide ? -22 : 16)).toFixed(1)}" text-anchor="${leftSide ? "end" : "start"}">now ${fmtSig(price(real))} Ⓝ</text>
-    <text class="lbl" x="${(cx + (leftSide ? -12 : 12)).toFixed(1)}" y="${(cy + (leftSide ? -8 : 30)).toFixed(1)}" text-anchor="${leftSide ? "end" : "start"}">${real.toFixed(2)} Ⓝ in curve</text>
-    <text class="lbl" x="${L}" y="${H - 8}">0 Ⓝ in curve</text>
+    <text class="lbl strong" x="${(cx + (leftSide ? -12 : 12)).toFixed(1)}" y="${(cy + (leftSide ? -22 : 16)).toFixed(1)}" text-anchor="${leftSide ? "end" : "start"}">now ${fmtPrice(price(real))} / 1M</text>
+    <text class="lbl" x="${(cx + (leftSide ? -12 : 12)).toFixed(1)}" y="${(cy + (leftSide ? -8 : 30)).toFixed(1)}" text-anchor="${leftSide ? "end" : "start"}">${real.toFixed(2)} Ⓝ paid in so far</text>
+    <text class="lbl" x="${L}" y="${H - 8}">0 Ⓝ paid in</text>
     <text class="lbl" x="${W - R}" y="${H - 8}" text-anchor="end">${xmax.toFixed(1)} Ⓝ</text>
   </svg>`);
 }
@@ -484,8 +549,8 @@ function renderSessionChart(a, W, H) {
     <line class="axis" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>
     <path class="step ${dir}" d="${d}"/>
     <circle class="now ${dir}" cx="${sx(now).toFixed(1)}" cy="${sy(last.p).toFixed(1)}" r="5"/>
-    <text class="lbl" x="${L}" y="${(sy(hi) - 6).toFixed(1)}">${hi === lo ? "" : "high "}${fmtSig(hi)} Ⓝ</text>
-    ${hi === lo ? "" : `<text class="lbl" x="${L}" y="${(sy(lo) + 14).toFixed(1)}">low ${fmtSig(lo)} Ⓝ</text>`}
+    <text class="lbl" x="${L}" y="${(sy(hi) - 6).toFixed(1)}">${hi === lo ? "" : "high "}${fmtPrice(hi)} / 1M</text>
+    ${hi === lo ? "" : `<text class="lbl" x="${L}" y="${(sy(lo) + 14).toFixed(1)}">low ${fmtPrice(lo)} / 1M</text>`}
     <text class="lbl" x="${L}" y="${H - 8}">${esc(since)}</text>
     <text class="lbl" x="${W - R}" y="${H - 8}" text-anchor="end">now · ${s.length} price ${s.length === 1 ? "level" : "levels"} seen</text>
   </svg>`);
@@ -529,23 +594,23 @@ function renderTicket() {
   sub.className = `big ${mode}`;
   sub.textContent = `${{ buy: "Buy", sell: "Sell", lock: "Lock", unlock: "Unlock" }[mode]} $${s}`;
   $("think").dataset.coin = a;
-  $("think-note").textContent = `wakes the brain · ${fmtNear(state.params.brain_fee)} per think · spent today ${fmtNear(i.brain_spent_today)} of ${fmtNear(state.params.brain_daily_cap)}`;
+  $("think-note").textContent = `Wakes $${s}'s AI to look for a deal. Costs ${fmtNear(state.params.brain_fee)}; it has used ${fmtNear(i.brain_spent_today)} of ${fmtNear(state.params.brain_daily_cap)} today.`;
 
   // position
   const who = state.me.acct;
   $("pos-who").textContent = who || "";
   const until = state.me.until[a] || 0n;
   setHTML($("pos"), !who
-    ? `<div><dt class="muted">${cfg.dev_key ? "No account selected." : "Type your account next to “view as” to see balances."}</dt></div>`
-    : `<div><dt>wallet $${esc(s)}</dt><dd>${esc(fmtTokens(state.me.bal[a] || 0n))}</dd></div>
-       <div><dt>locked $${esc(s)}</dt><dd>${esc(fmtTokens(lockedOf(a)))}</dd></div>
+    ? `<div><dt class="muted">${cfg.dev_key ? "No account selected." : hasWallet() ? "Connect a wallet to see your balances here." : "Type your account at the top to see balances."}</dt></div>`
+    : `<div><dt>$${esc(s)} you can sell</dt><dd>${esc(fmtTokens(state.me.bal[a] || 0n))}</dd></div>
+       <div><dt>$${esc(s)} ${term("lock", "locked for votes")}</dt><dd>${esc(fmtTokens(lockedOf(a)))}</dd></div>
        <div><dt>NEAR</dt><dd>${state.me.near == null ? "–" : esc(fmtNear(state.me.near))}</dd></div>
        ${until > chainNow ? `<div><dt>backing a vote</dt><dd>${leftTag(until)}</dd></div>` : ""}`);
   const lots = state.me.locks[a] || [];
   setHTML($("lots"), lots.length
-    ? `<div class="small muted">Locked lots · only lots locked before a bid was announced count in its vote</div>`
+    ? `<div class="small muted">Your locks · each one counts for bids announced after it was made</div>`
       + lots.map((l) => `<div class="lot"><span class="mono">${esc(fmtTokens(l.amount))} $${esc(s)}</span><span class="muted small">locked ${agoTag(l.since)}</span></div>`).join("")
-    : who ? `<div class="small muted">No locked lots. Lock tokens to vote on bids for $${esc(s)} and to veto its own bids.</div>` : "");
+    : who ? `<div class="small muted">Nothing locked yet. Lock some $${esc(s)} to vote when another coin bids for it, and to veto $${esc(s)}'s own bids.</div>` : "");
   updateQuote();
 }
 
@@ -569,10 +634,10 @@ async function updateQuote() {
   const raw = $("amt").value, v = parseUnits(raw, modeDec(mode)), av = available(mode, a);
   const until = state.me.until[a] || 0n;
   const hints = {
-    buy: `NEAR goes into the curve; ${state.params.trade_fee_bps / 100}% fee goes to the coin's treasury.`,
-    sell: "Sells back to the curve. Locked tokens must be unlocked first.",
-    lock: "Locked tokens vote on takeover bids. Lock before a bid is announced: later lots do not count for it.",
-    unlock: "Newest lots are released first.",
+    buy: `You pay NEAR and get $${i.symbol} at the current price. ${state.params.trade_fee_bps / 100}% goes to the coin's own treasury.`,
+    sell: `You give $${i.symbol} back and get NEAR at the current price. Locked tokens must be unlocked first.`,
+    lock: "Locking gives you a vote. The tokens stay yours and you can unlock later. Lock before a bid is announced, or it won't count for that bid.",
+    unlock: "Makes locked tokens sellable again. Newest locks are released first.",
   };
   let note = hints[mode], ok = false, rows = "", quote = null, bad = false;
   if (raw.trim() === "") { /* keep the hint */ }
@@ -592,9 +657,9 @@ async function updateQuote() {
       const impact = spot > 0 && avg > 0 ? (mode === "buy" ? avg / spot - 1 : 1 - avg / spot) : 0;
       const recv = (x) => (mode === "buy" ? `${fmtTokens(x)} $${esc(i.symbol)}` : esc(fmtNear(x)));
       rows = `<div class="recv"><dt>You receive</dt><dd>≈ ${recv(quote.out)}</dd></div>
-        <div><dt>Average price</dt><dd>${fmtSig(avg)} Ⓝ</dd></div>
-        <div><dt title="How far the average price is from the current price, fee included">Price impact + fee</dt><dd class="${impact > 0.05 ? "down" : ""}">${(impact * 100).toFixed(2)}%</dd></div>
-        <div><dt title="The trade is refused by the contract if you would get less">Minimum received</dt><dd>${recv(minOut(quote.out))}</dd></div>`;
+        <div><dt>Your price per 1M</dt><dd>${fmtPrice(avg)}</dd></div>
+        <div><dt title="How far your price is from the current price, fee included. Bigger trades move the price more.">Price impact + fee</dt><dd class="${impact > 0.05 ? "down" : ""}">${(impact * 100).toFixed(2)}%</dd></div>
+        <div><dt title="If the price moves and you would get less than this, the trade is refused and you keep your money">You get at least</dt><dd>${recv(minOut(quote.out))}</dd></div>`;
       if (mode === "buy" && state.me.registered[a] === false) note = `First buy of $${i.symbol}: ${fmtNear(state.storageMin[a] || 0n)} of this pays for your token storage.`;
       if (!ok) { note = "Too small to trade."; bad = true; }
     }
@@ -677,6 +742,23 @@ function renderOffers(offers) {
     const cls = { Open: "active", Executing: "pending", Executed: "merged", Failed: "failed", Sending: "pending" }[st] || "";
     const stance = stanceFor(o);
     const B = sym(o.buyer), T = sym(o.target);
+    const prem = o.premium_bps / 100;
+    const say = `<b>$${esc(B)}</b> wants to absorb <b>$${esc(T)}</b>. Each $${esc(T)} would become ${fmtRate(o.rate_ppm)} $${esc(B)}, <span class="${prem >= 0 ? "up" : "down"}">${Math.abs(prem).toFixed(1)}% ${prem >= 0 ? "more" : "less"}</span> than it is worth today.`;
+    const sayNow = st === "Executed" ? `Done: $${esc(T)} is now part of $${esc(B)}. Its holders can convert.`
+      : st === "Failed" ? `It did not go through: ${esc(o.status.Failed.reason)}.`
+      : !open ? "The merge is being carried out."
+      : !ended ? `Voting is open. It passes if at least ${quorum}% of $${esc(T)} votes and ${p.approval_bps / 100}% of the votes say yes.`
+      : inReveal ? "Voting has ended. Sealed votes are being revealed."
+      : "Voting has ended. Anyone can press Finalize to count the votes.";
+    // What this account can do here: only lots locked before the bid count.
+    const before = (coin) => (state.me.locks[coin] || []).filter((l) => BigInt(l.since) < BigInt(o.created_at)).reduce((x, l) => x + BigInt(l.amount), 0n);
+    let move = "";
+    if (open && !ended && who) {
+      const vt = before(o.target), vb = before(o.buyer);
+      move = vt > 0n ? `<div class="move can"><i>🗳</i><span>You have ${fmtTokens(vt)} $${esc(T)} locked from before this bid, so you can vote.</span></div>`
+        : vb > 0n ? `<div class="move can"><i>🛡</i><span>You have ${fmtTokens(vb)} $${esc(B)} locked: you can veto if you think $${esc(B)} is overpaying.</span></div>`
+        : `<div class="move"><i>👀</i><span>You have no $${esc(T)} or $${esc(B)} that was locked before this bid, so you can only watch this one. Lock tokens now to have a say in the next.</span></div>`;
+    }
     const voteBtns = ballot
       ? `<span class="small muted">You sealed <b>${ballot.support ? "YES" : "NO"}</b>. Come back to reveal it when the vote ends.</span>`
       : `<button class="yes" data-act="vote" data-coin="${esc(o.target)}" data-offer="${esc(key)}" data-round="${esc(o.round)}" data-support="true">${sealedMode ? "Seal YES" : "Vote YES"}</button>
@@ -685,23 +767,25 @@ function renderOffers(offers) {
       <div class="route"><span class="vs"><b>$${esc(B)}</b><i>bids for</i><b>$${esc(T)}</b></span>
         <span class="pill ${cls}">${esc(st === "Failed" ? "failed: " + o.status.Failed.reason : st.toLowerCase())}</span>
         <span class="muted small">${proposerHtml(o.proposer)} · ${agoTag(o.created_at)}</span></div>
+      <p class="say">${say} <span class="muted">${sayNow}</span></p>
+      ${move}
       <div class="terms">
-        <span><small>rate</small><b>${fmtRate(o.rate_ppm)}</b> $${esc(B)} per $${esc(T)}</span>
-        <span><small>fair</small><b>${fmtRate(o.fair_rate_ppm)}</b></span>
-        <span><small>premium</small><b class="${o.premium_bps >= 0 ? "up" : "down"}">${fmtBps(o.premium_bps)}</b></span>
+        <span><small>${term("rate")}</small><b>${fmtRate(o.rate_ppm)}</b> $${esc(B)} per $${esc(T)}</span>
+        <span><small>${term("fair rate")}</small><b>${fmtRate(o.fair_rate_ppm)}</b></span>
+        <span><small>${term("premium")}</small><b class="${o.premium_bps >= 0 ? "up" : "down"}">${fmtBps(o.premium_bps)}</b></span>
         <span><small>round</small><b>${esc(o.round)}</b></span>
         ${open && !ended ? `<span><small>vote</small><b>${leftTag(o.vote_ends)}</b></span>` : ""}
         ${open && inReveal ? `<span><small>reveal window</small><b>${leftTag(revealEnds)}</b></span>` : ""}
       </div>
-      <div class="pitch"><div class="who">pitch from $${esc(B)} · untrusted</div>“${esc(o.pitch)}”</div>
+      <div class="pitch"><div class="who">pitch from $${esc(B)}'s brain · an ad, not a fact</div>“${esc(humanize(o.pitch))}”</div>
       ${o.counter ? `<div class="pitch"><div class="who">counter from $${esc(T)}: ${fmtRate(o.counter.rate_ppm)}</div>“${esc(o.counter.pitch)}”</div>` : ""}
-      ${stance ? `<div class="pitch brain"><div class="who">$${esc(T)} brain</div>${esc(stance)}</div>` : ""}
+      ${stance ? `<div class="pitch brain"><div class="who">what $${esc(T)}'s brain tells its holders</div>${esc(humanize(stance))}</div>` : ""}
       <div>
-        <div class="barlabel"><span><b class="up">yes ${fmtTokens(yes)}</b> · <b class="down">no ${fmtTokens(no)}</b>${sealedMode || sealed > 0n ? ` · sealed ${fmtTokens(sealed)} <span title="Sealed votes count only once revealed">(direction hidden)</span>` : ""}</span><span>quorum ${quorum}% of ${fmtTokens(circ)}</span></div>
+        <div class="barlabel"><span><b class="up">yes ${fmtTokens(yes)}</b> · <b class="down">no ${fmtTokens(no)}</b>${sealedMode || sealed > 0n ? ` · sealed ${fmtTokens(sealed)} <span title="Sealed votes count only once revealed">(direction hidden)</span>` : ""}</span><span>${term("quorum", "needs")} ${quorum}% of ${fmtTokens(circ)} to vote</span></div>
         <div class="bar"><div class="y" style="width:${pct(yes)}%"></div><div class="n" style="left:${pct(yes)}%;width:${pct(no)}%"></div><div class="s" style="left:${pct(yes + no)}%;width:${pct(sealed)}%"></div><div class="q" style="left:${quorum}%"></div></div>
       </div>
       <div>
-        <div class="barlabel"><span>$${esc(B)} veto ${fmtTokens(o.veto || 0)}</span><span>blocks at ${p.veto_bps / 100}%</span></div>
+        <div class="barlabel"><span>$${esc(B)} holders ${term("veto", "against")} ${fmtTokens(o.veto || 0)}</span><span>blocked at ${p.veto_bps / 100}%</span></div>
         <div class="bar"><div class="n" style="left:0;width:${vetoPct}%"></div><div class="q" style="left:${p.veto_bps / 100}%"></div></div>
       </div>
       <div class="actions">
@@ -715,7 +799,7 @@ function renderOffers(offers) {
       </div>
     </article>`;
     return { key, html };
-  }), Object.values(state.tenders).some((l) => l.length) ? "" : `<p class="muted pad">No bids yet. Press 🧠 Think on a coin.</p>`);
+  }), Object.values(state.tenders).some((l) => l.length) ? "" : `<p class="muted pad">No deals yet. Open a coin and press <b>🧠 Think</b>: its brain looks at the rivals and may make the first bid.</p>`);
 }
 
 // Tender offers for tokens from outside the launchpad: deposits are the vote.
@@ -739,22 +823,27 @@ function renderTenders() {
     const ended = open && BigInt(t.deadline) <= chainNow;
     const cls = { Open: "active", Opening: "pending", Succeeded: "merged", Failed: "failed" }[st] || "";
     const C = sym(coin);
+    const sayNow = st === "Succeeded" ? "It worked: enough was deposited. Depositors can claim their coins."
+      : st === "Failed" ? `It did not go through: ${esc(t.status.Failed.reason)}. Depositors can take their tokens back.`
+      : st === "Opening" ? "The brain is checking that the token's owner cannot rug it."
+      : ended ? "The deadline has passed. Anyone can press Settle." : "";
     const html = `<article class="card offer tender${open ? " live" : ""}">
       <div class="route"><span class="vs"><b>$${esc(C)}</b><i>tenders for outside token</i><b class="mono">${esc(t.token)}</b></span>
         <span class="pill ${cls}">${esc(st === "Failed" ? "failed: " + t.status.Failed.reason : st.toLowerCase())}</span>
         <span class="muted small">${proposerHtml(t.proposer)} · ${agoTag(t.created_at)}</span></div>
+      <p class="say"><b>$${esc(C)}</b> offers holders of the outside token <b>${esc(short(t.token))}</b> a swap: ${fmtRate(t.rate_ppm)} $${esc(C)} for each token they deposit. ${term("tender", "All or nothing")}: it only happens if ${share(t.threshold)} of that token's supply is deposited in time. <span class="muted">${sayNow}</span></p>
       <div class="terms">
         <span><small>rate</small><b>${fmtRate(t.rate_ppm)}</b> $${esc(C)} per token</span>
         <span><small>all or nothing at</small><b>${share(t.threshold)}</b> of its supply</span>
         ${open && !ended ? `<span><small>deadline</small><b>${leftTag(t.deadline)}</b></span>` : ""}
       </div>
-      <div class="pitch"><div class="who">pitch from $${esc(C)}</div>“${esc(t.pitch)}”</div>
+      <div class="pitch"><div class="who">pitch from $${esc(C)}'s brain</div>“${esc(humanize(t.pitch))}”</div>
       <div>
         <div class="barlabel"><span>deposited ${share(t.deposited)} of supply</span><span>needs ${share(t.threshold)} · cap ${share(t.max_deposit)}</span></div>
         <div class="bar"><div class="y" style="width:${pct(t.deposited)}%"></div><div class="q" style="left:${pct(t.threshold)}%"></div></div>
       </div>
       <div>
-        <div class="barlabel"><span>$${esc(C)} holders backing ${fmtTokens(backing)}</span><span>needs ${p.quorum_bps / 100}% of ${fmtTokens(bsupply)}</span></div>
+        <div class="barlabel"><span>$${esc(C)} holders ${term("backing")} ${fmtTokens(backing)}</span><span>needs ${p.quorum_bps / 100}% of ${fmtTokens(bsupply)}</span></div>
         <div class="bar"><div class="y" style="width:${backPct}%"></div><div class="q" style="left:${p.quorum_bps / 100}%"></div></div>
       </div>
       <div>
@@ -772,6 +861,21 @@ function renderTenders() {
   }));
 }
 
+// What a brain's answer means, in a sentence.
+function describeAction(coin, a) {
+  const me = `$${sym(coin)}`;
+  const offerName = (key) => { const [b, n] = String(key).split("#"); return `$${sym(b)}'s bid #${n}`; };
+  switch (a?.type) {
+    case "none": return "Decided to wait.";
+    case "offer": return `Bids for $${sym(a.target)}: ${fmtRate(a.rate_ppm)} ${me} for each $${sym(a.target)}.`;
+    case "counter": return `Asks for more on ${offerName(a.offer)}: ${fmtRate(a.rate_ppm)} per token.`;
+    case "accept_counter": return `Accepts the counter-offer on its bid #${a.offer_id}.`;
+    case "stance": return `Tells its holders to vote ${a.support ? "YES" : "NO"} on ${offerName(a.offer)}.`;
+    case "tender": return `Opens a tender for the outside token ${short(a.token)}: ${fmtRate(a.rate_ppm)} ${me} per token.`;
+    default: return a ? JSON.stringify(a) : "";
+  }
+}
+
 // ---------- render: brain decisions, feed ----------
 function renderDecisions() {
   const rows = [];
@@ -784,12 +888,12 @@ function renderDecisions() {
     const cls = { Applied: "active", Pending: "pending", Refused: "failed", NoAnswer: "failed" }[st] || "";
     const html = `<div class="card decision">
       <div class="head"><b>🧠 $${esc(sym(coin))} <span class="muted">#${esc(d.id)}</span></b><span class="pill ${cls}">${esc(st === "Refused" ? "refused: " + d.status.Refused.reason : st)}</span></div>
-      ${out ? `<div class="thought">${esc(out.thought)}</div><div class="mono small muted wrap">${esc(JSON.stringify(out.action))}</div>` : ""}
-      <div class="small muted">${agoTag(d.requested_at)} · ${out?.mode ? esc(out.mode) + " · " : ""}paid ${esc(fmtNear(d.paid))} by ${d.paid_by_treasury ? "treasury" : esc(d.requested_by)}
-        · <a href="#" data-verify="${esc(coin)}|${esc(d.id)}">verify this decision</a></div>
+      ${out ? `<div class="thought">“${esc(humanize(out.thought))}”</div><div class="did" title="${esc(JSON.stringify(out.action))}">→ ${esc(describeAction(coin, out.action))}</div>` : st === "Pending" ? `<div class="muted">Thinking… the answer arrives in a few seconds.</div>` : ""}
+      <div class="small muted">${agoTag(d.requested_at)} · ${out?.mode ? esc(out.mode) + " · " : ""}woken by ${esc(short(d.requested_by))} · cost ${esc(fmtNear(d.paid))}${d.paid_by_treasury ? " from the treasury" : ""}
+        · <a href="#" data-verify="${esc(coin)}|${esc(d.id)}">proof</a></div>
     </div>`;
     return { key: `${coin}|${d.id}`, html };
-  }), `<p class="muted pad">No brain runs yet.</p>`);
+  }), `<p class="muted pad">No brain has been woken yet. Open a coin and press 🧠 Think.</p>`);
 }
 
 const EV_CLASS = { trade: "t", lock: "l", unlock: "l", think: "b", thought: "b", stance: "b", vote: "v", vote_sealed: "v", veto: "x", born: "n" };
@@ -802,12 +906,74 @@ function renderLog() {
     let key = `${e.coin}|${e.at}|${e.event}|${e.text}`;
     const n = seen.get(key) || 0; seen.set(key, n + 1);
     if (n) key += `|${n}`;
-    return { key, html: `<li><span class="ev ${EV_CLASS[e.event] || ""}">$${esc(sym(e.coin))} ${esc(e.event)}</span><span class="tx">${esc(e.text)}</span><span class="when">${agoTag(e.at)}</span></li>` };
+    return { key, html: `<li><span class="ev ${EV_CLASS[e.event] || ""}">$${esc(sym(e.coin))} ${esc(e.event.replace(/_/g, " "))}</span><span class="tx">${esc(humanize(e.text))}</span><span class="when">${agoTag(e.at)}</span></li>` };
   }), `<li class="muted">Nothing has happened yet.</li>`);
+}
+
+// The newest real deal on this launchpad, drawn large in the intro.
+function renderHeroDeal(offers) {
+  // A vote in progress first, then the newest finished merge, then anything.
+  const o = offers.find(liveOffer) || offers.find((x) => statusName(x.status) === "Executed") || offers[0];
+  const fighter = (i, role, small) => `<div class="fighter${small ? " small" : ""}">${avatar(i)}<b>$${esc(i.symbol)}</b><small>${role}</small></div>`;
+  const arrow = `<svg width="84" height="16" viewBox="0 0 84 16" aria-hidden="true"><path class="dash" d="M2 8H72"/><path class="head" d="M70 2l12 6-12 6z"/></svg>`;
+  if (!o || !state.info[o.buyer] || !state.info[o.target]) {
+    const ex = (symbol) => ({ symbol });
+    setHTML($("hero-deal"), `<div class="duel"><div class="duel-top"><span>How a takeover looks</span><span class="pill">example</span></div>
+      <div class="duel-row">${fighter(ex("PEPE"), "bidder")}<div class="duel-mid">${arrow}<span>+10% premium</span></div>${fighter(ex("DOGE"), "target", true)}</div>
+      <p class="duel-say"><b>$PEPE</b>'s brain bids for <b>$DOGE</b>. $DOGE holders vote, $PEPE holders can block it. If it passes, the two become one coin.</p>
+      <div class="bar"><div class="y" style="width:58%"></div><div class="n" style="left:58%;width:9%"></div><div class="q" style="left:10%"></div></div></div>`);
+    return;
+  }
+  const st = statusName(o.status), B = state.info[o.buyer], T = state.info[o.target];
+  const circ = BigInt(o.target_market?.circulating || 1) || 1n;
+  const pct = (x) => Math.min(100, Number((BigInt(x) * 10000n) / circ) / 100);
+  const [label, cls] = { Open: ["voting now", "active"], Executing: ["merging", "pending"], Sending: ["merging", "pending"], Executed: ["merged", "merged"], Failed: ["rejected", "failed"] }[st] || [st, ""];
+  const say = st === "Executed" ? `<b>$${esc(B.symbol)}</b> absorbed <b>$${esc(T.symbol)}</b>. Holders voted yes, and every $${esc(T.symbol)} became ${fmtRate(o.rate_ppm)} $${esc(B.symbol)}.`
+    : st === "Failed" ? `<b>$${esc(B.symbol)}</b> bid for <b>$${esc(T.symbol)}</b>, and it was turned down: ${esc(o.status.Failed.reason)}.`
+    : `<b>$${esc(B.symbol)}</b>'s brain is bidding for <b>$${esc(T.symbol)}</b> right now. $${esc(T.symbol)} holders are voting.`;
+  setHTML($("hero-deal"), `<a class="duel${st === "Open" ? "" : " done"}" href="#deals" style="text-decoration:none;color:inherit">
+    <div class="duel-top"><span>Latest takeover here · ${agoTag(o.created_at)}</span><span class="pill ${cls}">${label}</span></div>
+    <div class="duel-row">${fighter(B, "bidder")}<div class="duel-mid">${arrow}<span>${fmtBps(o.premium_bps)} premium</span></div>${fighter(T, "target", true)}</div>
+    <p class="duel-say">${say}</p>
+    <div><div class="barlabel"><span><b class="up">yes ${fmtTokens(o.yes)}</b> · <b class="down">no ${fmtTokens(o.no)}</b></span><span>of ${fmtTokens(circ)} $${esc(T.symbol)}</span></div>
+    <div class="bar"><div class="y" style="width:${pct(o.yes)}%"></div><div class="n" style="left:${pct(o.yes)}%;width:${pct(o.no)}%"></div><div class="q" style="left:${state.params.quorum_bps / 100}%"></div></div></div></a>`);
+}
+
+// First steps: each one ticks itself off from what the chain says about this account.
+function renderGuide() {
+  const who = state.me.acct, me = state.me;
+  const locked = Object.values(me.locks).some((l) => l.length);
+  const holds = locked || Object.values(me.bal).some((b) => b > 0n);
+  const events = Object.values(state.history).flat();
+  const did = (names) => !!who && events.some((e) => names.includes(e.event) && e.text.startsWith(`${who} `));
+  const fee = fmtNear(state.params.brain_fee);
+  const steps = [
+    cfg.dev_key
+      ? [!!who, "Pick a demo holder", `You are playing as ${short(who) || "nobody"}, with play money. Switch any time at the top.`, "who", "Switch holder"]
+      : [!!who, hasWallet() ? "Connect a wallet" : "Enter your account", hasWallet() ? "A free NEAR testnet wallet. No real money is involved." : "Type your account at the top to see your balances.", "who", hasWallet() ? "Connect" : "Enter account"],
+    [holds, "Buy your first coin", "Pick any coin, type how much NEAR to spend and press Buy. You can sell back any time.", "buy", "Buy a coin"],
+    [locked, "Lock some to get a vote", "Locking keeps the tokens yours and makes them count as votes. Do it before a bid shows up.", "lock", "Lock tokens"],
+    [did(["think"]), "Wake a brain", `Press Think and the coin's AI looks at its rivals. It may make a bid. Costs ${fee}.`, "think", "Show me"],
+    [did(["vote", "vote_sealed", "veto", "tender_backed", "tender_veto"]), "Have your say on a deal", "Open bids appear under Deals. Vote yes or no with what you locked.", "deals", "See the deals"],
+  ];
+  // Once done, a step stays done even when the event scrolls out of the coin's history.
+  const key = `autocto:guide:${cfg.launchpad}:${who}`;
+  const saved = who ? Number(store.get(key) || 0) : 0;
+  let mask = 0;
+  steps.forEach((x, k) => { if (x[0] || (saved >> k) & 1) { x[0] = true; mask |= 1 << k; } });
+  if (who && mask !== saved) store.set(key, String(mask));
+  const next = steps.findIndex((x) => !x[0]);
+  const done = steps.filter((x) => x[0]).length;
+  $("guide-progress").textContent = done === steps.length ? "All done. You know how it works." : `${done} of ${steps.length} done`;
+  $("nav-guide").hidden = done === steps.length; $("nav-guide").textContent = `${done}/${steps.length}`;
+  setHTML($("guide-steps"), steps.map(([ok, t, text, go, btn], k) =>
+    `<li class="${ok ? "done" : k === next ? "next" : ""}"><span class="tick" aria-hidden="true">${ok ? "✓" : k + 1}</span><b>${esc(t)}</b><p>${esc(text)}</p>
+      ${ok && go !== "who" ? "" : `<button type="button" class="${k === next ? "primary" : ""}" data-go="${go}">${esc(btn)}</button>`}</li>`).join(""));
 }
 
 function render() {
   const offers = allOffers();
+  renderHeroDeal(offers); renderGuide();
   renderTicker(offers); renderCoins(); renderDetail(); renderTicket();
   renderOffers(offers); renderTenders(); renderDecisions(); renderLog();
   tickClocks();
@@ -833,9 +999,78 @@ function showVerify(coin, id) {
   $("modal").showModal();
 }
 
+// ---------- wallet (testnet, mainnet) ----------
+// NEAR Connect shows the wallet picker and passes transactions to the chosen wallet,
+// which runs in its own sandboxed frame. Keys never touch this page.
+const NEAR_API = "https://cdn.jsdelivr.net/npm/near-api-js@7.4.0/+esm";
+const NEAR_CONNECT = "https://cdn.jsdelivr.net/npm/@hot-labs/near-connect@0.12.0/+esm";
+const hasWallet = () => !cfg.dev_key && (NETWORK === "testnet" || NETWORK === "mainnet");
+let connector = null, walletAcct = null;
+function setWallet(acct) {
+  walletAcct = acct || null;
+  $("connect").textContent = walletAcct ? "Disconnect" : "Connect wallet";
+  $("connect").className = walletAcct ? "" : "primary";
+  $("viewer").readOnly = !!walletAcct;
+  if (walletAcct) { $("viewer").value = walletAcct; store.set(`autocto:viewer:${NETWORK}`, walletAcct); }
+  refresh().catch(() => {});
+}
+async function getConnector() {
+  if (connector) return connector;
+  const { NearConnector } = await import(NEAR_CONNECT);
+  connector = new NearConnector({ network: NETWORK });
+  connector.on("wallet:signIn", (t) => { setWallet(t.accounts?.[0]?.accountId); if (walletAcct) toast(`Connected as ${walletAcct}`, "ok"); });
+  connector.on("wallet:signOut", () => setWallet(null));
+  return connector;
+}
+// A wallet connected on an earlier visit is picked up again.
+async function restoreWallet() {
+  try {
+    const c = await getConnector();
+    const { accounts } = await c.getConnectedWallet();
+    if (accounts?.[0]?.accountId) setWallet(accounts[0].accountId);
+  } catch (_) {}
+}
+async function connectWallet() {
+  try {
+    const c = await getConnector();
+    if (walletAcct) await c.disconnect(); else await c.connect();
+  } catch (e) {
+    // Closing the picker is not an error worth a message.
+    if (!/reject|cancel|closed/i.test(String(e?.message || e))) toast(`Could not open the wallet: ${e?.message || e}`, "bad");
+  }
+}
+async function walletCall(contract, method, args, deposit) {
+  const c = await getConnector();
+  const wallet = await c.wallet();
+  return wallet.signAndSendTransaction({
+    receiverId: contract,
+    actions: [{ type: "FunctionCall", params: { methodName: method, args, gas: GAS.toString(), deposit: BigInt(deposit).toString() } }],
+  });
+}
+
 // ---------- actions ----------
+// What each action is called while it runs and once it is done.
+const SAY = {
+  launch: ["Launching your coin", "Your coin is live. It shows up in the market in a moment."],
+  think: ["Waking the brain", "The brain is thinking. Its decision appears under Brain decisions in a few seconds."],
+  buy: ["Buying", "Bought. The tokens are in your wallet."],
+  sell: ["Selling", "Sold. The NEAR is in your wallet."],
+  lock: ["Locking", "Locked. These tokens now count in votes on bids announced from here on."],
+  unlock: ["Unlocking", "Unlocked. You can sell these tokens again."],
+  vote: ["Casting your vote", "Your vote is in."],
+  reveal: ["Revealing your vote", "Your vote is revealed and counted."],
+  veto: ["Sending your veto", "Your veto is in."],
+  finalize: ["Counting the votes", "The vote is counted. See the deal for the result."],
+  accept_counter: ["Accepting the counter-offer", "Counter-offer accepted. A new voting round starts."],
+  convert: ["Converting", "Converted. You now hold the winning coin."],
+  back_tender: ["Backing the tender", "You backed this tender."],
+  veto_tender: ["Sending your veto", "Your veto is in."],
+  settle_tender: ["Settling the tender", "The tender is settled."],
+  claim_tender: ["Claiming", "Claimed. Check your wallet."],
+};
 let nearApi = null;
 let acting = false;
+
 // A plan is [method, args, deposit, contract?, { ok, fail }?].
 async function act(btn) {
   const { act: what, coin, offer, support, id, round } = btn.dataset;
@@ -900,25 +1135,34 @@ async function act(btn) {
   };
   if (!plans[what]) return;
   let plan;
-  try { plan = await plans[what](); } catch (e) { toast(`${what} ✘ ${e.message || e}`, "bad"); return; }
+  const [doing, doneText] = SAY[what] || [what, "Done."];
+  try { plan = await plans[what](); } catch (e) { toast(`${e.message || e}`, "bad"); return; }
   let [method, args, deposit, contract = coin, hooks = {}] = plan;
   contract ||= coin;
   if (!cfg.dev_key) {
     const net = NETWORK === "local" ? "testnet" : NETWORK;
     const who = actor() || `<you>.${net}`;
-    $("modal-body").innerHTML = `<h3>${esc(method)} on ${esc(contract)}</h3><p>Sign this with <a href="https://github.com/near/near-cli-rs">near-cli</a>:</p>
-      <pre>near contract call-function as-transaction ${esc(contract)} ${esc(method)} json-args '${esc(JSON.stringify(args))}' prepaid-gas '300 Tgas' attached-deposit '${esc(deposit)} yoctoNEAR' sign-as ${esc(who)} network-config ${esc(net)} sign-with-legacy-keychain send</pre>
-      ${method === "vote_sealed" ? `<p class="small">Your choice and salt are saved in this browser; the Reveal button appears here when the vote ends.</p>` : ""}`;
-    $("modal").showModal();
-    return;
+    const cli = `<pre>near contract call-function as-transaction ${esc(contract)} ${esc(method)} json-args '${esc(JSON.stringify(args))}' prepaid-gas '300 Tgas' attached-deposit '${esc(deposit)} yoctoNEAR' sign-as ${esc(who)} network-config ${esc(net)} sign-with-legacy-keychain send</pre>`;
+    const sealedNote = method === "vote_sealed" ? `<p class="small">Your choice and salt are saved in this browser; the Reveal button appears here when the vote ends.</p>` : "";
+    if (hasWallet() && !walletAcct) { toast("Connect a wallet first, so the page knows which account is yours."); connectWallet(); return; }
+    if (!hasWallet()) {
+      $("modal-body").innerHTML = `<h3>${esc(doing)}</h3><p>This page has no wallet for this network. Sign the call with <a href="https://github.com/near/near-cli-rs">near-cli</a>:</p>${cli}${sealedNote}`;
+      $("modal").showModal();
+      return;
+    }
   }
   btn.disabled = true; acting = true;
-  toast(`${actor()} → ${method}…`);
+  toast(cfg.dev_key ? `${doing}…` : `${doing}: approve it in your wallet…`);
+  let gasless = false;
   try {
-    nearApi ??= await import("https://cdn.jsdelivr.net/npm/near-api-js@7.4.0/+esm");
-    const account = new nearApi.Account(actor(), cfg.rpc, cfg.dev_key);
-    let r;
-    if (cfg.relayer && $("gasless").checked && GASLESS.includes(method)) {
+    let r, account;
+    if (cfg.dev_key) {
+      nearApi ??= await import(NEAR_API);
+      account = new nearApi.Account(actor(), cfg.rpc, cfg.dev_key);
+    }
+    if (!cfg.dev_key) {
+      r = await walletCall(contract, method, args, deposit);
+    } else if (cfg.relayer && $("gasless").checked && GASLESS.includes(method)) {
       // NEP-366: the actor signs, the relayer pays the gas. The call still runs as the actor.
       const { signedDelegate } = await account.createSignedMetaTransaction({
         receiverId: contract, actions: [nearApi.actions.functionCall(method, args, 100_000_000_000_000n, deposit)],
@@ -930,16 +1174,16 @@ async function act(btn) {
       const j = await res.json();
       if (!j.ok) throw new Error(j.error);
       r = j.result;
-      method += " (gasless)";
+      gasless = true;
     } else {
       r = await account.callFunction({ contractId: contract, methodName: method, args, deposit, gas: GAS });
     }
     hooks.ok?.();
-    toast(`${method} ✔ ${r == null ? "" : JSON.stringify(r).slice(0, 80)}`, "ok");
+    toast(`${doneText}${gasless ? " The relayer paid the fee." : ""}`, "ok");
   } catch (e) {
     const msg = String(e.message || e);
     hooks.fail?.(msg);
-    toast(`${method} ✘ ${msg.slice(0, 160)}`, "bad");
+    toast(/reject|cancel|denied/i.test(msg) && !cfg.dev_key ? "Cancelled in the wallet. Nothing was sent." : `That didn't go through: ${plainError(msg)}`, "bad");
   } finally {
     btn.disabled = false; acting = false;
     refresh().catch(() => {});
@@ -971,7 +1215,59 @@ function selectCoin(a, scroll) {
   if (scroll) $("trade").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
 
+// Jump to the place a first step is done, and point at it.
+function go(where) {
+  const smooth = matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  const point = (el, block = "center") => {
+    el.scrollIntoView({ behavior: smooth, block });
+    el.classList.remove("ring"); void el.offsetWidth; el.classList.add("ring");
+  };
+  if (where === "who") {
+    const el = cfg.dev_key ? $("actor") : walletAcct || !hasWallet() ? $("viewer") : $("connect");
+    point(el); el.focus({ preventScroll: true });
+  } else if (where === "buy" || where === "lock") {
+    // Lock needs a coin this account holds; buy needs one that still trades.
+    const ids = state.coins.map((c) => c.account_id).filter((a) => !isMerged(state.info[a]));
+    const want = where === "lock" ? ids.find((a) => (state.me.bal[a] || 0n) > 0n) : ids.includes(state.sel) ? state.sel : ids[0];
+    if (where === "lock" && !want) { toast("Buy a coin first: you can only lock tokens you hold."); return go("buy"); }
+    if (want && want !== state.sel) selectCoin(want, false);
+    state.mode = where; $("amt").value = ""; state.quote = null; renderTicket();
+    point($("ticket")); $("amt").focus({ preventScroll: true });
+  } else if (where === "think") point($("think"));
+  else if (where === "deals") point($("deals"), "start");
+}
+
+function showGlossary() {
+  $("modal-body").innerHTML = `<h3>Words explained</h3><dl class="glossary">${Object.entries(GLOSSARY).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>`;
+  $("modal").showModal();
+}
+
+// One floating explanation for every [data-term]: hover, keyboard focus or tap.
+let tipFor = null;
+function showTip(el) {
+  const key = el.dataset.term, text = GLOSSARY[key];
+  if (!text) return;
+  const tip = $("tip");
+  tip.innerHTML = `<b>${esc(key)}</b>${esc(text)}`;
+  tip.hidden = false; tipFor = el;
+  const r = el.getBoundingClientRect(), t = tip.getBoundingClientRect();
+  const x = Math.max(12, Math.min(innerWidth - t.width - 12, r.left + r.width / 2 - t.width / 2));
+  const above = r.top - t.height - 8;
+  tip.style.left = `${x}px`; tip.style.top = `${above > 8 ? above : r.bottom + 8}px`;
+}
+function hideTip() { $("tip").hidden = true; tipFor = null; }
+document.addEventListener("mouseover", (e) => { const el = e.target.closest?.("[data-term]"); if (el) showTip(el); else if (tipFor) hideTip(); });
+document.addEventListener("focusin", (e) => { const el = e.target.closest?.("[data-term]"); if (el) showTip(el); });
+document.addEventListener("focusout", hideTip);
+addEventListener("scroll", hideTip, { passive: true });
+
 document.addEventListener("click", (e) => {
+  const g = e.target.closest("[data-go]");
+  if (g) { go(g.dataset.go); return; }
+  if (e.target.closest("[data-glossary]")) { e.preventDefault(); showGlossary(); return; }
+  if (e.target.closest("#connect, [data-connect]")) { connectWallet(); return; }
+  const pp = e.target.closest("[data-persona]");
+  if (pp) { $("launch-form").elements.persona.value = pp.dataset.persona; return; }
   const v = e.target.closest("[data-verify]");
   if (v) { e.preventDefault(); const [c, i] = v.dataset.verify.split("|"); showVerify(c, i); return; }
   const b = e.target.closest("button[data-act]");
@@ -1003,6 +1299,33 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   if ((e.key === "Enter" || e.key === " ") && e.target.matches?.("article[data-select]")) { e.preventDefault(); selectCoin(e.target.dataset.select, true); }
 });
+// Launch form: show the coin taking shape, and suggest an address from the name.
+function launchPreview(e) {
+  const f = $("launch-form").elements;
+  if (e?.target === f.symbol) f.symbol.value = f.symbol.value.toUpperCase();
+  if (e?.target === f.name && !f.label.dataset.touched) f.label.value = f.name.value.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32);
+  if (e?.target === f.label) f.label.dataset.touched = "1";
+  const symbol = f.symbol.value.trim();
+  $("launch-ava").textContent = symbol.slice(0, 2) || "?";
+  $("launch-ava").style.setProperty("--h", hue(symbol || "?"));
+  $("launch-title").textContent = symbol ? `$${symbol} ${f.name.value}` : f.name.value || "Your coin";
+  $("launch-addr").textContent = `${f.label.value || "name"}.${cfg.launchpad || ""}`;
+}
+$("launch-form").addEventListener("input", launchPreview);
+$("launch-form").addEventListener("reset", () => { delete $("launch-form").elements.label.dataset.touched; setTimeout(launchPreview); });
+
+// Intro and first steps can be folded away; the choice is remembered.
+function fold(key, cls, btn, on, labels) {
+  document.body.classList.toggle(cls, on);
+  $(btn).textContent = labels[on ? 1 : 0];
+  if (on) store.set(key, "1"); else store.del(key);
+}
+const foldIntro = (on) => fold("autocto:no-intro", "no-intro", "intro-toggle", on, ["Hide intro", "Show intro"]);
+const foldGuide = (on) => fold("autocto:no-guide", "guide-off", "guide-toggle", on, ["Hide", "Show"]);
+foldIntro(store.get("autocto:no-intro") === "1"); foldGuide(store.get("autocto:no-guide") === "1");
+$("intro-toggle").addEventListener("click", () => foldIntro(!document.body.classList.contains("no-intro")));
+$("guide-toggle").addEventListener("click", () => foldGuide(!document.body.classList.contains("guide-off")));
+
 $("launch-form").addEventListener("submit", (e) => {
   e.preventDefault();
   act(e.target.querySelector("button[data-act]"));
@@ -1046,7 +1369,7 @@ if ("IntersectionObserver" in globalThis) {
       for (const l of links) l.classList.toggle("on", l.getAttribute("href") === `#${en.target.id}`);
     }
   }, { rootMargin: "-20% 0px -70% 0px" });
-  for (const id of ["market", "trade", "deals", "brains", "feed", "launch", "rules", "sim-section"]) io.observe($(id));
+  for (const id of ["start", "guide", "market", "trade", "deals", "brains", "feed", "launch", "rules", "sim-section"]) io.observe($(id));
 }
 
 // ---------- simulation ----------
@@ -1118,6 +1441,7 @@ async function tick() {
 
 (async () => {
   await loadConfig();
+  launchPreview();
   loadSim();
   await tick();
   setInterval(tick, 3000);

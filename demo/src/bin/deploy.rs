@@ -14,6 +14,7 @@
 //!   --secrets-profile <name> with --brain-project: hand the brain that secrets profile of --owner
 //!   --global                 publish the coin code once by hash, so launches skip ~4.3 NEAR of storage
 //!   --fund <NEAR>            launchpad starting balance (default 8)
+//!   --top-up <NEAR>          the launchpad account exists already: send it this much and deploy
 //!   --lock                   delete the launchpad's only key at the end: no one can change it again
 //!   --web-config <file>      where to write the page config (default web/config.testnet.json)
 //!
@@ -97,14 +98,27 @@ async fn main() -> Result<()> {
     };
 
     let fund: u128 = arg(&args, "--fund").map(|n| n.parse::<u128>()).transpose()?.unwrap_or(8);
-    println!("creating {launchpad} with {fund} NEAR…");
-    Account::create_account(launchpad.clone())
-        .fund_myself(owner.clone(), NearToken::from_near(fund))
-        .with_public_key(public_key)
-        .with_signer(signer.clone())
-        .send_to(&net)
-        .await?
-        .assert_success();
+    if let Some(extra) = arg(&args, "--top-up") {
+        // The account exists already (an earlier run ran out of balance): add to it instead.
+        let extra: NearToken = format!("{extra} NEAR").parse().map_err(|e| anyhow!("--top-up: {e}"))?;
+        println!("sending {extra} to {launchpad}…");
+        near_api::Tokens::account(owner.clone())
+            .send_to(launchpad.clone())
+            .near(extra)
+            .with_signer(signer.clone())
+            .send_to(&net)
+            .await?
+            .assert_success();
+    } else {
+        println!("creating {launchpad} with {fund} NEAR…");
+        Account::create_account(launchpad.clone())
+            .fund_myself(owner.clone(), NearToken::from_near(fund))
+            .with_public_key(public_key)
+            .with_signer(signer.clone())
+            .send_to(&net)
+            .await?
+            .assert_success();
+    }
 
     println!("deploying the launchpad…");
     Contract::deploy(launchpad.clone())

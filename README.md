@@ -17,8 +17,8 @@ You need Rust (`rust-toolchain.toml` pins 1.99.1; rustup installs it) and [cargo
 | `cargo test -p autocto-coin -p autocto-brain` | 10 unit tests (curve math, brain reader and decider) |
 | `cargo run -p autocto-demo` | a narrated takeover and tender story (~4 min); it ends with "The chain keeps running" |
 | `python3 -m http.server 8080 -d web`, then open http://localhost:8080/?network=local | the trading page: market table, a coin panel with the bonding-curve chart and a buy/sell/lock ticket with live quotes, deals (bids and tenders), brain decisions, live feed, simulation |
-| on the page: pick a holder under "act as", buy or sell in the ticket, press **Think** on a coin, back or veto a deal, or fill **Launch a coin** | trades settle against the coin's curve; the demo process answers the brain run within seconds |
-| on the page: act as **zed.sandbox** (holds 0 NEAR), pick $WOJAK, open **Lock** in the trade ticket and lock some; then tick **gasless** and try again | the first try fails (zed can't pay for gas), the second works: zed signs, the demo's relayer pays |
+| on the page: follow **Your first steps**, or pick a holder under "playing as", buy or sell in the ticket, press **Think** on a coin, back or veto a deal, or fill **Launch a coin** | trades settle against the coin's curve; the demo process answers the brain run within seconds |
+| on the page: play as **zed.sandbox** (holds 0 NEAR), pick $WOJAK, open **Lock** in the trade ticket and lock some; then tick **gasless** and try again | the first try fails (zed can't pay for gas), the second works: zed signs, the demo's relayer pays |
 | with the demo running: `NEAR_PRIVATE_KEY=<dev_key from web/config.local.json> cargo run -p autocto-demo --bin keeper -- --owner dev.sandbox --network http://127.0.0.1:3030 --think --think-every 1 --interval 4` | the keeper wakes the brains and they negotiate by themselves: a bid, a counter, an accept, a stance |
 | `FUZZ_SEED=7 FUZZ_STEPS=120 cargo test -p autocto-tests --test invariants -- --nocapture` | random actions; "every invariant held after each one" |
 | `node sim/simulate.mjs` | regenerates `web/data/sim.json` and `sim/REPORT.md` |
@@ -165,7 +165,9 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 | Brain | `outlayer.testnet`, wasm pinned by sha256 `416b32ff…d8b6db` at commit `34c93f8` |
 | Page | `python3 -m http.server 8080 -d web`, then http://localhost:8080/?network=testnet |
 
-This launchpad was deployed and locked at commit `1290ae4`, before tender offers were added, so its coins run the takeover rules without tenders. Tenders run in the local sandbox until a new launchpad is deployed. Anyone can check the live one: at commit `1290ae4`, its on-chain code hash equals `res/autocto_launchpad.wasm`, `coin_code_hash` equals `res/autocto_coin.wasm`, and `get_params` equals `params/testnet.json`.
+This launchpad was deployed and locked at commit `1290ae4`, before tender offers were added, so its coins run the takeover rules without tenders.
+
+A second launchpad with the current code (tenders, sealed votes, the review fixes) is deployed at [`v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v2.scarpxvenom.testnet), brain pinned by sha256 `328d0eac…69c554` at commit `493e23f`. It has no coins yet and still holds its deploy key: it gets locked, and becomes the page's default, once a first coin has been launched and checked on it. Until then tenders run in the local sandbox. Anyone can check the live one: at commit `1290ae4`, its on-chain code hash equals `res/autocto_launchpad.wasm`, `coin_code_hash` equals `res/autocto_coin.wasm`, and `get_params` equals `params/testnet.json`.
 
 First coin: [`pepe.autocto.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.autocto.scarpxvenom.testnet). Its decision #0 went through the real `outlayer.testnet` (request 16511):
 - the worker fetched the brain from this repo's commit and checked its sha256;
@@ -177,7 +179,7 @@ A direct probe confirmed the brain can read testnet RPC from inside the enclave 
 
 ## Deploy to testnet
 
-You need a testnet account with about 10 NEAR for the launchpad (code storage), plus about 5.9 NEAR per coin in the default Embedded mode.
+You need a testnet account with about 8 NEAR for the launchpad (code storage), plus about 7.6 NEAR per coin in the default Embedded mode.
 
 ```bash
 # 1. A testnet account whose key is saved where the deploy tool reads it
@@ -196,7 +198,9 @@ python3 -m http.server 8080 -d web   # http://localhost:8080/?network=testnet
 
 The key comes from `~/.near-credentials/testnet/<you>.testnet.json`, or from `NEAR_PRIVATE_KEY`. The brain can also go to OutLayer's FastFS with `outlayer upload res/autocto-brain.wasm` (OutLayer CLI).
 
-The tool checks the deployed rules against the params file, prints the coin code hash and launch deposit, and writes `web/config.testnet.json`. Off the local sandbox the page shows a ready-to-run `near` CLI command for each action instead of signing.
+The tool checks the deployed rules against the params file, prints the coin code hash and launch deposit, and writes `web/config.testnet.json`. On testnet the page signs through a wallet: **Connect wallet** opens the [NEAR Connect](https://github.com/hot-dao/near-selector) picker (Meteor, Intear, Ledger, NEAR CLI and others), and each action is approved there. The picker has been opened on testnet; a full signed action through a wallet has not been run yet.
+
+If the launchpad account runs short of balance for its code storage, the deploy stops after creating it. Re-run with `--top-up <NEAR>` to add to the existing account and deploy.
 
 - **`--lock`** deletes the launchpad's only access key, so nobody can change it again.
 - **`--global`** publishes the coin code once as a global contract. A launch then costs 1.5 NEAR instead of 5.8, but publishing burns about 43 NEAR (10× normal storage), so it only pays off after about 10 coins.

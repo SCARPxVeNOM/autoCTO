@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@500;600;700&family=Funnel+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Pixelify+Sans:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body class="hatch">
 <div class="frame">
@@ -20,9 +20,10 @@
       <span class="wordmark">AutoCTO</span>
     </a>
     <div class="side-scroll">
-      <p class="tag">CTO, but the coins do it themselves. Memecoins on NEAR that bid for, vote on and absorb each other.</p>
-      <hr>
       <nav class="nav" id="nav" aria-label="Sections">
+        <h2>New here</h2>
+        <a href="#start"><i>★</i>What is this</a>
+        <a href="#guide"><i>✓</i>First steps <b id="nav-guide" class="count soft" hidden></b></a>
         <h2>Trade</h2>
         <a href="#market"><i>◧</i>Market</a>
         <a href="#trade"><i>◔</i>Coin &amp; trade</a>
@@ -33,6 +34,7 @@
         <h2>Build</h2>
         <a href="#launch"><i>＋</i>Launch a coin</a>
         <a href="#rules"><i>§</i>Rules</a>
+        <a href="#" data-glossary><i>?</i>Words explained</a>
         <a href="#sim-section" id="nav-sim" hidden><i>∿</i>Simulation</a>
       </nav>
     </div>
@@ -50,28 +52,59 @@
       </a>
       <div class="net">
         <span id="net-badge" class="pill">…</span>
-        <label class="actor" id="actor-wrap" hidden><span class="muted small">act as</span>
+        <label class="actor" id="actor-wrap" hidden title="A local demo with play money: switch between the demo holders to see every side of a deal"><span class="muted small">playing as</span>
           <select id="actor"></select>
         </label>
-        <label class="actor" id="viewer-wrap" hidden><span class="muted small">view as</span>
+        <label class="actor" id="viewer-wrap" hidden><span class="muted small">account</span>
           <input id="viewer" class="mono" placeholder="you.testnet" autocomplete="off" spellcheck="false">
         </label>
-        <label id="gasless-wrap" class="check small" hidden title="Lock, unlock, vote, veto, tender backing and tender claims are signed by you and paid by a relayer (NEP-366)"><input type="checkbox" id="gasless"> gasless</label>
+        <button id="connect" class="primary" type="button" hidden>Connect wallet</button>
+        <label id="gasless-wrap" class="check small" hidden data-term="gasless"><input type="checkbox" id="gasless"> gasless</label>
+        <button class="icon" type="button" data-glossary title="Words explained" aria-label="Words explained">?</button>
         <button id="theme" class="icon" type="button" title="Theme: auto" aria-label="Switch theme">◐</button>
       </div>
     </header>
 
     <nav class="mnav" aria-label="Sections">
-      <a href="#market">Market</a><a href="#trade">Trade</a><a href="#deals">Deals</a><a href="#brains">Brains</a><a href="#feed">Feed</a><a href="#launch">Launch</a><a href="#rules">Rules</a>
+      <a href="#start">Start</a><a href="#guide">Steps</a><a href="#market">Market</a><a href="#trade">Trade</a><a href="#deals">Deals</a><a href="#brains">Brains</a><a href="#feed">Feed</a><a href="#launch">Launch</a><a href="#rules">Rules</a>
     </nav>
 
     <main>
+      <section id="start" class="intro">
+        <div class="hero">
+          <div class="hero-copy">
+            <span id="hero-eyebrow" class="eyebrow"><i></i>Memecoins on NEAR</span>
+            <h1>Memecoins that <em>take each other over.</em></h1>
+            <p class="lede">Every coin here has its own AI brain. Brains bid for rival coins, holders vote, and the code carries out the deal. No team holds the keys, so nobody can rug.</p>
+            <div class="actions">
+              <a class="btn primary lg" href="#guide">Start in 5 small steps</a>
+              <a class="btn lg" href="#how">How it works</a>
+            </div>
+            <p id="mode-note" class="mode-note small"></p>
+          </div>
+          <div class="hero-art" id="hero-deal" aria-live="off"></div>
+        </div>
+        <div id="how" class="how">
+          <article><span class="step-n">1</span><h3>Buy a coin</h3><p>Each coin sells on its own price curve: the more people buy, the higher the price. You can sell back any time.</p></article>
+          <article><span class="step-n">2</span><h3>Lock to get a vote</h3><p>Locked tokens are your voting power. Lock early: only tokens locked before a bid is announced count for it.</p></article>
+          <article><span class="step-n">3</span><h3>Brains make bids</h3><p>Anyone can wake a coin's AI brain. It looks at its rivals and may bid to absorb a smaller one, with a rate and a pitch.</p></article>
+          <article><span class="step-n">4</span><h3>Holders decide</h3><p>The target's holders vote. The bidder's holders can block a bad deal. If it passes, the coins merge and holders swap at the agreed rate.</p></article>
+        </div>
+        <button id="intro-toggle" class="chip intro-toggle" type="button">Hide intro</button>
+      </section>
+
+      <section id="guide">
+        <div class="section-head"><h2>Your first steps</h2><span id="guide-progress" class="muted small"></span>
+          <button id="guide-toggle" class="chip" type="button" style="margin-left:auto">Hide</button></div>
+        <ol id="guide-steps" class="guide"></ol>
+      </section>
+
       <div id="ticker" class="ticker" aria-label="Launchpad totals"></div>
 
       <section id="market">
-        <div class="section-head"><span class="num">01</span><h2>Market</h2><span class="muted small">every number is read from chain views · refreshed every 3 s</span></div>
+        <div class="section-head"><span class="num">01</span><h2>Market</h2><span class="muted small">Click a coin to open it · live from the chain, refreshed every 3 s</span></div>
         <div class="mkt-head" aria-hidden="true">
-          <span>Coin</span><span>Price</span><span>Session</span><span>Market cap</span><span>Liquidity</span><span>Treasury</span><span>You hold</span><span>Status</span>
+          <span>Coin</span><span>Price / 1M</span><span>Session</span><span>Market cap</span><span>Liquidity</span><span>Treasury</span><span>You hold</span><span>Status</span>
         </div>
         <div id="coins" class="mkt"><p class="muted pad">Loading…</p></div>
       </section>
@@ -84,7 +117,7 @@
             <div class="chart-card">
               <div class="chart-top">
                 <div class="seg small" id="chart-seg" role="tablist">
-                  <button type="button" data-chart="curve" class="on">Bonding curve</button>
+                  <button type="button" data-chart="curve" class="on" data-term="bonding curve">Price curve</button>
                   <button type="button" data-chart="session">This session</button>
                 </div>
                 <span id="chart-note" class="muted small"></span>
@@ -108,7 +141,7 @@
               </label>
               <div id="quick" class="chips quick"></div>
               <dl id="quote" class="quote"></dl>
-              <label class="slip" id="slip-wrap"><span>Max slippage</span>
+              <label class="slip" id="slip-wrap"><span class="term" tabindex="0" data-term="slippage">Max slippage</span>
                 <select id="slip"><option value="50">0.5%</option><option value="100" selected>1%</option><option value="300">3%</option><option value="1000">10%</option></select>
               </label>
               <button id="submit" class="big" type="button" data-act="buy">Buy</button>
@@ -132,45 +165,51 @@
       </section>
 
       <section id="deals">
-        <div class="section-head"><span class="num">03</span><h2>Deals</h2><span class="muted small">takeover bids and tender offers · rival pitches are untrusted text: brains only see them through the reader</span></div>
+        <div class="section-head"><span class="num">03</span><h2>Deals</h2><span class="muted small">Takeovers in progress and finished. Pitches are written by AI brains: read them as ads, not facts.</span></div>
         <div id="offers" class="offers"></div>
         <div id="tenders" class="offers tenders"></div>
       </section>
 
       <section class="two">
         <div id="brains">
-          <div class="section-head"><span class="num">04</span><h2>Brain decisions</h2></div>
+          <div class="section-head"><span class="num">04</span><h2>Brain decisions</h2><span class="muted small">what each coin's AI decided, and why</span></div>
           <div id="decisions" class="decisions"></div>
         </div>
         <div id="feed">
-          <div class="section-head"><span class="num">05</span><h2>Live feed</h2><span class="live-dot"><i></i>on-chain events</span></div>
+          <div class="section-head"><span class="num">05</span><h2>Live feed</h2><span class="live-dot"><i></i>everything that happens, as it happens</span></div>
           <ol id="log" class="log"></ol>
         </div>
       </section>
 
       <section id="launch">
-        <div class="section-head"><span class="num">06</span><h2>Launch a coin</h2><span class="muted small">same code, same rules, no keys</span></div>
+        <div class="section-head"><span class="num">06</span><h2>Launch a coin</h2><span class="muted small">Your coin gets the same code and rules as every other. After launch nobody can change it, not even you.</span></div>
         <form id="launch-form" class="card launch" autocomplete="off">
-          <p class="muted small">The deposit pays for storage, the reserve and 1 Ⓝ of brain budget.</p>
+          <div class="launch-preview"><span id="launch-ava" class="ava big" style="--h:265" aria-hidden="true">?</span>
+            <div><b id="launch-title">Your coin</b><div id="launch-addr" class="mono small muted wrap"></div></div></div>
           <div class="fields">
-            <label>label <input name="label" required pattern="[a-z0-9_\-]{2,32}" placeholder="bonk"></label>
-            <label>name <input name="name" required maxlength="32" placeholder="Bonk"></label>
-            <label>symbol <input name="symbol" required maxlength="10" placeholder="BONK"></label>
-            <label class="wide">persona (the brain's character) <input name="persona" required maxlength="280" placeholder="A loud dog that only buys coins with big treasuries."></label>
+            <label>Name <input name="name" required maxlength="32" placeholder="Bonk"></label>
+            <label>Ticker <input name="symbol" required maxlength="10" placeholder="BONK"></label>
+            <label>Address (lowercase, no spaces) <input name="label" required pattern="[a-z0-9_\-]{2,32}" placeholder="bonk"></label>
+            <label class="wide">Personality: how its AI brain talks and what it goes after <input name="persona" required maxlength="280" placeholder="A loud dog that only buys coins with big treasuries."></label>
           </div>
-          <div class="actions"><button class="primary" data-act="launch">Launch</button><span id="launch-cost" class="muted small"></span></div>
+          <div class="chips" id="persona-presets" aria-label="Personality ideas">
+            <span class="muted small">Ideas:</span>
+            <button type="button" class="chip" data-persona="A hungry hunter that bids for any smaller coin with a fat treasury.">Hungry hunter</button>
+            <button type="button" class="chip" data-persona="A careful builder that only merges when both sides clearly win.">Careful builder</button>
+            <button type="button" class="chip" data-persona="A chaotic gambler that loves bold bids and louder pitches.">Chaotic gambler</button>
+            <button type="button" class="chip" data-persona="A loyal guardian that defends its holders and counters every low offer.">Loyal guardian</button>
+          </div>
+          <div class="actions"><button class="primary" data-act="launch">Launch coin</button><span id="launch-cost" class="muted small"></span></div>
+          <p class="muted small">The deposit pays for the coin's storage on chain, a small reserve and 1 Ⓝ of thinking budget for its brain.</p>
         </form>
       </section>
 
       <section id="rules">
         <div class="section-head"><span class="num">07</span><h2>Rules</h2><span id="code-hash" class="mono small muted wrap"></span></div>
         <div class="explain">
-          <p>Every coin here was launched by one factory with the same code and the same fixed rules, and has <b>zero access keys</b>.
-          A coin's AI brain (on OutLayer) can <b>bid</b> for a smaller rival. The rival's holders <b>vote</b> with tokens locked before the bid,
-          the bidder's holders can <b>veto</b>, and a passed deal <b>merges</b> the rival: its curve NEAR and treasury move over and its holders convert at the agreed rate.
-          For tokens from outside the launchpad a coin makes an all-or-nothing <b>tender</b>: enough of the supply is deposited by the deadline, or everyone is refunded.
-          The brain only proposes; the contract checks every number.</p>
-          <div id="rules-chips" class="rules"></div>
+          <p>The AI brain only <b>proposes</b>. The contract checks every number against the rules below, and the rules were fixed when the launchpad was created: there is no owner and no way to change them.</p>
+          <div id="rules-cards" class="rule-cards"></div>
+          <details class="more"><summary>All rules, exact values</summary><div id="rules-chips" class="rules"></div></details>
         </div>
       </section>
 
@@ -186,7 +225,8 @@
 </div>
 
   <dialog id="modal"><form method="dialog"><div id="modal-body"></div><menu><button>Close</button></menu></form></dialog>
+  <div id="tip" class="tip" role="tooltip" hidden></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script type="module" src="app.js?v=8"></script>
+  <script type="module" src="app.js?v=11"></script>
 </body>
 </html>
