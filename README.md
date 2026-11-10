@@ -110,12 +110,20 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 
 | | |
 |---|---|
-| Launchpad | [`autocto.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/autocto.scarpxvenom.testnet) |
+| Launchpad | [`autocto.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/autocto.scarpxvenom.testnet), locked: 0 access keys (tx `Cp16UaQE…`) |
 | Rules | `params/testnet.json` (10-minute votes, 5-minute newborn protection) |
 | Brain | `outlayer.testnet`, wasm pinned by sha256 `416b32ff…d8b6db` at commit `34c93f8` |
 | Page | `python3 -m http.server 8080 -d web`, then http://localhost:8080/?network=testnet |
 
 Anyone can check it: the launchpad's on-chain code hash equals `res/autocto_launchpad.wasm`, `coin_code_hash` equals `res/autocto_coin.wasm`, and `get_params` equals `params/testnet.json`.
+
+First coin: [`pepe.autocto.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.autocto.scarpxvenom.testnet). Its decision #0 went through the real `outlayer.testnet` (request 16511):
+- the worker fetched the brain from this repo's commit and checked its sha256;
+- it ran 418k instructions in 1.1 s and answered in 12 s;
+- it cost 0.0012 NEAR, and the rest of the 0.05 fee went back to PEPE's treasury;
+- the contract recorded the decision as Applied.
+
+A direct probe confirmed the brain can read testnet RPC from inside the enclave (`rivals_seen: 1`).
 
 ## Deploy to testnet
 
@@ -163,8 +171,8 @@ The tool checks the deployed rules against the params file, prints the coin code
 
 ## Honest limits
 
-- **Testnet is partly exercised.** The launchpad is live on testnet and verified against the committed binaries. The full takeover flow, including real OutLayer runs, has so far been exercised only in the local sandbox.
-- **OutLayer runs locally on a mock.** Tests and the demo use `mock-outlayer`, which has the same call signature and the same yield/resume flow. Two things are unchecked against the real `outlayer.testnet`: its gas use, and the exact `version_key` format for pinning a project version.
+- **Testnet covers launch, trading and real brain runs; the full takeover runs locally.** On testnet: the launchpad, a launch, trading, and a brain run through the real `outlayer.testnet`. A complete takeover (bid, vote, merge, convert) has so far run only in the local sandbox, against `mock-outlayer`. The mock has the same call signature and yield/resume flow; its result shape and gas budget are checked against OutLayer's contract source.
+- **Unchecked on OutLayer.** The `version_key` format for pinning a project version (LLM mode) is not yet verified.
 - **Replay is partial.** The input hash pins what the contract gave the brain, but the brain also reads rival coins live over RPC. Re-running a scouting decision later can differ; trust in LLM mode rests on OutLayer's TEE attestation.
 - **The fair rate is spot-price based.** A trader can move a curve before a bid. The caps bound the damage; a time-weighted price would be better.
 - **The model is ours.** The simulation chooses parameters under a score we defined; it is not a market.
