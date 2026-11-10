@@ -56,6 +56,7 @@ enum Key {
     Tenders,
     TenderDeposits,
     TenderByToken,
+    SealedBallots,
 }
 
 #[near(contract_state)]
@@ -113,6 +114,9 @@ pub struct Coin {
     /// Our tokens still to be minted for depositors of succeeded tenders.
     tender_owed: u128,
     watchlist: Vec<AccountId>,
+
+    /// Sealed votes waiting for their reveal, by "offer|round|account".
+    sealed_ballots: LookupMap<String, SealedBallot>,
 }
 
 /// "pepe.autocto.testnet" -> "autocto.testnet"
@@ -202,6 +206,7 @@ impl Coin {
             tender_by_token: LookupMap::new(Key::TenderByToken),
             tender_owed: 0,
             watchlist: Vec::new(),
+            sealed_ballots: LookupMap::new(Key::SealedBallots),
         };
         this.token.internal_register_account(&me);
         this.token.internal_deposit(&me, this.params.total_supply.0);

@@ -206,6 +206,9 @@ async fn main() -> Result<()> {
         format!("{}%", u128_of(&t["threshold"]) * 100 / supply)
     );
 
+    c.ok(&mallory, &wojak, "back_tender", json!({ "tender_id": 0 }), 0).await?;
+    println!("  mallory backs it with her locked WOJAK: a tender needs a quorum of the coin's own holders");
+
     say("erin tenders half of all OLDCAT; the deadline passes; anyone settles");
     c.ok(&erin, &oldcat, "ft_transfer_call", json!({ "receiver_id": wojak, "amount": (supply / 2).to_string(), "msg": "0" }), 1).await?;
     w.wait_secs(61).await?;

@@ -50,6 +50,7 @@ pub struct Params {
     pub tender_period_sec: u64,
     pub tender_threshold_bps: u32,
     pub tender_max_dilution_bps: u32,
+    pub reveal_period_sec: u64,
 }
 
 /// Same JSON shape as the coin's `BrainConfig`.

@@ -39,9 +39,9 @@ fn status_is(v: &Value, name: &str) -> bool {
 }
 
 /// Events worth a chat message; the rest stay in the on-chain log.
-const PUBLIC_EVENTS: [&str; 14] = [
+const PUBLIC_EVENTS: [&str; 15] = [
     "born", "thought", "offer_made", "counter", "counter_accepted", "stance", "offer_passed",
-    "offer_failed", "takeover", "merged", "nominated", "tender_opened", "tender_succeeded", "tender_failed",
+    "offer_failed", "takeover", "merged", "nominated", "tender_backed", "tender_opened", "tender_succeeded", "tender_failed",
 ];
 
 fn telegram(token: &str, chat: &str, text: &str) {
@@ -108,7 +108,8 @@ async fn main() -> Result<()> {
             let mut pending = vec![];
             for o in offers.as_array().into_iter().flatten() {
                 let ours = o["target"] == coin.to_string();
-                let ends = o["vote_ends"].as_u64().unwrap_or(u64::MAX);
+                let reveal = params["reveal_period_sec"].as_u64().unwrap_or(0) * 1_000_000_000;
+                let ends = o["vote_ends"].as_u64().unwrap_or(u64::MAX).saturating_add(reveal);
                 if ours && status_is(&o["status"], "Open") && now >= ends {
                     let key = format!("{}#{}", o["buyer"].as_str().unwrap_or(""), o["id"]);
                     let r = c.call(&owner, &coin, "finalize", json!({ "offer": key }), 0).await?;

@@ -13,7 +13,7 @@ You need Rust (`rust-toolchain.toml` pins 1.99.1; rustup installs it) and [cargo
 | Do | See |
 |---|---|
 | `./scripts/build.sh` | five wasm files in `res/` and their sha256 |
-| `cargo test -p autocto-tests` | 12 end-to-end takeover, tender and gasless-voting tests, plus an invariant fuzz run, pass in a local NEAR sandbox (~4 min) |
+| `cargo test -p autocto-tests` | 14 end-to-end takeover, tender, gasless-voting and sealed-voting tests, plus an invariant fuzz run, pass in a local NEAR sandbox (~4 min) |
 | `cargo test -p autocto-coin -p autocto-brain` | 10 unit tests (curve math, brain reader and decider) |
 | `cargo run -p autocto-demo` | a narrated takeover and tender story (~4 min); it ends with "The chain keeps running" |
 | `python3 -m http.server 8080 -d web`, then open http://localhost:8080/?network=local | the live page: 3 coins, DOGE "merged → PEPE", the bids, brain decisions, event log, simulation |
@@ -72,6 +72,7 @@ Every step emits a NEP-297 event (standard `autocto`) and lands in the coin's on
 | Re-bid cooldown after a failed bid | 120 s | 5 days |
 | Bids per coin per day | 3 | 3 |
 | Brain fee / daily treasury cap | 0.05 Ⓝ / 1 Ⓝ | 0.05 Ⓝ / 1 Ⓝ |
+| Private voting: reveal window after the vote (0 = open votes) | off | 1 day |
 | Tender period | 60 s | 3 days |
 | Tender threshold (share of the outside token's supply) | 40% | 40% |
 | Tender dilution cap (new tokens per tender vs supply) | 20% | 20% |
@@ -86,9 +87,19 @@ A token deployed outside the launchpad can't hold a vote, but it is a standard N
 2. **Size up.** The brain reads the token's supply and its access keys. If the owner still holds a full-access key, it refuses: the owner could rewrite the token.
 3. **Open.** The coin registers itself with the token (NEP-145), reads its supply and opens the tender: "deposit by the deadline and get `rate` of mine for each".
 4. **Deposit.** Outside holders send `ft_transfer_call` to the coin. Deposits above the dilution cap are returned on the spot.
-5. **Settle.** After the deadline anyone settles. If at least 40% of the outside supply was deposited and the coin's own holders did not veto, every depositor claims the coin's tokens at the tender rate. Otherwise every depositor claims the deposit back. The threshold is the vote, and the old token's developer can't block it.
+4a. **Back.** The coin's own holders back or veto the tender with tokens locked before it was announced. Whoever opened it, brain or holder, it needs a quorum of backing.
+5. **Settle.** After the deadline anyone settles. If at least 40% of the outside supply was deposited, a quorum of the coin's holders backed it and they did not veto, every depositor claims the coin's tokens at the tender rate. Otherwise every depositor claims the deposit back. The threshold is the vote, and the old token's developer can't block it.
 
 Every step can also be done by hand (`propose_tender`). The old token keeps existing; the coin's account now holds a large share of it.
+
+## Private voting (optional rule)
+
+With `reveal_period_sec` above 0, a launchpad's coins vote in two steps.
+
+1. **Commit.** During the vote period a holder calls `vote_sealed` with the sha256 of `offer|round|account|true-or-false|salt`. The chain shows how much weight has voted, not which way.
+2. **Reveal.** After the vote period the holder calls `reveal_vote` with the vote and the salt. A vote that isn't revealed inside the window doesn't count, and `finalize` waits for the window to end.
+
+This is commit-reveal, not the enclave tally from the idea doc: votes become public at reveal, and a voter can still show a briber their salt. It stops bandwagoning during the vote. Sealed bids are not built.
 
 ## Attacks and what stops them
 
@@ -102,13 +113,18 @@ Every step can also be done by hand (`propose_tender`). The old token keeps exis
 | Sniping a coin at birth | Newborn protection | `caps_and_safety_rules` |
 | Fake coin pretends to be a sibling | Targets and buyers must be `label.<launchpad>`, an account only the launchpad can create, with fixed code | `caps_and_safety_rules` |
 | Prompt injection in a rival's pitch | CaMeL-style split: a reader turns the pitch into fixed fields; the decider sees numbers and those fields only | `injected_pitch_never_reaches_the_decider` |
+| Bandwagoning, or proving a bought vote while the vote runs | Sealed votes: holders commit a hash during the vote and reveal after it; only the total weight is visible meanwhile | `sealed_votes_stay_hidden_until_the_reveal` |
 | A holder with no NEAR can't vote | Gasless voting: the holder signs, a relayer pays; every rule still applies | `a_holder_with_zero_near_votes_through_a_relayer` |
 | A lying or broken brain | The contract re-checks every action; a bad answer is recorded as Refused and changes nothing | `a_lying_brain_is_refused_and_coins_have_no_keys` |
 | Brain drains the treasury | Fee per thought, daily treasury cap, think cooldown; callers can pay instead | `brains_negotiate_offer_counter_accept` |
 | Admin rug | No owner, no setters, zero access keys on coins; the deploy tool can delete the launchpad's last key | `a_lying_brain_is_refused_and_coins_have_no_keys`, page badges |
+| Flash proposer: buy, lock, propose, unlock and sell in one transaction | Proposers need tokens locked since an earlier block and stay locked for the vote or tender period | `pump_before_the_bid_fails_at_execution` (lock), code in `assert_proposer` |
+| Pump the target before the bid, dump after | The buyer re-checks the rate against live prices at execution; supply inflated around a bid can't raise the veto line or the mint cap | `pump_before_the_bid_fails_at_execution` |
+| A junk token fakes deposits into a tender | No tender succeeds without a quorum of the coin's own holders backing it | `brain_tenders_for_nominated_tokens_and_refuses_ruggable_ones` |
+| Dust deposits bloat a coin's storage | A first deposit must be at least 1% of the threshold; deposits are capped at the token's supply | `tender_for_an_outside_token_swaps_everyone_or_refunds_everyone` |
 | Bidding on an old coin whose owner can rug | The brain checks the token's account for full-access keys and refuses | `brain_tenders_for_nominated_tokens_and_refuses_ruggable_ones` |
 | The brain tenders for a scam token | The brain can only tender for tokens holders nominated; the contract refuses others | same test |
-| A tender dilutes the coin's holders | Per-tender dilution cap, excess deposits returned, holder veto | `tender_for_an_outside_token_swaps_everyone_or_refunds_everyone` |
+| A tender dilutes the coin's holders | Per-tender dilution cap, excess deposits returned, holder backing quorum and veto | `tender_for_an_outside_token_swaps_everyone_or_refunds_everyone` |
 | A failed tender keeps deposits | All-or-nothing: refunds return exactly what was deposited | same test |
 | Any sequence of actions breaks the books | Invariant fuzzing: supply, balances, solvency and caps are re-checked after every random action | `random_actions_never_break_the_rules` |
 | Holders stranded by chained merges (A takes B, C takes A) | Each coin tracks what it still owes to unconverted holders; that debt is part of every cap | `chain_of_takeovers_leaves_no_holder_stranded` |
@@ -211,10 +227,11 @@ The tool checks the deployed rules against the params file, prints the coin code
 - **Unchecked on OutLayer.** The `version_key` format for pinning a project version (LLM mode) is not yet verified.
 - **Replay is partial.** The input hash pins what the contract gave the brain, but the brain also reads rival coins live over RPC. Re-running a scouting decision later can differ; trust in LLM mode rests on OutLayer's TEE attestation.
 - **The fair rate is spot-price based.** A trader can move a curve before a bid. The caps bound the damage; a time-weighted price would be better.
-- **Tenders have no price check.** There is no on-chain price for an outside token, so the contract can't judge a tender's rate. It bounds the damage with the per-tender dilution cap and the holders' veto. The rules brain prices by size only; a model with market data would do better.
+- **Tenders have no price check.** There is no on-chain price for an outside token, so the contract can't judge a tender's rate. The coin's holders judge it: a tender needs their backing quorum, and the per-tender dilution cap and veto bound the damage. A large holder who locked early can still push a bad tender if others don't veto. The rules brain prices by size only; a model with market data would do better.
 - **Tender deposits are locked until the deadline**, and the tendered tokens then sit in the coin's account: there is no rule yet for using them. Tokens that follow NEP-141 loosely (fees on transfer, rebasing) are untested.
+- **Known gaps from our own review.** A sealed voter who splits tokens across two accounts can commit both ways and reveal one side late; unrevealed votes carry no penalty yet. Finished bids and tenders are never pruned, so after several hundred records a coin's `think()` could run out of gas. Storage for votes and decisions is paid by the coin, not the caller. A long vote can fail at execution if prices drift past the premium cap.
 - **The model is ours.** The simulation chooses parameters under a score we defined; it is not a market.
-- **Not built from the idea doc.** Swaps on Rhea (buybacks, toehold stakes), private votes and sealed bids, wrapped "join the launchpad" tokens, cross-chain takeovers with Chain Signatures, and NEAR Intents.
+- **Not built from the idea doc.** Swaps on Rhea (buybacks, toehold stakes), enclave-counted votes and sealed bids, wrapped "join the launchpad" tokens, cross-chain takeovers with Chain Signatures, and NEAR Intents.
 - **Missing pieces.** No graduation from the bonding curve to a DEX yet. No audit. Each coin keeps its last 64 events on chain; the full log is in its NEP-297 events.
 
 ## Built with

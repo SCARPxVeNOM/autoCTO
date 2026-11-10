@@ -52,6 +52,7 @@ pub fn demo_params() -> Value {
         "tender_period_sec": 60,
         "tender_threshold_bps": 4000,
         "tender_max_dilution_bps": 2000,
+        "reveal_period_sec": 0,
     })
 }
 

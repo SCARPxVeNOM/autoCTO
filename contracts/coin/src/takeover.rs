@@ -34,21 +34,21 @@ impl Coin {
 
     /// Bid for a sibling coin by hand. Needs `proposer_bps` of supply locked.
     pub fn propose_offer(&mut self, target: AccountId, rate_ppm: U128, pitch: String) -> Promise {
-        let who = self.assert_proposer();
+        let who = self.assert_proposer(self.params.vote_period_sec);
         self.try_make_offer(target, rate_ppm.0, pitch, Proposer::Holder { account_id: who })
             .unwrap_or_else(|e| env::panic_str(&e))
     }
 
     /// Counter a bid we received, by hand.
     pub fn propose_counter(&mut self, offer: String, rate_ppm: U128, pitch: String) -> Promise {
-        let who = self.assert_proposer();
+        let who = self.assert_proposer(self.params.vote_period_sec);
         self.try_counter(offer, rate_ppm.0, pitch, Proposer::Holder { account_id: who })
             .unwrap_or_else(|e| env::panic_str(&e))
     }
 
     /// Accept the target's counter to one of our bids, by hand.
     pub fn accept_counter(&mut self, offer_id: u64) -> Promise {
-        self.assert_proposer();
+        self.assert_proposer(self.params.vote_period_sec);
         self.try_accept_counter(offer_id).unwrap_or_else(|e| env::panic_str(&e))
     }
 
@@ -96,6 +96,7 @@ impl Coin {
             counter: None,
             yes: U128(0),
             no: U128(0),
+            sealed: U128(0),
             veto: U128(0),
             buyer_market,
             target_market: target_market.clone(),
@@ -130,6 +131,7 @@ impl Coin {
         let now = self.now();
         let o = self.incoming.get(&offer).cloned().expect("unknown offer");
         require!(o.status == OfferStatus::Open && now < o.vote_ends, "voting is closed");
+        require!(self.params.reveal_period_sec == 0, "votes are sealed here: use vote_sealed, then reveal_vote");
         let weight = self.weight_at(&who, o.created_at);
         require!(weight > 0, "no tokens locked before this offer was announced");
         let ballot = format!("in|{offer}|{}|{who}", o.round);
@@ -156,7 +158,72 @@ impl Coin {
         U128(weight)
     }
 
-    /// Close the vote. Anyone can call this once the vote period is over.
+    /// Private voting, step 1: commit a vote without showing its direction.
+    /// `commitment` is the sha256 (hex) of "offer|round|account|true|salt" for
+    /// YES or "...|false|salt" for NO, with a secret salt of your choice.
+    pub fn vote_sealed(&mut self, offer: String, commitment: String) -> U128 {
+        let who = env::predecessor_account_id();
+        let now = self.now();
+        let o = self.incoming.get(&offer).cloned().expect("unknown offer");
+        require!(o.status == OfferStatus::Open && now < o.vote_ends, "voting is closed");
+        require!(self.params.reveal_period_sec > 0, "votes are open here: use vote");
+        require!(
+            commitment.len() == 64 && commitment.bytes().all(|b| b.is_ascii_hexdigit()),
+            "commitment must be a sha256 in hex"
+        );
+        let weight = self.weight_at(&who, o.created_at);
+        require!(weight > 0, "no tokens locked before this offer was announced");
+        let key = format!("{offer}|{}|{who}", o.round);
+        require!(self.voted.insert(format!("in|{key}")), "already voted in this round");
+        self.sealed_ballots.insert(key, SealedBallot { commitment: commitment.to_lowercase(), weight: U128(weight) });
+        let o = self.incoming.get_mut(&offer).unwrap();
+        o.sealed = U128(o.sealed.0 + weight);
+        let (sealed, reveal_ends) = (o.sealed, o.vote_ends + self.params.reveal_period_sec * NS_PER_SEC);
+        self.extend_vote_lock(&who, reveal_ends);
+        let text = format!("{who} cast a sealed vote on {offer} with {}", fmt_tokens(weight));
+        self.emit("vote_sealed", json!({ "offer": offer, "account": who, "weight": U128(weight), "sealed": sealed }), text);
+        U128(weight)
+    }
+
+    /// Private voting, step 2: after the vote period, show the vote. A vote
+    /// that is not revealed in the reveal window does not count.
+    pub fn reveal_vote(&mut self, offer: String, support: bool, salt: String) -> U128 {
+        let who = env::predecessor_account_id();
+        let now = self.now();
+        let o = self.incoming.get(&offer).cloned().expect("unknown offer");
+        let reveal_ends = o.vote_ends + self.params.reveal_period_sec * NS_PER_SEC;
+        require!(o.status == OfferStatus::Open, "offer is not open");
+        require!(now >= o.vote_ends, "the vote is still running: reveal after it ends");
+        require!(now < reveal_ends, "the reveal window is closed");
+        let key = format!("{offer}|{}|{who}", o.round);
+        let ballot = self.sealed_ballots.get(&key).cloned().expect("no sealed vote to reveal");
+        let opened = crate::hex(&env::sha256(format!("{key}|{support}|{salt}").as_bytes()));
+        require!(opened == ballot.commitment, "vote and salt do not match the commitment");
+        self.sealed_ballots.remove(&key);
+        let weight = ballot.weight.0;
+        let o = self.incoming.get_mut(&offer).unwrap();
+        o.sealed = U128(o.sealed.0 - weight);
+        if support {
+            o.yes = U128(o.yes.0 + weight);
+        } else {
+            o.no = U128(o.no.0 + weight);
+        }
+        let (yes, no) = (o.yes, o.no);
+        let text = format!(
+            "{who} revealed a {} vote on {offer} with {}",
+            if support { "YES" } else { "NO" },
+            fmt_tokens(weight)
+        );
+        self.emit(
+            "vote",
+            json!({ "offer": offer, "account": who, "support": support, "weight": U128(weight), "yes": yes, "no": no }),
+            text,
+        );
+        U128(weight)
+    }
+
+    /// Close the vote. Anyone can call this once the vote period (and the
+    /// reveal window, with private voting) is over.
     pub fn finalize(&mut self, offer: String) -> PromiseOrValue<bool> {
         let now = self.now();
         let o = self.incoming.get(&offer).cloned().expect("unknown offer");
@@ -172,6 +239,10 @@ impl Coin {
             CoinStatus::Active => {}
         }
         require!(now >= o.vote_ends, "the vote is still running");
+        require!(
+            now >= o.vote_ends + self.params.reveal_period_sec * NS_PER_SEC,
+            "sealed votes are still being revealed"
+        );
 
         let turnout = o.yes.0 + o.no.0;
         let quorum = bps_of(o.target_market.circulating.0, self.params.quorum_bps);
@@ -199,7 +270,7 @@ impl Coin {
         PromiseOrValue::Promise(
             Self::ext(o.buyer.clone())
                 .with_static_gas(GAS_EXECUTE)
-                .execute_takeover(o.id, claims)
+                .execute_takeover(o.id, claims, self.market())
                 .then(Self::ext(self.me()).with_static_gas(GAS_ON_EXECUTE).on_execute(offer)),
         )
     }
@@ -293,6 +364,7 @@ impl Coin {
         o.round += 1;
         o.yes = U128(0);
         o.no = U128(0);
+        o.sealed = U128(0);
         o.vote_ends = now + period;
         let ack = CounterAck {
             rate_ppm: o.rate_ppm,
@@ -427,7 +499,7 @@ impl Coin {
     }
 
     /// The target's holders approved. Last checks on our side: veto and dilution.
-    pub fn execute_takeover(&mut self, id: u64, target_circulating: U128) -> bool {
+    pub fn execute_takeover(&mut self, id: u64, target_circulating: U128, target_market: MarketSnapshot) -> bool {
         let target = env::predecessor_account_id();
         let o = self.outgoing.get(&id).cloned().expect("unknown offer");
         require!(o.target == target, "not your offer");
@@ -436,9 +508,23 @@ impl Coin {
             self.fail_outgoing(id, "buyer is no longer active");
             return false;
         }
-        let veto_needed = bps_of(o.buyer_market.circulating.0, self.params.veto_bps);
-        if o.veto.0 > 0 && o.veto.0 >= veto_needed {
+        // The smaller of the supply at the bid and now: inflating supply
+        // around the bid cannot raise the veto line.
+        let veto_base = o.buyer_market.circulating.0.min(self.circulating());
+        if o.veto.0 > 0 && o.veto.0 >= bps_of(veto_base, self.params.veto_bps) {
             self.fail_outgoing(id, "vetoed by our holders");
+            return false;
+        }
+        // Prices now, not at the bid: a target pumped for the bid and dumped
+        // after it no longer fits under the premium cap.
+        let fair_now = fair_rate_ppm(
+            target_market.amm_near.0,
+            target_market.amm_tokens.0,
+            self.amm_near,
+            self.amm_tokens,
+        );
+        if premium_bps(o.rate_ppm.0, fair_now) > self.params.max_premium_bps as i64 {
+            self.fail_outgoing(id, "prices moved: the rate is now above the premium cap");
             return false;
         }
         let minted_max = mul_div(target_circulating.0, o.rate_ppm.0, RATE_SCALE);
@@ -555,13 +641,18 @@ impl Coin {
 }
 
 impl Coin {
-    pub(crate) fn assert_proposer(&self) -> AccountId {
+    /// A proposer needs `proposer_bps` locked since an earlier block (a lock
+    /// made in the same transaction does not count), and stays locked for
+    /// `lock_sec`: no flash buy-lock-propose-unlock-sell.
+    pub(crate) fn assert_proposer(&mut self, lock_sec: u64) -> AccountId {
         let who = env::predecessor_account_id();
+        let now = self.now();
         let need = bps_of(self.circulating(), self.params.proposer_bps).max(1);
         require!(
-            self.locked_of(&who) >= need,
-            "lock more tokens to make proposals by hand"
+            self.weight_at(&who, now) >= need,
+            "lock more tokens (in an earlier block) to make proposals by hand"
         );
+        self.extend_vote_lock(&who, now + lock_sec * NS_PER_SEC);
         who
     }
 
@@ -661,6 +752,7 @@ impl Coin {
             counter: None,
             yes: U128(0),
             no: U128(0),
+            sealed: U128(0),
             veto: U128(0),
             buyer_market: market.clone(),
             target_market: MarketSnapshot {

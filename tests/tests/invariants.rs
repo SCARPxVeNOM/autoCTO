@@ -196,7 +196,8 @@ async fn random_actions_never_break_the_rules() -> Result<()> {
                 let rate = (circ / (5 + rng.below(40) as u128)) * 1_000_000 / (old_supply / 10 * 4);
                 ("propose_tender", c.call(&who, &coin, "propose_tender", json!({ "token": f.old, "rate_ppm": rate.max(1).to_string(), "pitch": "fuzz" }), 0).await?)
             }
-            11 | 12 => {
+            12 => ("back_tender", c.call(&who, &coin, "back_tender", json!({ "tender_id": tender_id }), 0).await?),
+            11 => {
                 let have = f.w.balance(&f.old, &who).await?;
                 let amount = have / (1 + rng.below(3) as u128);
                 ("tender_deposit", c.call(&who, &f.old, "ft_transfer_call", json!({ "receiver_id": coin, "amount": amount.max(1).to_string(), "msg": tender_id.to_string() }), 1).await?)

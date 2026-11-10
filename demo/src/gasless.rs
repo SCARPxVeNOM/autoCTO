@@ -21,7 +21,8 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::Caller;
 
 /// Calls a relayer forwards. All of them move no NEAR out of the holder.
-pub const GASLESS_METHODS: [&str; 6] = ["lock", "unlock", "vote", "veto", "veto_tender", "claim_tender"];
+pub const GASLESS_METHODS: [&str; 9] =
+    ["lock", "unlock", "vote", "vote_sealed", "reveal_vote", "veto", "back_tender", "veto_tender", "claim_tender"];
 const MAX_GAS_TGAS: u64 = 150;
 const MAX_BODY: usize = 64 * 1024;
 

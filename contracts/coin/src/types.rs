@@ -56,6 +56,10 @@ pub struct Params {
     pub tender_threshold_bps: u32,
     /// Most tokens one tender may mint, as a share of our supply.
     pub tender_max_dilution_bps: u32,
+    /// Private voting. 0: votes are open. Above 0: holders commit a sealed
+    /// vote during the vote period and reveal it in this window afterwards,
+    /// so nobody sees which way a vote is leaning while it runs.
+    pub reveal_period_sec: u64,
 }
 
 /// Where the brain lives. Pinned at launch: a project version (wasm hash) or a
@@ -151,6 +155,8 @@ pub struct Offer {
     pub counter: Option<Counter>,
     pub yes: U128,
     pub no: U128,
+    /// Weight of sealed votes not revealed yet (their direction is hidden).
+    pub sealed: U128,
     pub veto: U128,
     pub buyer_market: MarketSnapshot,
     pub target_market: MarketSnapshot,
@@ -230,6 +236,14 @@ pub struct Decision {
     pub status: DecisionStatus,
 }
 
+/// A committed vote: sha256 hex of "offer|round|account|true-or-false|salt".
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq)]
+pub struct SealedBallot {
+    pub commitment: String,
+    pub weight: U128,
+}
+
 #[near(serializers = [borsh, json])]
 #[derive(Clone, Debug, PartialEq)]
 pub enum TenderStatus {
@@ -263,6 +277,8 @@ pub struct Tender {
     pub max_deposit: U128,
     pub deposited: U128,
     pub claimed: U128,
+    /// Weight of our holders who backed the tender; it needs a quorum of it.
+    pub backing: U128,
     pub veto: U128,
     /// Our circulating supply (plus owed) at the snapshot.
     pub buyer_supply: U128,

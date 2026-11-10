@@ -45,12 +45,14 @@ All calls: `near contract call-function as-transaction <contract> <method> json-
 | Counter a bid | target coin | `propose_counter {"offer":"<buyer>#<id>","rate_ppm","pitch"}` | 0 |
 | Accept a counter | buyer coin | `accept_counter {"offer_id"}` | 0 |
 | Vote on a bid | target coin | `vote {"offer":"<buyer>#<id>","support":true}` | 0 |
+| Vote when `reveal_period_sec` > 0 | target coin | `vote_sealed {"offer","commitment"}` with sha256 hex of `offer\|round\|account\|true-or-false\|salt`, then after `vote_ends`: `reveal_vote {"offer","support","salt"}` | 0 |
 | Veto your coin's bid | buyer coin | `veto {"offer_id"}` | 0 |
 | Close a vote | target coin | `finalize {"offer":"<buyer>#<id>"}` (anyone, after `vote_ends`) | 0 |
 | Convert after a merge | merged coin | `convert {}` | 1 yoctoNEAR |
 | Nominate an outside token | coin | `nominate {"token"}` | 0 |
 | Tender for an outside token | coin | `propose_tender {"token","rate_ppm","pitch"}` | 0 |
 | Deposit into a tender | the outside token | `ft_transfer_call {"receiver_id":"<coin>","amount","msg":"<tender id>"}` | 1 yoctoNEAR |
+| Back your coin's tender | coin | `back_tender {"tender_id"}` (a tender needs a quorum of backing; one ballot each, back or veto) | 0 |
 | Veto your coin's tender | coin | `veto_tender {"tender_id"}` | 0 |
 | Settle a tender | coin | `settle_tender {"tender_id"}` (anyone, after `deadline`) | 0 |
 | Claim tokens or refund | coin | `claim_tender {"tender_id"}` | 0 |

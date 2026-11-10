@@ -49,7 +49,7 @@ impl Coin {
     /// Ask the brain to size up an outside token. The brain may only tender
     /// for tokens on this list: holders pick the token, the brain the numbers.
     pub fn nominate(&mut self, token: AccountId) {
-        let who = self.assert_proposer();
+        let who = self.assert_proposer(self.params.tender_period_sec);
         require!(token != self.me() && !self.is_sibling(&token), "siblings get takeover bids");
         require!(!self.watchlist.contains(&token), "already on the watchlist");
         require!(self.watchlist.len() < MAX_WATCHLIST, "the watchlist is full");
@@ -58,28 +58,39 @@ impl Coin {
         self.emit("nominated", json!({ "token": token, "by": who }), text);
     }
 
+    /// Take a token off the watchlist.
+    pub fn denominate(&mut self, token: AccountId) {
+        let who = self.assert_proposer(self.params.tender_period_sec);
+        require!(self.watchlist.contains(&token), "not on the watchlist");
+        self.watchlist.retain(|t| t != &token);
+        let text = format!("{who} took {token} off the watchlist");
+        self.emit("denominated", json!({ "token": token, "by": who }), text);
+    }
+
     /// Open a tender for an outside token by hand. Needs `proposer_bps` locked.
     pub fn propose_tender(&mut self, token: AccountId, rate_ppm: U128, pitch: String) -> Promise {
-        let who = self.assert_proposer();
+        let who = self.assert_proposer(self.params.tender_period_sec);
         self.try_open_tender(token, rate_ppm.0, pitch, Proposer::Holder { account_id: who })
             .unwrap_or_else(|e| env::panic_str(&e))
     }
 
     #[private]
-    pub fn on_tender_opened(
-        &mut self,
-        id: u64,
-        #[callback_result] supply: Result<U128, PromiseError>,
-    ) -> bool {
+    pub fn on_tender_opened(&mut self, id: u64) -> bool {
         let Some(t) = self.tenders.get(&id).cloned() else { return false };
-        let supply = supply.map(|s| s.0).unwrap_or(0);
+        // Read the raw answer: a token that returns something odd must fail
+        // the tender, not leave it stuck in Opening.
+        let supply = env::promise_result_checked(0, 128)
+            .ok()
+            .and_then(|b| near_sdk::serde_json::from_slice::<U128>(&b).ok())
+            .map(|s| s.0)
+            .unwrap_or(0);
         if supply == 0 {
             self.fail_tender(id, "the token did not report a supply");
             return false;
         }
         let threshold = bps_of(supply, self.params.tender_threshold_bps).max(1);
         let max_mint = bps_of(t.buyer_supply.0, self.params.tender_max_dilution_bps);
-        let max_deposit = mul_div(max_mint, RATE_SCALE, t.rate_ppm.0);
+        let max_deposit = mul_div(max_mint, RATE_SCALE, t.rate_ppm.0).min(supply);
         if max_deposit < threshold {
             self.fail_tender(id, "at this rate the threshold would break the dilution cap");
             return false;
@@ -107,21 +118,34 @@ impl Coin {
         true
     }
 
+    /// An Opening tender whose callback never ran (out of gas) can be closed
+    /// by anyone after ten minutes.
+    pub fn cancel_stuck_tender(&mut self, tender_id: u64) {
+        let t = self.tenders.get(&tender_id).expect("unknown tender");
+        require!(t.status == TenderStatus::Opening, "tender is not stuck");
+        require!(self.now() > t.created_at + 600 * NS_PER_SEC, "give it ten minutes");
+        self.fail_tender(tender_id, "the token never answered");
+    }
+
+    /// Back a tender our coin opened, with tokens locked before it was
+    /// announced. A tender needs a quorum of backing: whoever opens it, the
+    /// holders decide.
+    pub fn back_tender(&mut self, tender_id: u64) -> U128 {
+        let (who, weight, t) = self.tender_ballot(tender_id);
+        let t2 = self.tenders.get_mut(&tender_id).unwrap();
+        t2.backing = U128(t2.backing.0 + weight);
+        let backing = t2.backing;
+        let text = format!("{who} backed the tender for {} with {}", t.token, fmt_tokens(weight));
+        self.emit("tender_backed", json!({ "tender": tender_id, "account": who, "backing": backing }), text);
+        backing
+    }
+
     /// Veto a tender our coin opened, with tokens locked before it was announced.
     pub fn veto_tender(&mut self, tender_id: u64) -> U128 {
-        let who = env::predecessor_account_id();
-        let t = self.tenders.get(&tender_id).cloned().expect("unknown tender");
-        require!(
-            t.status == TenderStatus::Open && self.now() < t.deadline,
-            "veto window is closed"
-        );
-        let weight = self.weight_at(&who, t.created_at);
-        require!(weight > 0, "no tokens locked before this tender was announced");
-        require!(self.voted.insert(format!("tender|{tender_id}|{who}")), "already vetoed");
+        let (who, weight, t) = self.tender_ballot(tender_id);
         let t2 = self.tenders.get_mut(&tender_id).unwrap();
         t2.veto = U128(t2.veto.0 + weight);
         let veto = t2.veto;
-        self.extend_vote_lock(&who, t.deadline);
         let text = format!("{who} vetoed the tender for {} with {}", t.token, fmt_tokens(weight));
         self.emit("tender_veto", json!({ "tender": tender_id, "account": who, "veto": veto }), text);
         veto
@@ -132,13 +156,23 @@ impl Coin {
         let t = self.tenders.get(&tender_id).cloned().expect("unknown tender");
         require!(t.status == TenderStatus::Open, "tender is not open");
         require!(self.now() >= t.deadline, "the deadline has not passed");
-        let veto_needed = bps_of(t.buyer_supply.0, self.params.veto_bps);
+        if matches!(self.status, CoinStatus::MergePending { .. }) {
+            env::panic_str("a takeover of this coin is executing; try again shortly");
+        }
+        // The smaller of our supply at the snapshot and now, so inflating the
+        // supply around the proposal buys neither a bigger mint nor a higher veto line.
+        let base = t.buyer_supply.0.min(self.circulating() + self.owed());
+        let mint = mul_div(t.deposited.0, t.rate_ppm.0, RATE_SCALE);
         let verdict = if self.status != CoinStatus::Active {
             Err("we are no longer active")
-        } else if t.veto.0 > 0 && t.veto.0 >= veto_needed {
+        } else if t.veto.0 > 0 && t.veto.0 >= bps_of(base, self.params.veto_bps) {
             Err("vetoed by our holders")
+        } else if t.backing.0 == 0 || t.backing.0 < bps_of(base, self.params.quorum_bps) {
+            Err("not backed by a quorum of our holders")
         } else if t.deposited.0 < t.threshold.0 {
             Err("threshold not reached")
+        } else if mint > bps_of(base, self.params.tender_max_dilution_bps) {
+            Err("dilution cap exceeded at settlement")
         } else {
             Ok(())
         };
@@ -148,7 +182,6 @@ impl Coin {
         }
         self.tenders.get_mut(&tender_id).unwrap().status = TenderStatus::Succeeded;
         self.tender_by_token.remove(&t.token);
-        let mint = mul_div(t.deposited.0, t.rate_ppm.0, RATE_SCALE);
         self.tender_owed += mint;
         let text = format!(
             "TENDER for {} succeeded: {} deposited, up to {} of ours to claim",
@@ -257,6 +290,8 @@ impl FungibleTokenReceiver for Coin {
         require!(accepted > 0, "the tender is full");
         let key = deposit_key(id, &sender_id);
         let cur = self.tender_deposits.get(&key).copied().unwrap_or(0);
+        // Each depositor costs us storage: no dust accounts.
+        require!(cur > 0 || accepted >= t.threshold.0 / 100, "first deposit must be at least 1% of the threshold");
         self.tender_deposits.insert(key, cur + accepted);
         let t2 = self.tenders.get_mut(&id).unwrap();
         t2.deposited = U128(t2.deposited.0 + accepted);
@@ -310,6 +345,7 @@ impl Coin {
             max_deposit: U128(0),
             deposited: U128(0),
             claimed: U128(0),
+            backing: U128(0),
             veto: U128(0),
             buyer_supply: U128(self.circulating() + self.owed()),
             status: TenderStatus::Opening,
@@ -322,6 +358,22 @@ impl Coin {
             .storage_deposit(Some(self.me()), Some(true))
             .then(ext_ft::ext(token).with_static_gas(GAS_FT_VIEW).ft_total_supply())
             .then(Self::ext(self.me()).with_static_gas(GAS_ON_TENDER_OPENED).on_tender_opened(id)))
+    }
+
+    /// One ballot (back or veto) per holder per tender, weighted by tokens
+    /// locked before the tender was announced.
+    fn tender_ballot(&mut self, tender_id: u64) -> (AccountId, u128, Tender) {
+        let who = env::predecessor_account_id();
+        let t = self.tenders.get(&tender_id).cloned().expect("unknown tender");
+        require!(
+            t.status == TenderStatus::Open && self.now() < t.deadline,
+            "the tender is closed"
+        );
+        let weight = self.weight_at(&who, t.created_at);
+        require!(weight > 0, "no tokens locked before this tender was announced");
+        require!(self.voted.insert(format!("tender|{tender_id}|{who}")), "already backed or vetoed");
+        self.extend_vote_lock(&who, t.deadline);
+        (who, weight, t)
     }
 
     fn fail_tender(&mut self, id: u64, reason: &str) {
