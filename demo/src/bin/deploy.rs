@@ -172,7 +172,7 @@ async fn main() -> Result<()> {
     println!("  page config      {}", config_path.display());
     println!("\nlaunch a coin:");
     println!(
-        "  near contract call-function as-transaction {launchpad} launch json-args '{{\"label\":\"pepe\",\"name\":\"Pepe\",\"symbol\":\"PEPE\",\"icon\":null,\"persona\":\"A smug frog.\"}}' prepaid-gas '300 Tgas' attached-deposit '{:.2} NEAR' sign-as {owner} network-config testnet sign-with-keychain send",
+        "  near contract call-function as-transaction {launchpad} launch json-args '{{\"label\":\"pepe\",\"name\":\"Pepe\",\"symbol\":\"PEPE\",\"icon\":null,\"persona\":\"A smug frog.\"}}' prepaid-gas '300 Tgas' attached-deposit '{:.2} NEAR' sign-as {owner} network-config testnet sign-with-legacy-keychain send",
         (min as f64 / ONE_NEAR as f64) + 1.0
     );
     Ok(())

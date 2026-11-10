@@ -106,6 +106,17 @@ Quorum, approval and veto come from the simulation's parameter sweep (below). Th
 
 The page charts all of it, and `sim/REPORT.md` has the numbers.
 
+## Live on testnet
+
+| | |
+|---|---|
+| Launchpad | [`autocto.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/autocto.scarpxvenom.testnet) |
+| Rules | `params/testnet.json` (10-minute votes, 5-minute newborn protection) |
+| Brain | `outlayer.testnet`, wasm pinned by sha256 `416b32ff…d8b6db` at commit `34c93f8` |
+| Page | `python3 -m http.server 8080 -d web`, then http://localhost:8080/?network=testnet |
+
+Anyone can check it: the launchpad's on-chain code hash equals `res/autocto_launchpad.wasm`, `coin_code_hash` equals `res/autocto_coin.wasm`, and `get_params` equals `params/testnet.json`.
+
 ## Deploy to testnet
 
 You need a testnet account with about 10 NEAR for the launchpad (code storage), plus about 5.9 NEAR per coin in the default Embedded mode.
@@ -152,7 +163,7 @@ The tool checks the deployed rules against the params file, prints the coin code
 
 ## Honest limits
 
-- **Not on testnet yet.** Deploying needs the team's own testnet account. The deploy tool is tested against the local sandbox, where it deploys, initialises, verifies the rules, deletes the key and launches a coin.
+- **Testnet is partly exercised.** The launchpad is live on testnet and verified against the committed binaries. The full takeover flow, including real OutLayer runs, has so far been exercised only in the local sandbox.
 - **OutLayer runs locally on a mock.** Tests and the demo use `mock-outlayer`, which has the same call signature and the same yield/resume flow. Two things are unchecked against the real `outlayer.testnet`: its gas use, and the exact `version_key` format for pinning a project version.
 - **Replay is partial.** The input hash pins what the contract gave the brain, but the brain also reads rival coins live over RPC. Re-running a scouting decision later can differ; trust in LLM mode rests on OutLayer's TEE attestation.
 - **The fair rate is spot-price based.** A trader can move a curve before a bid. The caps bound the damage; a time-weighted price would be better.

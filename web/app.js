@@ -318,7 +318,7 @@ async function act(btn) {
   if (!cfg.dev_key) {
     const near = (Number(deposit / 10n ** 18n) / 1e6).toString();
     $("modal-body").innerHTML = `<h3>${esc(method)} on ${esc(contract)}</h3><p>Sign this with <a href="https://github.com/near/near-cli-rs">near-cli</a>:</p>
-      <pre>near contract call-function as-transaction ${esc(contract)} ${esc(method)} json-args '${esc(JSON.stringify(args))}' prepaid-gas '300 Tgas' attached-deposit '${near} NEAR' sign-as &lt;you&gt;.testnet network-config testnet sign-with-keychain send</pre>`;
+      <pre>near contract call-function as-transaction ${esc(contract)} ${esc(method)} json-args '${esc(JSON.stringify(args))}' prepaid-gas '300 Tgas' attached-deposit '${near} NEAR' sign-as &lt;you&gt;.testnet network-config testnet sign-with-legacy-keychain send</pre>`;
     $("modal").showModal();
     return;
   }
