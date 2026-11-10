@@ -1,17 +1,17 @@
-/* AutoCTO: a framed, monochrome trading desk. Violet is the brand, green/red are only ever up/down. */
+/* AutoCTO: a framed, monochrome trading desk. Sky blue is the brand, green/red are only ever up/down. */
 :root {
   --page: #ffffff; --raised: #ffffff; --well: #f4f4f5;
   --wash: rgba(0,0,0,.035); --wash-2: rgba(0,0,0,.06);
   --line: rgba(0,0,0,.08); --line-strong: rgba(0,0,0,.17);
   --ink: #18181b; --ink-2: #55555e; --ink-3: #74747d;
-  --brand: #5b3df5; --brand-top: #6f55ff; --brand-bot: #4a2be0; --brand-edge: #3a1fc0; --on-brand: #fff;
+  --brand: #0284c7; --brand-top: #1aa5ee; --brand-bot: #0284c7; --brand-edge: #0369a1; --on-brand: #fff;
   --up: #07875a; --up-top: #12a56f; --up-bot: #07875a; --up-edge: #056b47;
   --down: #d3212c; --down-top: #ec3b46; --down-bot: #d3212c; --down-edge: #a9141e;
   --warn: #a86200;
   --btn-top: #ffffff; --btn-bot: #f5f5f6; --btn-edge: rgba(0,0,0,.14);
   --drop: 0 1px 1px rgba(0,0,0,.04), 0 2px 5px rgba(0,0,0,.05);
   --hatch: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Cpath d='M-1 1l2-2M0 6l6-6M5 7l2-2' stroke='black' stroke-opacity='0.09'/%3E%3C/svg%3E");
-  --s0: #5b3df5; --s1: #07875a; --s2: #d3212c; --s3: #b26a00; --s4: #0e7fa8; --s5: #a33ea1;
+  --s0: #0284c7; --s1: #07875a; --s2: #d3212c; --s3: #b26a00; --s4: #64748b; --s5: #a33ea1;
   --ease: cubic-bezier(.215,.61,.355,1);
   --gutter: 16px; --pad: 24px;
   --sans: "Funnel Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -26,14 +26,14 @@
     --wash: rgba(255,255,255,.05); --wash-2: rgba(255,255,255,.085);
     --line: rgba(255,255,255,.09); --line-strong: rgba(255,255,255,.19);
     --ink: #fafafa; --ink-2: #b0b0b6; --ink-3: #8d8d95;
-    --brand: #a493ff; --brand-top: #7c63ff; --brand-bot: #5b3df5; --brand-edge: #8f7bff;
+    --brand: #38bdf8; --brand-top: #1aa5ee; --brand-bot: #0284c7; --brand-edge: #38bdf8;
     --up: #3ddc97; --up-top: #17a873; --up-bot: #0b8a5c; --up-edge: #35c489;
     --down: #ff6b70; --down-top: #e8434d; --down-bot: #c92a35; --down-edge: #ff7d84;
     --warn: #f0b429;
     --btn-top: #26262a; --btn-bot: #1d1d20; --btn-edge: rgba(255,255,255,.13);
     --drop: 0 1px 1px rgba(0,0,0,.25), 0 2px 6px rgba(0,0,0,.3);
     --hatch: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Cpath d='M-1 1l2-2M0 6l6-6M5 7l2-2' stroke='white' stroke-opacity='0.08'/%3E%3C/svg%3E");
-    --s0: #a493ff; --s1: #3ddc97; --s2: #ff6b70; --s3: #f0b429; --s4: #4cc3ea; --s5: #e07fdd;
+    --s0: #38bdf8; --s1: #3ddc97; --s2: #ff6b70; --s3: #f0b429; --s4: #94a3b8; --s5: #e07fdd;
     color-scheme: dark;
   }
 }
@@ -42,14 +42,14 @@
   --wash: rgba(255,255,255,.05); --wash-2: rgba(255,255,255,.085);
   --line: rgba(255,255,255,.09); --line-strong: rgba(255,255,255,.19);
   --ink: #fafafa; --ink-2: #b0b0b6; --ink-3: #8d8d95;
-  --brand: #a493ff; --brand-top: #7c63ff; --brand-bot: #5b3df5; --brand-edge: #8f7bff;
+  --brand: #38bdf8; --brand-top: #1aa5ee; --brand-bot: #0284c7; --brand-edge: #38bdf8;
   --up: #3ddc97; --up-top: #17a873; --up-bot: #0b8a5c; --up-edge: #35c489;
   --down: #ff6b70; --down-top: #e8434d; --down-bot: #c92a35; --down-edge: #ff7d84;
   --warn: #f0b429;
   --btn-top: #26262a; --btn-bot: #1d1d20; --btn-edge: rgba(255,255,255,.13);
   --drop: 0 1px 1px rgba(0,0,0,.25), 0 2px 6px rgba(0,0,0,.3);
   --hatch: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Cpath d='M-1 1l2-2M0 6l6-6M5 7l2-2' stroke='white' stroke-opacity='0.08'/%3E%3C/svg%3E");
-  --s0: #a493ff; --s1: #3ddc97; --s2: #ff6b70; --s3: #f0b429; --s4: #4cc3ea; --s5: #e07fdd;
+  --s0: #38bdf8; --s1: #3ddc97; --s2: #ff6b70; --s3: #f0b429; --s4: #94a3b8; --s5: #e07fdd;
   color-scheme: dark;
 }
 
@@ -159,7 +159,7 @@ section.two > div + div { border-left: 1px dashed var(--line-strong); }
 .section-head .chips { margin-left: auto; }
 footer { padding: 18px var(--pad); text-align: center; }
 
-.ticker { display: grid; grid-template-columns: repeat(6, 1fr); border-bottom: 1px dashed var(--line-strong); }
+.ticker { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px dashed var(--line-strong); }
 .ticker div { padding: 14px var(--pad); min-width: 0; border-left: 1px dashed var(--line); }
 .ticker div:first-child { border-left: 0; }
 .ticker span { display: block; font-size: 12.5px; color: var(--ink-3); white-space: nowrap; }
@@ -610,3 +610,12 @@ details.more[open] summary { margin-bottom: 10px; }
 .off { display: none !important; }
 .pad-x { padding: 0 var(--pad); margin: -6px 0 14px; }
 main > section:last-of-type, main > .ticker { border-bottom: 1px dashed var(--line-strong); }
+
+/* ---------- icons ---------- */
+.ic { width: 1em; height: 1em; flex: none; vertical-align: -.14em; }
+.logo .ic { width: 19px; height: 19px; }
+.nav a i .ic { width: 17px; height: 17px; }
+button.icon .ic { width: 16px; height: 16px; vertical-align: -3px; }
+.badge .ic { width: 11px; height: 11px; vertical-align: -1px; }
+.move i .ic { width: 16px; height: 16px; vertical-align: -3px; }
+.guide .tick .ic { width: 14px; height: 14px; }

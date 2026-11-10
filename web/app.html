@@ -9,41 +9,37 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@500;600;700&family=Funnel+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Pixelify+Sans:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body class="hatch">
 <div class="frame">
 
   <aside class="side">
     <a class="brand" href="index.html" data-home title="What is AutoCTO">
-      <span class="logo" aria-hidden="true">⚔︎</span>
+      <span class="logo" aria-hidden="true"><svg class="ic" aria-hidden="true"><use href="icons.svg#swords"/></svg></span>
       <span class="wordmark">AutoCTO</span>
     </a>
     <div class="side-scroll">
       <nav class="nav" id="nav" aria-label="Sections">
         <h2>Trade</h2>
-        <a href="#market"><i>◧</i>Market</a>
-        <a href="#deals"><i>⚔︎</i>Deals <b id="nav-deals" class="count" hidden></b></a>
-        <a href="#brains"><i>✺</i>Brains &amp; feed</a>
+        <a href="#market"><i><svg class="ic" aria-hidden="true"><use href="icons.svg#layout-dashboard"/></svg></i>Market</a>
+        <a href="#deals"><i><svg class="ic" aria-hidden="true"><use href="icons.svg#swords"/></svg></i>Deals <b id="nav-deals" class="count" hidden></b></a>
+        <a href="#brains"><i><svg class="ic" aria-hidden="true"><use href="icons.svg#brain"/></svg></i>Brains &amp; feed</a>
         <h2>Build</h2>
-        <a href="#launch"><i>＋</i>Launch a coin</a>
-        <a href="#rules"><i>§</i>Rules</a>
+        <a href="#launch"><i><svg class="ic" aria-hidden="true"><use href="icons.svg#rocket"/></svg></i>Launch a coin</a>
+        <a href="#rules"><i><svg class="ic" aria-hidden="true"><use href="icons.svg#scale"/></svg></i>Rules</a>
         <h2>Help</h2>
-        <a href="#guide"><i>✓</i>First steps <b id="nav-guide" class="count soft" hidden></b></a>
-        <a href="#" data-glossary><i>?</i>Words explained</a>
-        <a href="index.html" data-home><i>←</i>What is AutoCTO</a>
+        <a href="#guide"><i><svg class="ic" aria-hidden="true"><use href="icons.svg#list-checks"/></svg></i>First steps <b id="nav-guide" class="count soft" hidden></b></a>
+        <a href="#" data-glossary><i><svg class="ic" aria-hidden="true"><use href="icons.svg#book-open"/></svg></i>Words explained</a>
+        <a href="index.html" data-home><i><svg class="ic" aria-hidden="true"><use href="icons.svg#arrow-left"/></svg></i>What is AutoCTO</a>
       </nav>
-    </div>
-    <div class="side-foot">
-      <div class="small muted">launchpad</div>
-      <div id="launchpad" class="mono small wrap"></div>
     </div>
   </aside>
 
   <div class="col">
     <header class="top">
       <a class="brand mobile-brand" href="index.html" data-home>
-        <span class="logo" aria-hidden="true">⚔︎</span>
+        <span class="logo" aria-hidden="true"><svg class="ic" aria-hidden="true"><use href="icons.svg#swords"/></svg></span>
         <span class="wordmark">AutoCTO</span>
       </a>
       <div class="net">
@@ -56,8 +52,8 @@
         </label>
         <button id="connect" class="primary" type="button" hidden>Connect wallet</button>
         <label id="gasless-wrap" class="check small" hidden data-term="gasless"><input type="checkbox" id="gasless"> gasless</label>
-        <button class="icon" type="button" data-glossary title="Words explained" aria-label="Words explained">?</button>
-        <button id="theme" class="icon" type="button" title="Theme: auto" aria-label="Switch theme">◐</button>
+        <button class="icon" type="button" data-glossary title="Words explained" aria-label="Words explained"><svg class="ic" aria-hidden="true"><use href="icons.svg#circle-help"/></svg></button>
+        <button id="theme" class="icon" type="button" title="Theme: auto" aria-label="Switch theme"><svg class="ic" aria-hidden="true"><use href="icons.svg#sun-moon"/></svg></button>
       </div>
     </header>
 
@@ -76,7 +72,7 @@
       <div id="ticker" class="ticker" data-v="market" aria-label="Launchpad totals"></div>
 
       <section id="market" data-v="market">
-        <div class="section-head"><h2>Market</h2><span class="muted small">Click a coin to open it · live from the chain, refreshed every 3 s</span></div>
+        <div class="section-head"><h2>Market</h2><span class="muted small">Click a coin to open it</span></div>
         <div class="mkt-head" aria-hidden="true">
           <span>Coin</span><span>Price / 1M</span><span>Session</span><span>Market cap</span><span>Liquidity</span><span>Treasury</span><span>You hold</span><span>Status</span>
         </div>
@@ -131,7 +127,7 @@
               <div id="lots" class="lots"></div>
             </div>
             <div class="ticket-foot">
-              <button id="think" type="button" data-act="think">🧠 Think</button>
+              <button id="think" type="button" data-act="think"><svg class="ic" aria-hidden="true"><use href="icons.svg#brain"/></svg> Think</button>
               <span id="think-note" class="muted small"></span>
             </div>
           </aside>
@@ -158,7 +154,7 @@
       <section id="launch" data-v="launch">
         <div class="section-head"><h2>Launch a coin</h2><span class="muted small">Your coin gets the same code and rules as every other. After launch nobody can change it, not even you.</span></div>
         <form id="launch-form" class="card launch" autocomplete="off">
-          <div class="launch-preview"><span id="launch-ava" class="ava big" style="--h:265" aria-hidden="true">?</span>
+          <div class="launch-preview"><span id="launch-ava" class="ava big" style="--h:200" aria-hidden="true">?</span>
             <div><b id="launch-title">Your coin</b><div id="launch-addr" class="mono small muted wrap"></div></div></div>
           <div class="fields">
             <label>Name <input name="name" required maxlength="32" placeholder="Bonk"></label>
@@ -179,28 +175,28 @@
       </section>
 
       <section id="rules" data-v="rules">
-        <div class="section-head"><h2>Rules</h2><span id="code-hash" class="mono small muted wrap"></span></div>
+        <div class="section-head"><h2>Rules</h2></div>
         <div class="explain">
           <p>The AI brain only <b>proposes</b>. The contract checks every number against the rules below, and the rules were fixed when the launchpad was created: there is no owner and no way to change them.</p>
           <div id="rules-cards" class="rule-cards"></div>
-          <details class="more"><summary>All rules, exact values</summary><div id="rules-chips" class="rules"></div></details>
+          <details class="more"><summary>All rules, exact values</summary><div id="rules-chips" class="rules"></div><p class="mono small muted wrap">launchpad <span id="launchpad"></span> · <span id="code-hash"></span></p></details>
         </div>
       </section>
 
       <section id="sim-section" data-v="rules" hidden>
-        <div class="section-head"><h2>Why these parameters</h2><span class="muted small">60-day simulation, <code>node sim/simulate.mjs</code></span></div>
+        <div class="section-head"><h2>Why these parameters</h2><span class="muted small">tested in a 60-day simulation</span></div>
         <div id="sweep"></div>
         <div id="sim" class="sim"></div>
       </section>
     </main>
 
-    <footer class="muted small">Built at NEAR HACKATHON · contracts in <code>contracts/</code>, brain in <code>brain/</code> · <a href="https://github.com/SCARPxVeNOM/autoCTO">source</a> · MIT</footer>
+    <footer class="muted small">AutoCTO · <a href="https://github.com/SCARPxVeNOM/autoCTO">Source</a></footer>
   </div>
 </div>
 
   <dialog id="modal"><form method="dialog"><div id="modal-body"></div><menu><button>Close</button></menu></form></dialog>
   <div id="tip" class="tip" role="tooltip" hidden></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script type="module" src="app.js?v=13"></script>
+  <script type="module" src="app.js?v=15"></script>
 </body>
 </html>

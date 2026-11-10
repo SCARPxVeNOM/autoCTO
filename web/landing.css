@@ -141,7 +141,7 @@
 
 .viz-lock { grid-template-columns: 1fr 1fr; padding: 0 18px; gap: 6px; }
 .chips-fly { position: relative; height: 100px; }
-.chips-fly i { position: absolute; left: 6%; width: 34px; height: 34px; border-radius: 12px; background: linear-gradient(hsl(190 70% 56%), hsl(214 72% 40%)); box-shadow: inset 0 1px 0 rgba(255,255,255,.35), var(--drop); animation: fly 3.2s var(--ease) infinite; }
+.chips-fly i { position: absolute; left: 6%; width: 34px; height: 34px; border-radius: 12px; background: linear-gradient(var(--brand-top), var(--brand-bot)); box-shadow: inset 0 1px 0 rgba(255,255,255,.35), var(--drop); animation: fly 3.2s var(--ease) infinite; }
 .chips-fly i:nth-child(1) { top: 4px; } .chips-fly i:nth-child(2) { top: 34px; animation-delay: .5s; } .chips-fly i:nth-child(3) { top: 62px; animation-delay: 1s; } .chips-fly i:nth-child(4) { top: 20px; animation-delay: 1.6s; }
 @keyframes fly { 0% { transform: translateX(0) scale(1); opacity: 0; } 15% { opacity: 1; } 70% { transform: translateX(150%) scale(.9); opacity: 1; } 100% { transform: translateX(260%) scale(.3); opacity: 0; } }
 .vault { display: grid; justify-items: center; gap: 8px; }
@@ -261,3 +261,12 @@
   .reveal { opacity: 1; transform: none; }
   .viz-curve .c { stroke-dashoffset: 0; }
 }
+
+/* icons */
+.btn .ic { margin-left: 6px; width: 16px; height: 16px; }
+.st-h .ic { width: 17px; height: 17px; color: var(--brand); }
+.vault span .ic { width: 30px; height: 30px; color: var(--brand); }
+.radar .me .ic { width: 28px; height: 28px; color: var(--brand); }
+.bento h3 .ic { width: 19px; height: 19px; color: var(--brand); margin-right: 4px; vertical-align: -3px; }
+.guard i .ic, .verdict .ic, .proof .ic, .inject .ic, .tag .ic { width: 13px; height: 13px; vertical-align: -2px; }
+.guard i .ic { stroke-width: 3; }

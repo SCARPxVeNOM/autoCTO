@@ -62,6 +62,7 @@ const GLOSSARY = {
   "sealed vote": "Votes are hidden until voting ends, so nobody can follow the crowd. You reveal yours afterwards.",
   convert: "After a takeover, swap your tokens of the absorbed coin for the winner's at the agreed rate.",
 };
+const ic = (name) => `<svg class="ic" aria-hidden="true"><use href="icons.svg#${name}"/></svg>`;
 const term = (key, label = key) => `<span class="term" tabindex="0" data-term="${esc(key)}">${esc(label)}</span>`;
 
 // ---------- formatting ----------
@@ -353,7 +354,6 @@ function renderTicker(offers) {
     ["curve liquidity", esc(fmtNear(liq))],
     ["treasuries", esc(fmtNear(tre))],
     ["live deals", String(deals)],
-    ["block", `#${esc(state.block)}`],
   ];
   setHTML($("ticker"), cells.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join(""));
   $("nav-deals").hidden = !deals; $("nav-deals").textContent = deals;
@@ -378,10 +378,10 @@ function sameCode(a) {
 function badges(a) {
   const i = state.info[a];
   const same = sameCode(a);
-  return `<span class="badge ${state.keys[a] === 0 ? "ok" : "bad"}" data-term="0 keys" tabindex="0">${state.keys[a] === 0 ? "🔒 0 keys" : `${esc(state.keys[a] ?? "?")} keys`}</span>
-    <span class="badge ${same ? "ok" : "bad"}" data-term="launchpad code" tabindex="0">${same ? "✔ launchpad code" : "code ?"}</span>
+  return `<span class="badge ${state.keys[a] === 0 ? "ok" : "bad"}" data-term="0 keys" tabindex="0">${state.keys[a] === 0 ? `${ic("lock")} 0 keys` : `${esc(state.keys[a] ?? "?")} keys`}</span>
+    <span class="badge ${same ? "ok" : "bad"}" data-term="launchpad code" tabindex="0">${same ? `${ic("badge-check")} launchpad code` : "code ?"}</span>
     ${i.absorbed.map(([t]) => `<span class="badge ate">ate $${esc(sym(t))}</span>`).join("")}
-    ${(i.watchlist || []).map((t) => `<span class="badge" data-term="watchlist" tabindex="0">👀 ${esc(short(t))}</span>`).join("")}`;
+    ${(i.watchlist || []).map((t) => `<span class="badge" data-term="watchlist" tabindex="0">${ic("eye")} ${esc(short(t))}</span>`).join("")}`;
 }
 
 const hue = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
@@ -529,7 +529,7 @@ function renderChart() {
 function renderSessionChart(a, W, H) {
   const s = state.samples[a] || [], box = $("chart");
   const since = new Date(state.opened).toLocaleTimeString();
-  $("chart-note").textContent = `sampled by this page since ${since} · the chain keeps no price history`;
+  $("chart-note").textContent = `since you opened this page at ${since}`;
   if (!s.length) { setHTML(box, `<p class="muted pad">Collecting…</p>`); return; }
   const now = Date.now(), t0 = state.opened, span = Math.max(1, now - t0);
   const lo = Math.min(...s.map((x) => x.p)), hi = Math.max(...s.map((x) => x.p));
@@ -716,7 +716,7 @@ async function sha256Hex(text) {
 }
 const randomHex = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map((b) => b.toString(16).padStart(2, "0")).join("");
 
-const proposerHtml = (pr) => (pr.Brain ? `🧠 brain decision #${esc(pr.Brain.decision_id)}` : `✋ ${esc(pr.Holder?.account_id)}`);
+const proposerHtml = (pr) => (pr.Brain ? `${ic("brain")} brain decision #${esc(pr.Brain.decision_id)}` : `${ic("hand")} ${esc(pr.Holder?.account_id)}`);
 
 function renderOffers(offers) {
   const p = state.params;
@@ -754,9 +754,9 @@ function renderOffers(offers) {
     let move = "";
     if (open && !ended && who) {
       const vt = before(o.target), vb = before(o.buyer);
-      move = vt > 0n ? `<div class="move can"><i>🗳</i><span>You have ${fmtTokens(vt)} $${esc(T)} locked from before this bid, so you can vote.</span></div>`
-        : vb > 0n ? `<div class="move can"><i>🛡</i><span>You have ${fmtTokens(vb)} $${esc(B)} locked: you can veto if you think $${esc(B)} is overpaying.</span></div>`
-        : `<div class="move"><i>👀</i><span>You have no $${esc(T)} or $${esc(B)} that was locked before this bid, so you can only watch this one. Lock tokens now to have a say in the next.</span></div>`;
+      move = vt > 0n ? `<div class="move can"><i>${ic("vote")}</i><span>You have ${fmtTokens(vt)} $${esc(T)} locked from before this bid, so you can vote.</span></div>`
+        : vb > 0n ? `<div class="move can"><i>${ic("shield")}</i><span>You have ${fmtTokens(vb)} $${esc(B)} locked: you can veto if you think $${esc(B)} is overpaying.</span></div>`
+        : `<div class="move"><i>${ic("eye")}</i><span>You have no $${esc(T)} or $${esc(B)} that was locked before this bid, so you can only watch this one. Lock tokens now to have a say in the next.</span></div>`;
     }
     const voteBtns = ballot
       ? `<span class="small muted">You sealed <b>${ballot.support ? "YES" : "NO"}</b>. Come back to reveal it when the vote ends.</span>`
@@ -798,7 +798,7 @@ function renderOffers(offers) {
       </div>
     </article>`;
     return { key, html };
-  }), Object.values(state.tenders).some((l) => l.length) ? "" : `<p class="muted pad">No deals yet. Open a coin and press <b>🧠 Think</b>: its brain looks at the rivals and may make the first bid.</p>`);
+  }), Object.values(state.tenders).some((l) => l.length) ? "" : `<p class="muted pad">No deals yet. Open a coin and press <b>Think</b>: its brain looks at the rivals and may make the first bid.</p>`);
 }
 
 // Tender offers for tokens from outside the launchpad: deposits are the vote.
@@ -886,13 +886,13 @@ function renderDecisions() {
     const st = statusName(d.status);
     const cls = { Applied: "active", Pending: "pending", Refused: "failed", NoAnswer: "failed" }[st] || "";
     const html = `<div class="card decision">
-      <div class="head"><b>🧠 $${esc(sym(coin))} <span class="muted">#${esc(d.id)}</span></b><span class="pill ${cls}">${esc(st === "Refused" ? "refused: " + d.status.Refused.reason : st)}</span></div>
+      <div class="head"><b>${ic("brain")} $${esc(sym(coin))} <span class="muted">#${esc(d.id)}</span></b><span class="pill ${cls}">${esc(st === "Refused" ? "refused: " + d.status.Refused.reason : st)}</span></div>
       ${out ? `<div class="thought">“${esc(humanize(out.thought))}”</div><div class="did" title="${esc(JSON.stringify(out.action))}">→ ${esc(describeAction(coin, out.action))}</div>` : st === "Pending" ? `<div class="muted">Thinking… the answer arrives in a few seconds.</div>` : ""}
-      <div class="small muted">${agoTag(d.requested_at)} · ${out?.mode ? esc(out.mode) + " · " : ""}woken by ${esc(short(d.requested_by))} · cost ${esc(fmtNear(d.paid))}${d.paid_by_treasury ? " from the treasury" : ""}
+      <div class="small muted">${agoTag(d.requested_at)} · woken by ${esc(short(d.requested_by))} · cost ${esc(fmtNear(d.paid))}${d.paid_by_treasury ? " from the treasury" : ""}
         · <a href="#" data-verify="${esc(coin)}|${esc(d.id)}">proof</a></div>
     </div>`;
     return { key: `${coin}|${d.id}`, html };
-  }), `<p class="muted pad">No brain has been woken yet. Open a coin and press 🧠 Think.</p>`);
+  }), `<p class="muted pad">No brain has been woken yet. Open a coin and press Think.</p>`);
 }
 
 const EV_CLASS = { trade: "t", lock: "l", unlock: "l", think: "b", thought: "b", stance: "b", vote: "v", vote_sealed: "v", veto: "x", born: "n" };
@@ -937,7 +937,7 @@ function renderGuide() {
   $("guide-progress").textContent = done === steps.length ? "All done. You know how it works." : `${done} of ${steps.length} done`;
   $("nav-guide").hidden = done === steps.length; $("nav-guide").textContent = `${done}/${steps.length}`;
   setHTML($("guide-steps"), steps.map(([ok, t, text, go, btn], k) =>
-    `<li class="${ok ? "done" : k === next ? "next" : ""}"><span class="tick" aria-hidden="true">${ok ? "✓" : k + 1}</span><b>${esc(t)}</b><p>${esc(text)}</p>
+    `<li class="${ok ? "done" : k === next ? "next" : ""}"><span class="tick" aria-hidden="true">${ok ? ic("check") : k + 1}</span><b>${esc(t)}</b><p>${esc(text)}</p>
       ${ok && go !== "who" ? "" : `<button type="button" class="${k === next ? "primary" : ""}" data-go="${go}">${esc(btn)}</button>`}</li>`).join(""));
 }
 
@@ -1338,7 +1338,7 @@ const THEMES = ["auto", "dark", "light"];
 function applyTheme(t) {
   if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   $("theme").title = `Theme: ${t}`;
-  $("theme").textContent = { auto: "◐", dark: "☾", light: "☀" }[t];
+  $("theme").innerHTML = ic({ auto: "sun-moon", dark: "moon", light: "sun" }[t]);
 }
 applyTheme(THEMES.includes(store.get("autocto:theme")) ? store.get("autocto:theme") : "auto");
 $("theme").addEventListener("click", () => {

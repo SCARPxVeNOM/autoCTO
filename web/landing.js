@@ -85,7 +85,7 @@ const THEMES = ["auto", "dark", "light"];
 function applyTheme(t) {
   if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   $("theme").title = `Theme: ${t}`;
-  $("theme").textContent = { auto: "◐", dark: "☾", light: "☀" }[t];
+  $("theme").innerHTML = `<svg class="ic" aria-hidden="true"><use href="icons.svg#${{ auto: "sun-moon", dark: "moon", light: "sun" }[t]}"/></svg>`;
 }
 applyTheme(THEMES.includes(store.get("autocto:theme")) ? store.get("autocto:theme") : "auto");
 $("theme").addEventListener("click", () => {
