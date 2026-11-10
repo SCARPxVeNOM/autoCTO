@@ -230,7 +230,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     say("The chain keeps running. Open the page:");
-    println!("  python3 -m http.server 8080 -d web   →   http://localhost:8080/?network=local");
+    println!("  python3 -m http.server 8080 -d web   →   http://localhost:8080/?network=local   (the app itself: /app.html?network=local)");
     println!("  (this process also answers brain runs and relays gasless calls: act as zed with `gasless` ticked; Ctrl-C to stop)");
     loop {
         tokio::time::sleep(std::time::Duration::from_millis(700)).await;

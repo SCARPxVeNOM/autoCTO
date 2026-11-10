@@ -206,7 +206,6 @@ async function loadConfig() {
   }
   $("net-badge").textContent = NETWORK;
   $("launchpad").textContent = cfg.launchpad;
-  $("hero-eyebrow").lastChild.textContent = cfg.dev_key ? "Local demo · play money" : NETWORK === "testnet" ? "Live on NEAR testnet" : "Memecoins on NEAR";
   $("mode-note").innerHTML = cfg.dev_key
     ? `<b>Demo mode.</b><span>Everything here is play money on a local chain. Use “playing as” at the top to switch between demo holders and see every side of a deal.</span>`
     : NETWORK === "testnet"
@@ -910,35 +909,6 @@ function renderLog() {
   }), `<li class="muted">Nothing has happened yet.</li>`);
 }
 
-// The newest real deal on this launchpad, drawn large in the intro.
-function renderHeroDeal(offers) {
-  // A vote in progress first, then the newest finished merge, then anything.
-  const o = offers.find(liveOffer) || offers.find((x) => statusName(x.status) === "Executed") || offers[0];
-  const fighter = (i, role, small) => `<div class="fighter${small ? " small" : ""}">${avatar(i)}<b>$${esc(i.symbol)}</b><small>${role}</small></div>`;
-  const arrow = `<svg width="84" height="16" viewBox="0 0 84 16" aria-hidden="true"><path class="dash" d="M2 8H72"/><path class="head" d="M70 2l12 6-12 6z"/></svg>`;
-  if (!o || !state.info[o.buyer] || !state.info[o.target]) {
-    const ex = (symbol) => ({ symbol });
-    setHTML($("hero-deal"), `<div class="duel"><div class="duel-top"><span>How a takeover looks</span><span class="pill">example</span></div>
-      <div class="duel-row">${fighter(ex("PEPE"), "bidder")}<div class="duel-mid">${arrow}<span>+10% premium</span></div>${fighter(ex("DOGE"), "target", true)}</div>
-      <p class="duel-say"><b>$PEPE</b>'s brain bids for <b>$DOGE</b>. $DOGE holders vote, $PEPE holders can block it. If it passes, the two become one coin.</p>
-      <div class="bar"><div class="y" style="width:58%"></div><div class="n" style="left:58%;width:9%"></div><div class="q" style="left:10%"></div></div></div>`);
-    return;
-  }
-  const st = statusName(o.status), B = state.info[o.buyer], T = state.info[o.target];
-  const circ = BigInt(o.target_market?.circulating || 1) || 1n;
-  const pct = (x) => Math.min(100, Number((BigInt(x) * 10000n) / circ) / 100);
-  const [label, cls] = { Open: ["voting now", "active"], Executing: ["merging", "pending"], Sending: ["merging", "pending"], Executed: ["merged", "merged"], Failed: ["rejected", "failed"] }[st] || [st, ""];
-  const say = st === "Executed" ? `<b>$${esc(B.symbol)}</b> absorbed <b>$${esc(T.symbol)}</b>. Holders voted yes, and every $${esc(T.symbol)} became ${fmtRate(o.rate_ppm)} $${esc(B.symbol)}.`
-    : st === "Failed" ? `<b>$${esc(B.symbol)}</b> bid for <b>$${esc(T.symbol)}</b>, and it was turned down: ${esc(o.status.Failed.reason)}.`
-    : `<b>$${esc(B.symbol)}</b>'s brain is bidding for <b>$${esc(T.symbol)}</b> right now. $${esc(T.symbol)} holders are voting.`;
-  setHTML($("hero-deal"), `<a class="duel${st === "Open" ? "" : " done"}" href="#deals" style="text-decoration:none;color:inherit">
-    <div class="duel-top"><span>Latest takeover here · ${agoTag(o.created_at)}</span><span class="pill ${cls}">${label}</span></div>
-    <div class="duel-row">${fighter(B, "bidder")}<div class="duel-mid">${arrow}<span>${fmtBps(o.premium_bps)} premium</span></div>${fighter(T, "target", true)}</div>
-    <p class="duel-say">${say}</p>
-    <div><div class="barlabel"><span><b class="up">yes ${fmtTokens(o.yes)}</b> · <b class="down">no ${fmtTokens(o.no)}</b></span><span>of ${fmtTokens(circ)} $${esc(T.symbol)}</span></div>
-    <div class="bar"><div class="y" style="width:${pct(o.yes)}%"></div><div class="n" style="left:${pct(o.yes)}%;width:${pct(o.no)}%"></div><div class="q" style="left:${state.params.quorum_bps / 100}%"></div></div></div></a>`);
-}
-
 // First steps: each one ticks itself off from what the chain says about this account.
 function renderGuide() {
   const who = state.me.acct, me = state.me;
@@ -973,7 +943,7 @@ function renderGuide() {
 
 function render() {
   const offers = allOffers();
-  renderHeroDeal(offers); renderGuide();
+  renderGuide();
   renderTicker(offers); renderCoins(); renderDetail(); renderTicket();
   renderOffers(offers); renderTenders(); renderDecisions(); renderLog();
   tickClocks();
@@ -1212,8 +1182,27 @@ function selectCoin(a, scroll) {
     render();
     refresh().catch(() => {});
   }
+  if (scroll) setView("market", false);
   if (scroll) $("trade").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
+
+// ---------- views ----------
+// The page shows one view at a time; the address hash picks it (and the section inside it).
+const VIEW_OF = { market: "market", guide: "market", trade: "market", deals: "deals", brains: "brains", feed: "brains", launch: "launch", rules: "rules", "sim-section": "rules" };
+function setView(id, scroll = true) {
+  const view = VIEW_OF[id] || "market";
+  const changed = document.body.dataset.view !== view;
+  document.body.dataset.view = view;
+  for (const el of document.querySelectorAll("[data-v]")) el.classList.toggle("off", el.dataset.v !== view);
+  for (const l of document.querySelectorAll(".nav a[href^='#'], .mnav a[href^='#']")) l.classList.toggle("on", VIEW_OF[l.getAttribute("href").slice(1)] === view && l.getAttribute("href") !== "#guide");
+  if (changed) renderChart();
+  if (!scroll) return;
+  const first = { market: "guide", deals: "deals", brains: "brains", launch: "launch", rules: "rules" }[view];
+  if (id === first || !VIEW_OF[id]) scrollTo({ top: 0 }); else $(id)?.scrollIntoView({ block: "start" });
+}
+addEventListener("hashchange", () => setView(location.hash.slice(1)));
+// "What is AutoCTO" keeps the network the visitor is on.
+for (const a of document.querySelectorAll("[data-home]")) a.href = `index.html${location.search}`;
 
 // Jump to the place a first step is done, and point at it.
 function go(where) {
@@ -1229,12 +1218,13 @@ function go(where) {
     // Lock needs a coin this account holds; buy needs one that still trades.
     const ids = state.coins.map((c) => c.account_id).filter((a) => !isMerged(state.info[a]));
     const want = where === "lock" ? ids.find((a) => (state.me.bal[a] || 0n) > 0n) : ids.includes(state.sel) ? state.sel : ids[0];
+    setView("market", false);
     if (where === "lock" && !want) { toast("Buy a coin first: you can only lock tokens you hold."); return go("buy"); }
     if (want && want !== state.sel) selectCoin(want, false);
     state.mode = where; $("amt").value = ""; state.quote = null; renderTicket();
     point($("ticket")); $("amt").focus({ preventScroll: true });
-  } else if (where === "think") point($("think"));
-  else if (where === "deals") point($("deals"), "start");
+  } else if (where === "think") { setView("market", false); point($("think")); }
+  else if (where === "deals") location.hash = "#deals";
 }
 
 function showGlossary() {
@@ -1320,10 +1310,8 @@ function fold(key, cls, btn, on, labels) {
   $(btn).textContent = labels[on ? 1 : 0];
   if (on) store.set(key, "1"); else store.del(key);
 }
-const foldIntro = (on) => fold("autocto:no-intro", "no-intro", "intro-toggle", on, ["Hide intro", "Show intro"]);
 const foldGuide = (on) => fold("autocto:no-guide", "guide-off", "guide-toggle", on, ["Hide", "Show"]);
-foldIntro(store.get("autocto:no-intro") === "1"); foldGuide(store.get("autocto:no-guide") === "1");
-$("intro-toggle").addEventListener("click", () => foldIntro(!document.body.classList.contains("no-intro")));
+foldGuide(store.get("autocto:no-guide") === "1");
 $("guide-toggle").addEventListener("click", () => foldGuide(!document.body.classList.contains("guide-off")));
 
 $("launch-form").addEventListener("submit", (e) => {
@@ -1360,18 +1348,6 @@ $("theme").addEventListener("click", () => {
   applyTheme(next);
 });
 
-// highlight the section in view
-if ("IntersectionObserver" in globalThis) {
-  const links = [...document.querySelectorAll(".nav a, .mnav a")];
-  const io = new IntersectionObserver((entries) => {
-    for (const en of entries) {
-      if (!en.isIntersecting) continue;
-      for (const l of links) l.classList.toggle("on", l.getAttribute("href") === `#${en.target.id}`);
-    }
-  }, { rootMargin: "-20% 0px -70% 0px" });
-  for (const id of ["start", "guide", "market", "trade", "deals", "brains", "feed", "launch", "rules", "sim-section"]) io.observe($(id));
-}
-
 // ---------- simulation ----------
 async function loadSim() {
   let sim;
@@ -1380,7 +1356,7 @@ async function loadSim() {
     if (!r.ok) return;
     sim = await r.json();
   } catch (_) { return; }
-  $("sim-section").hidden = false; $("nav-sim").hidden = false;
+  $("sim-section").hidden = false;
   $("sim").innerHTML = sim.scenarios.map((s) => {
     const W = 340, H = 170, P = 28;
     const series = Object.entries(s.supply);
@@ -1439,6 +1415,7 @@ async function tick() {
   }
 }
 
+setView(location.hash.slice(1), false);
 (async () => {
   await loadConfig();
   launchPreview();

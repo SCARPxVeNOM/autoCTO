@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoCTO app</title>
+  <meta name="description" content="Memecoins that take each other over: AI brains bid, holders vote, contracts enforce.">
+  <script>try { const t = localStorage.getItem("autocto:theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (_) {}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@500;600;700&family=Funnel+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Pixelify+Sans:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=7">
+</head>
+<body class="hatch">
+<div class="frame">
+
+  <aside class="side">
+    <a class="brand" href="index.html" data-home title="What is AutoCTO">
+      <span class="logo" aria-hidden="true">⚔︎</span>
+      <span class="wordmark">AutoCTO</span>
+    </a>
+    <div class="side-scroll">
+      <nav class="nav" id="nav" aria-label="Sections">
+        <h2>Trade</h2>
+        <a href="#market"><i>◧</i>Market</a>
+        <a href="#deals"><i>⚔︎</i>Deals <b id="nav-deals" class="count" hidden></b></a>
+        <a href="#brains"><i>✺</i>Brains &amp; feed</a>
+        <h2>Build</h2>
+        <a href="#launch"><i>＋</i>Launch a coin</a>
+        <a href="#rules"><i>§</i>Rules</a>
+        <h2>Help</h2>
+        <a href="#guide"><i>✓</i>First steps <b id="nav-guide" class="count soft" hidden></b></a>
+        <a href="#" data-glossary><i>?</i>Words explained</a>
+        <a href="index.html" data-home><i>←</i>What is AutoCTO</a>
+      </nav>
+    </div>
+    <div class="side-foot">
+      <div class="small muted">launchpad</div>
+      <div id="launchpad" class="mono small wrap"></div>
+    </div>
+  </aside>
+
+  <div class="col">
+    <header class="top">
+      <a class="brand mobile-brand" href="index.html" data-home>
+        <span class="logo" aria-hidden="true">⚔︎</span>
+        <span class="wordmark">AutoCTO</span>
+      </a>
+      <div class="net">
+        <span id="net-badge" class="pill">…</span>
+        <label class="actor" id="actor-wrap" hidden title="A local demo with play money: switch between the demo holders to see every side of a deal"><span class="muted small">playing as</span>
+          <select id="actor"></select>
+        </label>
+        <label class="actor" id="viewer-wrap" hidden><span class="muted small">account</span>
+          <input id="viewer" class="mono" placeholder="you.testnet" autocomplete="off" spellcheck="false">
+        </label>
+        <button id="connect" class="primary" type="button" hidden>Connect wallet</button>
+        <label id="gasless-wrap" class="check small" hidden data-term="gasless"><input type="checkbox" id="gasless"> gasless</label>
+        <button class="icon" type="button" data-glossary title="Words explained" aria-label="Words explained">?</button>
+        <button id="theme" class="icon" type="button" title="Theme: auto" aria-label="Switch theme">◐</button>
+      </div>
+    </header>
+
+    <nav class="mnav" aria-label="Sections">
+      <a href="#market">Market</a><a href="#deals">Deals</a><a href="#brains">Brains</a><a href="#launch">Launch</a><a href="#rules">Rules</a><a href="index.html" data-home>About</a>
+    </nav>
+
+    <main>
+      <section id="guide" data-v="market">
+        <div class="section-head"><h2>Your first steps</h2><span id="guide-progress" class="muted small"></span>
+          <button id="guide-toggle" class="chip" type="button" style="margin-left:auto">Hide</button></div>
+        <p id="mode-note" class="mode-note small pad-x"></p>
+        <ol id="guide-steps" class="guide"></ol>
+      </section>
+
+      <div id="ticker" class="ticker" data-v="market" aria-label="Launchpad totals"></div>
+
+      <section id="market" data-v="market">
+        <div class="section-head"><h2>Market</h2><span class="muted small">Click a coin to open it · live from the chain, refreshed every 3 s</span></div>
+        <div class="mkt-head" aria-hidden="true">
+          <span>Coin</span><span>Price / 1M</span><span>Session</span><span>Market cap</span><span>Liquidity</span><span>Treasury</span><span>You hold</span><span>Status</span>
+        </div>
+        <div id="coins" class="mkt"><p class="muted pad">Loading…</p></div>
+      </section>
+
+      <section id="trade" data-v="market">
+        <div class="section-head"><h2>Coin &amp; trade</h2><div id="coin-tabs" class="chips"></div></div>
+        <div class="trade">
+          <div class="detail">
+            <div id="coin-head" class="coin-head"><p class="muted">Pick a coin in the market.</p></div>
+            <div class="chart-card">
+              <div class="chart-top">
+                <div class="seg small" id="chart-seg" role="tablist">
+                  <button type="button" data-chart="curve" class="on" data-term="bonding curve">Price curve</button>
+                  <button type="button" data-chart="session">This session</button>
+                </div>
+                <span id="chart-note" class="muted small"></span>
+              </div>
+              <div id="chart" class="chart"></div>
+            </div>
+            <dl id="coin-stats" class="stats"></dl>
+          </div>
+
+          <aside class="ticket" id="ticket">
+            <div class="seg" id="mode-seg" role="tablist">
+              <button type="button" data-mode="buy" class="on">Buy</button>
+              <button type="button" data-mode="sell">Sell</button>
+              <button type="button" data-mode="lock">Lock</button>
+              <button type="button" data-mode="unlock">Unlock</button>
+            </div>
+            <div id="ticket-live">
+              <label class="amount">
+                <span class="amount-top"><span id="amt-label">You pay</span><span class="muted">available <b id="avail" class="mono">–</b></span></span>
+                <span class="amount-row"><input id="amt" inputmode="decimal" placeholder="0.0" autocomplete="off" spellcheck="false" aria-describedby="ticket-note"><span id="amt-unit" class="unit">NEAR</span></span>
+              </label>
+              <div id="quick" class="chips quick"></div>
+              <dl id="quote" class="quote"></dl>
+              <label class="slip" id="slip-wrap"><span class="term" tabindex="0" data-term="slippage">Max slippage</span>
+                <select id="slip"><option value="50">0.5%</option><option value="100" selected>1%</option><option value="300">3%</option><option value="1000">10%</option></select>
+              </label>
+              <button id="submit" class="big" type="button" data-act="buy">Buy</button>
+              <p id="ticket-note" class="small muted note"></p>
+            </div>
+            <div id="ticket-merged" hidden>
+              <p id="merged-note" class="note"></p>
+              <button id="convert" class="big primary" type="button" data-act="convert">Convert</button>
+            </div>
+            <div class="pos">
+              <h4>Your position <span id="pos-who" class="muted mono small"></span></h4>
+              <dl id="pos" class="quote"></dl>
+              <div id="lots" class="lots"></div>
+            </div>
+            <div class="ticket-foot">
+              <button id="think" type="button" data-act="think">🧠 Think</button>
+              <span id="think-note" class="muted small"></span>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="deals" data-v="deals">
+        <div class="section-head"><h2>Deals</h2><span class="muted small">Takeovers in progress and finished. Pitches are written by AI brains: read them as ads, not facts.</span></div>
+        <div id="offers" class="offers"></div>
+        <div id="tenders" class="offers tenders"></div>
+      </section>
+
+      <section class="two" data-v="brains">
+        <div id="brains">
+          <div class="section-head"><h2>Brain decisions</h2><span class="muted small">what each coin's AI decided, and why</span></div>
+          <div id="decisions" class="decisions"></div>
+        </div>
+        <div id="feed">
+          <div class="section-head"><h2>Live feed</h2><span class="live-dot"><i></i>everything that happens, as it happens</span></div>
+          <ol id="log" class="log"></ol>
+        </div>
+      </section>
+
+      <section id="launch" data-v="launch">
+        <div class="section-head"><h2>Launch a coin</h2><span class="muted small">Your coin gets the same code and rules as every other. After launch nobody can change it, not even you.</span></div>
+        <form id="launch-form" class="card launch" autocomplete="off">
+          <div class="launch-preview"><span id="launch-ava" class="ava big" style="--h:265" aria-hidden="true">?</span>
+            <div><b id="launch-title">Your coin</b><div id="launch-addr" class="mono small muted wrap"></div></div></div>
+          <div class="fields">
+            <label>Name <input name="name" required maxlength="32" placeholder="Bonk"></label>
+            <label>Ticker <input name="symbol" required maxlength="10" placeholder="BONK"></label>
+            <label>Address (lowercase, no spaces) <input name="label" required pattern="[a-z0-9_\-]{2,32}" placeholder="bonk"></label>
+            <label class="wide">Personality: how its AI brain talks and what it goes after <input name="persona" required maxlength="280" placeholder="A loud dog that only buys coins with big treasuries."></label>
+          </div>
+          <div class="chips" id="persona-presets" aria-label="Personality ideas">
+            <span class="muted small">Ideas:</span>
+            <button type="button" class="chip" data-persona="A hungry hunter that bids for any smaller coin with a fat treasury.">Hungry hunter</button>
+            <button type="button" class="chip" data-persona="A careful builder that only merges when both sides clearly win.">Careful builder</button>
+            <button type="button" class="chip" data-persona="A chaotic gambler that loves bold bids and louder pitches.">Chaotic gambler</button>
+            <button type="button" class="chip" data-persona="A loyal guardian that defends its holders and counters every low offer.">Loyal guardian</button>
+          </div>
+          <div class="actions"><button class="primary" data-act="launch">Launch coin</button><span id="launch-cost" class="muted small"></span></div>
+          <p class="muted small">The deposit pays for the coin's storage on chain, a small reserve and 1 Ⓝ of thinking budget for its brain.</p>
+        </form>
+      </section>
+
+      <section id="rules" data-v="rules">
+        <div class="section-head"><h2>Rules</h2><span id="code-hash" class="mono small muted wrap"></span></div>
+        <div class="explain">
+          <p>The AI brain only <b>proposes</b>. The contract checks every number against the rules below, and the rules were fixed when the launchpad was created: there is no owner and no way to change them.</p>
+          <div id="rules-cards" class="rule-cards"></div>
+          <details class="more"><summary>All rules, exact values</summary><div id="rules-chips" class="rules"></div></details>
+        </div>
+      </section>
+
+      <section id="sim-section" data-v="rules" hidden>
+        <div class="section-head"><h2>Why these parameters</h2><span class="muted small">60-day simulation, <code>node sim/simulate.mjs</code></span></div>
+        <div id="sweep"></div>
+        <div id="sim" class="sim"></div>
+      </section>
+    </main>
+
+    <footer class="muted small">Built at NEAR HACKATHON · contracts in <code>contracts/</code>, brain in <code>brain/</code> · <a href="https://github.com/SCARPxVeNOM/autoCTO">source</a> · MIT</footer>
+  </div>
+</div>
+
+  <dialog id="modal"><form method="dialog"><div id="modal-body"></div><menu><button>Close</button></menu></form></dialog>
+  <div id="tip" class="tip" role="tooltip" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script type="module" src="app.js?v=13"></script>
+</body>
+</html>

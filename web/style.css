@@ -605,3 +605,8 @@ details.more[open] summary { margin-bottom: 10px; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- one view at a time ---------- */
+.off { display: none !important; }
+.pad-x { padding: 0 var(--pad); margin: -6px 0 14px; }
+main > section:last-of-type, main > .ticker { border-bottom: 1px dashed var(--line-strong); }
