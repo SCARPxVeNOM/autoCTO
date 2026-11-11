@@ -179,6 +179,8 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 | 5 | After the 10-minute vote, `finalize`: DOGE's curve NEAR and treasury move into PEPE | [`B4EtwFnz…`](https://testnet.nearblocks.io/txns/B4EtwFnzxBqPFmBYNdMCAzeA8TKTzqqiHXXPJjybmbaV) |
 | 6 | The holder converts 37.98M DOGE into PEPE at 0.983199 | [`XNByHRah…`](https://testnet.nearblocks.io/txns/XNByHRahR4hfg8jp2BB2bDcjon9BHaDvaS4Eh6qGkVN) |
 
+**A tender for a meme.cooking token.** A PEPE holder nominated [`cook-112.factory.v10.meme-cooking.testnet`](https://testnet.nearblocks.io/address/cook-112.factory.v10.meme-cooking.testnet), a token launched on [meme.cooking](https://meme.cooking)'s testnet factory ([`HYf5HTHG…`](https://testnet.nearblocks.io/txns/HYf5HTHGdR1P8Zn5vYbSb85iPDEKpCGLQvjUUkar4Es3)). PEPE's brain checked that the token's contract has no access keys and opened an all-or-nothing tender at 0.0416 PEPE per token ([`9m74ssUn…`](https://testnet.nearblocks.io/txns/9m74ssUnUe2nTrkM4TUR22YuPbCPWwpR1Q8ycaruDg3V)). Nobody from that token's side deposited, so this one shows the opening and the rug check, not a completed swap.
+
 One account played every holder in this run, so it shows the mechanism end to end, not a contested vote. Check the result with `near view pepe.v2.scarpxvenom.testnet coin_info` (`absorbed` lists DOGE) and `near view doge.v2.scarpxvenom.testnet history`.
 
 The launchpad account still holds its deploy key; it is to be deleted (`--lock`), after which nobody can change the launchpad. Its coins already have zero keys. Anyone can check that the launchpad's on-chain code hash equals `res/autocto_launchpad.wasm`, that `coin_code_hash` equals `res/autocto_coin.wasm`, and that `get_params` equals `params/testnet.json`.
