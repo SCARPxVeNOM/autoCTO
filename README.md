@@ -166,7 +166,7 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 
 | | |
 |---|---|
-| Launchpad | [`v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v4.scarpxvenom.testnet), current code, deployed from commit `f2f2586` |
+| Launchpad | [`v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v4.scarpxvenom.testnet), current code, deployed from commit `f2f2586`, locked: 0 access keys (key deleted in [`HBDN5KUA…`](https://testnet.nearblocks.io/txns/HBDN5KUAPCduEyx5VRFy6QxW2fL2RzNkShfYCjnYR6dW)) |
 | Rules | `params/testnet.json` (10-minute votes, 5-minute newborn protection) |
 | Brain | OutLayer project `scarpxvenom.testnet/autocto-brain` on `outlayer.testnet`, version pinned by sha256 `efc702f6…d3b5a5` (`res/autocto-brain.wasm` at commit `f2f2586`). **Model mode**: `z-ai/glm-5.3-flash` on NEAR AI Cloud, the API key held as an OutLayer secret |
 | Coins | [`pepe.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v4.scarpxvenom.testnet), [`doge.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v4.scarpxvenom.testnet) and [`wojak.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/wojak.v4.scarpxvenom.testnet) (absorbed by PEPE), each with 0 access keys |
@@ -198,7 +198,7 @@ Open the app's **Verify** page (`app.html?network=testnet#verify`). The browser 
 6. `get_params` equals `params/testnet.json`;
 7. the latest model answer's signature is valid and its key is in a fresh NEAR AI attestation report.
 
-On `v4`, checks 2 to 7 pass; check 1 passes once the launchpad's last key is deleted. The page does not check the Intel and NVIDIA hardware quotes; it says so and links to the verifiers that do. It reads the chain through public FastNEAR nodes, which limit request rates, so it asks at most four things at once, every 10 seconds, and moves to a second node when one refuses.
+All seven pass on `v4`. The page does not check the Intel and NVIDIA hardware quotes; it says so and links to the verifiers that do. It reads the chain through public FastNEAR nodes, which limit request rates, so it asks at most four things at once, every 10 seconds, and moves to a second node when one refuses.
 
 ### Earlier runs
 
