@@ -162,7 +162,7 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 
 | | |
 |---|---|
-| Launchpad | [`v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v2.scarpxvenom.testnet), current code (tenders, sealed votes, the review fixes) |
+| Launchpad | [`v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v2.scarpxvenom.testnet), current code (tenders, sealed votes, the review fixes), locked: 0 access keys |
 | Rules | `params/testnet.json` (10-minute votes, 5-minute newborn protection) |
 | Brain | `outlayer.testnet`, wasm pinned by sha256 `328d0eac…69c554` at commit `493e23f`, rules mode |
 | Coins | [`pepe.v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v2.scarpxvenom.testnet) and [`doge.v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v2.scarpxvenom.testnet) (absorbed), each with 0 access keys |
@@ -183,7 +183,7 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 
 One account played every holder in this run, so it shows the mechanism end to end, not a contested vote. Check the result with `near view pepe.v2.scarpxvenom.testnet coin_info` (`absorbed` lists DOGE) and `near view doge.v2.scarpxvenom.testnet history`.
 
-The launchpad account still holds its deploy key; it is to be deleted (`--lock`), after which nobody can change the launchpad. Its coins already have zero keys. Anyone can check that the launchpad's on-chain code hash equals `res/autocto_launchpad.wasm`, that `coin_code_hash` equals `res/autocto_coin.wasm`, and that `get_params` equals `params/testnet.json`.
+The launchpad is locked: its only key was deleted ([`8VUUph2F…`](https://testnet.nearblocks.io/txns/8VUUph2FjUxUTxDLiUgecJG4BnU2batkzfpUZM8Qtkno)), so it has 0 access keys and nobody can change it. Its coins have zero keys too. Anyone can check that the launchpad's on-chain code hash equals `res/autocto_launchpad.wasm`, that `coin_code_hash` equals `res/autocto_coin.wasm`, and that `get_params` equals `params/testnet.json`.
 
 An earlier launchpad, [`autocto.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/autocto.scarpxvenom.testnet), was deployed and locked at commit `1290ae4`, before tender offers were added (0 access keys, tx `Cp16UaQE…`). Its one coin, `pepe.autocto.scarpxvenom.testnet`, made the first brain run through `outlayer.testnet` (request 16511).
 
