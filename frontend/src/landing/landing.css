@@ -1,6 +1,13 @@
 /* AutoCTO landing: a framed page (thin rules, hatched gutters) around one animated takeover. */
 .lp-body { padding-inline: 0; }
 .lp { position: relative; max-width: 76rem; margin: 0 auto; border-inline: 1px solid var(--line-strong); min-height: 100dvh; background: var(--background); }
+/* type: Bricolage Grotesque for headings, Instrument Serif italic for the stressed words, Caveat for notes in the margin */
+.lp {
+  --font-display: "Bricolage Grotesque", "Funnel Display", system-ui, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-hand: "Caveat", "Segoe Print", cursive;
+}
+.lp :is(h1, h2) em { font-family: var(--font-serif); font-style: italic; font-weight: 400; letter-spacing: -.01em; }
 .lp::before, .lp::after {
   content: ""; position: absolute; top: 0; bottom: 0; width: 100vw; pointer-events: none;
   background-image: var(--hatch); background-size: 6px 6px; opacity: .7;
@@ -34,8 +41,9 @@
 @keyframes drift { to { transform: translate3d(-3%, 4%, 0) scale(1.06); } }
 .lp-hero > * { position: relative; }
 .lp-hero-left { display: grid; gap: 22px; justify-items: start; }
-.lp-hero h1 { margin: 0; font: 700 clamp(40px, 6.4vw, 84px)/.98 var(--font-display); letter-spacing: -.04em; text-wrap: balance; }
-.lp-hero h1 em { font-style: normal; color: var(--up); }
+.lp-hero h1 { margin: 0; font: 700 clamp(40px, 6.4vw, 84px)/.98 var(--font-display); letter-spacing: -.045em; text-wrap: balance; }
+.lp-hero h1 em { color: var(--up); font-size: 1.08em; letter-spacing: -.02em; }
+.eyebrow-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .lp-hero-right { display: grid; gap: 20px; padding-bottom: 8px; }
 .lp-hero .lede { font-size: 17.5px; }
 
@@ -179,11 +187,38 @@
 
 .lp-foot { padding: 20px 24px 28px; text-align: center; }
 
+/* pen notes (Pen.jsx): the words write themselves in, then the arrow draws, then its head */
+.pen { --ink: var(--primary); position: relative; display: inline-flex; align-items: flex-start; gap: 4px; color: var(--ink); font: 600 22px/1 var(--font-hand); white-space: nowrap; pointer-events: none; rotate: var(--tilt, -3deg); }
+.pen-arrow { flex: none; overflow: visible; }
+.pen-arrow path, .pen-under path { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.pen-text { clip-path: inset(-30% 100% -30% 0); }
+.pen.in .pen-text { clip-path: inset(-30% 0 -30% 0); transition: clip-path .9s steps(24, end) .15s; }
+.pen.in .pen-arrow path { stroke-dashoffset: 0; transition: stroke-dashoffset .7s var(--ease) .95s; }
+.pen.in .pen-arrow .pen-head { transition: stroke-dashoffset .2s ease-out 1.6s; }
+.pen-mark { position: relative; display: inline-block; }
+.pen-under { position: absolute; left: -3%; top: 84%; width: 106%; height: auto; overflow: visible; color: var(--up); }
+.pen-under path { stroke-width: 5; }
+.pen-mark.in .pen-under path { stroke-dashoffset: 0; transition: stroke-dashoffset .6s var(--ease) .5s; }
+.pen-mark.in .pen-under path + path { transition-delay: 1s; }
+
+.pen-live { --tilt: -2deg; margin-top: 12px; }
+.lp .lp-hero .actions { align-items: center; flex-wrap: nowrap; }
+.pen-go { margin-left: -2px; }
+.pen-go .pen-text { margin-top: 15px; }
+.lp-demo .pen-row { display: flex; justify-content: flex-end; padding-right: 7%; margin-top: -8px; }
+.pen-steps { align-items: flex-end; --tilt: -2deg; }
+.pen-steps .pen-text { margin-bottom: 2px; }
+.lp-head { position: relative; }
+.pen-ai { position: absolute; right: calc(38% - 12px); bottom: -22px; flex-direction: row-reverse; --tilt: -4deg; z-index: 2; }
+.pen-ai .pen-text { margin-top: -4px; }
+.pen-keys { align-self: center; margin-left: 4px; --tilt: -5deg; }
+
 /* reveal on scroll */
 .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s var(--ease), transform .7s var(--ease); transition-delay: var(--d, 0s); animation: none; }
 .reveal.in { opacity: 1; transform: none; }
 
 @media (max-width: 980px) {
+  .pen-ai { display: none; }
   .lp-links { display: none; }
   .lp-top-right { margin-left: auto; }
   .lp-hero { grid-template-columns: minmax(0, 1fr); padding: 56px 20px 36px !important; }
@@ -206,7 +241,10 @@
   .facts div:nth-child(even) { border-left: 1px dashed var(--line-strong); }
   .faq details { padding: 0 20px; }
 }
+@media (max-width: 760px) { .pen-live { display: none; } }
 @media (max-width: 560px) {
+  .pen-go .pen-text { white-space: normal; max-width: 6.5em; line-height: .95; }
+  .lp-demo .pen-row { padding-right: 4%; }
   .steps { grid-template-columns: minmax(0, 1fr); }
   .step + .step { border-left: 0; border-top: 1px solid var(--line-strong); }
   .lp-top { padding: 0 14px; gap: 10px; }
@@ -215,6 +253,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; }
+  .pen-text { clip-path: none; }
+  .pen-arrow path, .pen-under path { stroke-dashoffset: 0; }
 }
 
 

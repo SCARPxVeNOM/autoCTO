@@ -1,6 +1,6 @@
 // Small pieces shared by the app's views.
 import { useEffect, useState } from "react";
-import { ChevronDown, Swords } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -15,14 +15,12 @@ export function useTick() {
 export const Ago = ({ ns }) => <time>{ago(ns)}</time>;
 export const Left = ({ ns }) => <span>{left(ns)}</span>;
 
-export function Logo({ className }) {
-  return (
-    <span className={cn("grid size-[34px] place-items-center rounded-[10px] bg-primary text-primary-foreground shadow-sm", className)} aria-hidden="true">
-      <Swords className="size-[18px]" />
-    </span>
-  );
-}
-export const Wordmark = () => <span className="font-pixel text-xl font-semibold leading-none">AutoCTO</span>;
+// The mark: a coin wearing a crown, the one that took the others over (rendered, in web/brand/).
+const MARK = new URL("brand/autocto.webp", document.baseURI).href;
+export const Logo = ({ className }) => (
+  <img className={cn("size-[34px] flex-none select-none drop-shadow-sm", className)} src={MARK} width="34" height="34" alt="" draggable="false" />
+);
+export const Wordmark = () => <span className="font-pixel text-xl font-semibold leading-none">Auto<span className="text-up">CTO</span></span>;
 
 // A coin's own icon (stored on chain at launch) is shown only if it is an image data URL or an https link.
 const ownIcon = (icon) => (typeof icon === "string" && /^(data:image\/[a-z+.-]+[;,]|https:\/\/)/i.test(icon) ? icon : null);
