@@ -76,6 +76,7 @@ impl Coin {
             answered_at: None,
             output: None,
             status: DecisionStatus::Pending,
+            signed_by: None,
         });
         let text = format!("{caller} woke the brain (decision #{id})");
         self.emit(
@@ -126,8 +127,26 @@ impl Coin {
         };
         let output_text = raw.as_ref().map(|b| truncate(String::from_utf8_lossy(b).into_owned(), 2000));
 
+        // A signed answer must carry a signature that checks out, or it is not applied.
+        let mut signed_by = None;
+        let parsed = parsed.map(|r| {
+            r.and_then(|out| match &out.attest {
+                None => Ok(out),
+                Some(a) => match signer_of(a) {
+                    Some(addr) if addr == a.signing_address.to_lowercase() => {
+                        signed_by = Some(addr);
+                        Ok(out)
+                    }
+                    _ => Err("the model's signature does not match its stated key".to_string()),
+                },
+            })
+        });
+
         let (status, summary) = match parsed {
             None => (DecisionStatus::NoAnswer, "no answer from OutLayer".to_string()),
+            Some(Err(e)) if e.starts_with("the model's signature") => {
+                (DecisionStatus::Refused { reason: e.clone() }, e)
+            }
             Some(Err(e)) => (
                 DecisionStatus::Refused { reason: truncate(format!("unreadable answer: {e}"), 200) },
                 "unreadable answer".to_string(),
@@ -150,9 +169,10 @@ impl Coin {
             d.answered_at = Some(now);
             d.output = output_text;
             d.status = status.clone();
+            d.signed_by = signed_by.clone();
         }
         let text = format!("decision #{decision_id}: {summary}");
-        self.emit("decision", json!({ "decision": decision_id, "status": status }), text);
+        self.emit("decision", json!({ "decision": decision_id, "status": status, "signed_by": signed_by }), text);
         summary
     }
 
@@ -160,6 +180,28 @@ impl Coin {
     pub fn brain_input(&self) -> Value {
         self.brain_input_value(self.decisions.len() as u64)
     }
+}
+
+/// The address whose key made this signature (secp256k1, recovered on chain),
+/// or None when the signature is malformed.
+fn signer_of(a: &ModelSignature) -> Option<String> {
+    let sig = unhex(a.signature.trim_start_matches("0x"))?;
+    if sig.len() != 65 || a.text.len() > 400 {
+        return None;
+    }
+    let mut msg = format!("\x19Ethereum Signed Message:\n{}", a.text.len()).into_bytes();
+    msg.extend_from_slice(a.text.as_bytes());
+    let hash = env::keccak256_array(&msg);
+    let v = if sig[64] >= 27 { sig[64] - 27 } else { sig[64] };
+    let key = env::ecrecover(&hash, &sig[..64], v, true)?;
+    Some(format!("0x{}", hex(&env::keccak256_array(&key)[12..])))
+}
+
+fn unhex(s: &str) -> Option<Vec<u8>> {
+    if s.len() % 2 != 0 {
+        return None;
+    }
+    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok()).collect()
 }
 
 impl Coin {

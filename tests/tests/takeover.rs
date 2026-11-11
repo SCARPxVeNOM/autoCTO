@@ -637,3 +637,35 @@ async fn pump_before_the_bid_fails_at_execution() -> Result<()> {
         "the vote period is over, alice may unlock");
     Ok(())
 }
+
+#[tokio::test]
+async fn the_coin_checks_the_models_signature() -> Result<()> {
+    let c = cast(false).await?;
+    let w = &c.w;
+    // A real signature from a NEAR AI Cloud enclave over one model call.
+    let text = "z-ai/glm-5.3-flash:68babc0de9e4c292f79437a5f51f5f0a82178b85d706a8005b9bc9b12c2e7cdc:b59add6bc6769a26cf17beb189386063622edeecbfa93da1e9f283e550560c2f";
+    let signature = "0x2ddf39d4a09f9c26a00626ec04583c224aecf462fe4c907a57df768d3776b0ba2d261b796d43a1ac8b68a748e5f37ace214f03aaf89ccc29c198891805e011691b";
+    let signer = "0x3b753b4406613c5e70ae640508632b600424fa0c";
+    let answer = |text: &str| {
+        json!({ "action": { "type": "none" }, "thought": "wait",
+            "attest": { "text": text, "signature": signature, "signing_address": signer, "kind": "provider_tee" } })
+    };
+
+    // The signature checks out: applied, and the coin records who signed.
+    let (_, d) = w.think_forced(&c.dev, &c.pepe, ONE_NEAR / 10, answer(text)).await?;
+    assert_eq!(d["status"], "Applied", "{d}");
+    assert_eq!(d["signed_by"], signer, "{d}");
+
+    // One character of the signed text changed: the answer is not applied.
+    w.wait_secs(6).await?;
+    let (_, d) = w.think_forced(&c.dev, &c.pepe, ONE_NEAR / 10, answer(&text.replace("68ba", "68bb"))).await?;
+    assert!(d["status"]["Refused"]["reason"].as_str().unwrap().contains("signature"), "{d}");
+    assert!(d["signed_by"].is_null(), "{d}");
+
+    // An unsigned answer (rules mode) is still fine, and says so.
+    w.wait_secs(6).await?;
+    let (_, d) = w.think_forced(&c.dev, &c.pepe, ONE_NEAR / 10, json!({ "action": { "type": "none" } })).await?;
+    assert_eq!(d["status"], "Applied", "{d}");
+    assert!(d["signed_by"].is_null(), "{d}");
+    Ok(())
+}

@@ -29,7 +29,33 @@ export async function playTakeover() {
   };
   const who = cfg.accounts || [];
   const actor = state.actor || who[0];
+  // Wait until `t` (ns), showing a countdown.
+  const until = async (t) => {
+    if (t <= now()) return;
+    auto.until = t.toString(); bump();
+    while (now() <= t + 2n * NS) await sleep(1000);
+    auto.until = null;
+  };
   try {
+    // A bid left open from earlier (the demo story leaves one) is counted first, so the brain starts fresh.
+    const stale = [];
+    for (const { account_id: a } of state.coins) {
+      if (statusName((await info(a)).status) !== "Active") continue;
+      for (const o of await view(a, "list_offers", { live_only: true })) if (o.target === a && statusName(o.status) === "Open") stale.push(o);
+    }
+    const failedAt = {};
+    if (stale.length) {
+      step(stale.length === 1 ? "A bid from earlier is still open. Counting it first." : "Bids from earlier are still open. Counting them first.");
+      await until(stale.reduce((m, o) => (BigInt(o.vote_ends) > m ? BigInt(o.vote_ends) : m), 0n));
+      for (const o of stale) {
+        await devCall(actor, o.target, "finalize", { offer: `${o.buyer}#${o.id}` }).catch(() => {});
+        const after = await view(o.target, "get_incoming", { offer: `${o.buyer}#${o.id}` });
+        if (statusName(after?.status) === "Failed") failedAt[o.buyer] = now();
+      }
+      await sleep(3000);
+      await refresh();
+    }
+
     const live = [];
     let newborn = 0n;
     for (const { account_id: a } of state.coins) {
@@ -85,9 +111,12 @@ export async function playTakeover() {
 
     if (newborn > now()) {
       step("A new coin cannot be bid for right away. Waiting out its newborn protection.");
-      auto.until = newborn.toString(); bump();
-      while (now() <= newborn + 2n * NS) await sleep(1000);
-      auto.until = null;
+      await until(newborn);
+    }
+    const cool = failedAt[bidder] && failedAt[bidder] + BigInt(state.params.rebid_cooldown_sec) * NS;
+    if (cool > now()) {
+      step(`$${B}'s earlier bid failed, so it has to wait before bidding again.`);
+      await until(cool);
     }
     step(`Waking $${B}'s brain. It sizes up its rivals.`);
     const id = (await info(bidder)).decisions;
@@ -110,6 +139,20 @@ export async function playTakeover() {
     location.hash = "#deals";
     if (state.params.reveal_period_sec > 0) throw new Error("Votes are sealed on this chain, so the rest is by hand: vote, reveal, then finalize.");
 
+    // Someone who shows up after the bid tries to swing the vote. The contract says no.
+    const lockedBefore = async (acct) => (await view(target, "locks_of", { account_id: acct })).some((l) => BigInt(l.since) < BigInt(o.created_at));
+    let late = null;
+    for (const acct of who) if (!(await lockedBefore(acct))) { late = acct; break; }
+    if (late) {
+      step(`${late.split(".")[0]} buys $${T} after the bid, locks it and tries to vote no.`);
+      await devCall(late, target, "buy", { min_out: "0" }, 3n * YOCTO).catch(() => {});
+      const bal = BigInt(await view(target, "ft_balance_of", { account_id: late }));
+      if (bal > 0n) await devCall(late, target, "lock", { amount: bal.toString() }).catch(() => {});
+      const said = await devCall(late, target, "vote", { offer: key, support: false }).then(() => null, reason);
+      if (said) { step(`Refused by the contract: “${said}”.`); auto.steps.at(-1).refused = true; }
+      refresh();
+    }
+
     let voted = 0;
     for (const acct of who) {
       const locks = await view(target, "locks_of", { account_id: acct });
@@ -118,9 +161,7 @@ export async function playTakeover() {
       refresh();
     }
     step(`${voted} ${voted === 1 ? "holder" : "holders"} voted yes. Waiting for the vote to close.`);
-    auto.until = o.vote_ends; bump();
-    while (now() <= BigInt(o.vote_ends) + 2n * NS) await sleep(1000);
-    auto.until = null;
+    await until(BigInt(o.vote_ends));
 
     step("The vote is over. Anyone can ask the contract to count it.");
     await devCall(actor, target, "finalize", { offer: key });

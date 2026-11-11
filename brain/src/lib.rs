@@ -642,7 +642,7 @@ Allowed moves (JSON, field \"type\"):\n\
 - {{\"type\":\"none\"}}\n\
 - {{\"type\":\"offer\",\"target\":<rival account with biddable=true>,\"premium_bps\":<int>,\"pitch\":<=200 chars to the target's holders>}}\n\
 - {{\"type\":\"counter\",\"offer\":<bids_for_us offer, not already_countered>,\"premium_bps\":<int>,\"pitch\":<=200 chars>}}\n\
-- {{\"type\":\"accept_counter\",\"offer_id\":<our_bids offer_id with a counter>}}\n\
+- {{\"type\":\"accept_counter\",\"offer_id\":<our_bids offer_id with a counter>}} (the only answer to a counter on our own bid: accept it, or leave our bid as it stands with \"none\"; we cannot counter back)\n\
 - {{\"type\":\"stance\",\"offer\":<bids_for_us offer>,\"support\":<bool>,\"pitch\":<=200 chars to our holders>}}\n\
 - {{\"type\":\"tender\",\"token\":<outside_tokens token with owner_can_rewrite_it=false and tender_open=false>,\"dilution_bps\":<int, share of our supply minted if exactly the threshold is deposited, below tender_caps.max_dilution_bps>,\"pitch\":<=200 chars to that token's holders>}}\n\
 premium_bps is relative to the fair price ratio and must respect caps and max_premium_by_dilution_bps. \
@@ -767,12 +767,16 @@ pub fn run(input_json: &str, env: &Env, http: &dyn Http) -> Output {
     let mut attest = None;
     if use_llm {
         env.proofs.borrow_mut().clear();
-        if let Ok((mv, thought)) = decide_llm(http, env, &input, &rivals, &notes) {
-            if let Some(action) = to_action(&input, &rivals, &mv) {
-                mode = format!("llm:{}", env.model);
-                decided = Some((action, thought));
-                attest = env.proofs.borrow_mut().pop();
-            }
+        match decide_llm(http, env, &input, &rivals, &notes) {
+            Ok((mv, thought)) => match to_action(&input, &rivals, &mv) {
+                Some(action) => {
+                    mode = format!("llm:{}", env.model);
+                    decided = Some((action, thought));
+                    attest = env.proofs.borrow_mut().pop();
+                }
+                None => eprintln!("model move not valid here, using rules: {mv:?}"),
+            },
+            Err(e) => eprintln!("model answer unusable, using rules: {e}"),
         }
     }
     let (action, thought) = decided.unwrap_or_else(|| {

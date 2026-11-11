@@ -234,6 +234,9 @@ pub struct Decision {
     /// The brain's raw answer (truncated to 2000 bytes).
     pub output: Option<String>,
     pub status: DecisionStatus,
+    /// The key that signed the model's answer, when there was a signature and
+    /// this contract checked it (an Ethereum-style address, 0x + 40 hex).
+    pub signed_by: Option<String>,
 }
 
 /// A committed vote: sha256 hex of "offer|round|account|true-or-false|salt".
@@ -307,6 +310,19 @@ pub struct BrainOutput {
     pub action: BrainAction,
     #[serde(default)]
     pub thought: Option<String>,
+    /// In model mode: the model host's signature over the deciding call.
+    #[serde(default)]
+    pub attest: Option<ModelSignature>,
+}
+
+/// An EIP-191 signature over `text` ("<model>:<sha256 of request>:<sha256 of
+/// response>"), as NEAR AI Cloud's enclaves produce.
+#[near(serializers = [json])]
+#[derive(Clone, Debug)]
+pub struct ModelSignature {
+    pub text: String,
+    pub signature: String,
+    pub signing_address: String,
 }
 
 #[near(serializers = [borsh, json])]

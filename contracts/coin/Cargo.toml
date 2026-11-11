@@ -16,7 +16,8 @@ passed_env = []
 container_build_command = ["cargo", "near", "build", "non-reproducible-wasm", "--locked"]
 
 [dependencies]
-near-sdk.workspace = true
+# "unstable" is where the SDK keeps ecrecover, used to check the model's signature.
+near-sdk = { workspace = true, features = ["unstable"] }
 near-contract-standards.workspace = true
 uint = { version = "0.10", default-features = false }
 

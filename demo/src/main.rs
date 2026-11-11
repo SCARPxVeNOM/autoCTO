@@ -197,8 +197,17 @@ async fn main() -> Result<()> {
     say("WOJAK's brain opens an all-or-nothing tender for the keyless one");
     c.ok(&mallory, &wojak, "nominate", json!({ "token": oldcat }), 0).await?;
     w.wait_secs(6).await?;
-    let (out, d) = w.think(&dev, &wojak, ONE_NEAR / 10).await?;
-    show_brain("WOJAK", &out, &d);
+    // A model may answer something else first (a live bid against WOJAK, say); ask again.
+    for attempt in 1..=4 {
+        let (out, d) = w.think(&dev, &wojak, ONE_NEAR / 10).await?;
+        show_brain("WOJAK", &out, &d);
+        if !c.view(&wojak, "get_tender", json!({ "tender_id": 0 })).await?.is_null() {
+            break;
+        }
+        anyhow::ensure!(attempt < 4, "WOJAK's brain did not open a tender in 4 tries");
+        println!("  (no tender yet; the brain chose another move, so we wake it again)");
+        w.wait_secs(6).await?;
+    }
     let t = c.view(&wojak, "get_tender", json!({ "tender_id": 0 })).await?;
     println!(
         "  on-chain tender #0: rate {} WOJAK per OLDCAT, needs {} of the supply deposited in 60 s",

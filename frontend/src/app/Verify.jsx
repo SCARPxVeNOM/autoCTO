@@ -108,7 +108,7 @@ const CHECKS = [
       const who = `$${sym(coin)} decision #${d.id}`;
       if (recoverSigner(a.text, a.signature).toLowerCase() !== a.signing_address.toLowerCase()) return { ok: false, detail: `${who}: the signature does not match the stated key` };
       const rep = await keyInReport(a.signing_address, a.kind === "provider_tee" ? parseSigned(a.text).model : null);
-      return { ok: rep.listed, detail: `${who}: signature valid, key ${short(a.signing_address)} ${rep.listed ? "is" : "is not"} in NEAR AI's current report` };
+      return { ok: rep.listed, detail: `${who}: signature valid${d.signed_by ? " (also checked by the contract)" : ""}, key ${short(a.signing_address)} ${rep.listed ? "is" : "is not"} in NEAR AI's current report` };
     },
   },
 ];

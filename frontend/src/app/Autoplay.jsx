@@ -1,5 +1,5 @@
 // The demo's "play a takeover" run: a button to start it and a panel that follows it across views.
-import { Check, CircleAlert, LoaderCircle, Play, X } from "lucide-react";
+import { Ban, Check, CircleAlert, LoaderCircle, Play, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -25,8 +25,8 @@ export function AutoPanel() {
         {a.steps.map((s, k) => {
           const stopped = !s.done && !a.running;
           return (
-            <li key={k} className={cn("flex items-start gap-2", s.done && k < a.steps.length - 1 && "text-muted-foreground")}>
-              {s.done ? <Check className="mt-0.5 size-4 flex-none text-up" strokeWidth={3} /> : stopped ? <CircleAlert className="mt-0.5 size-4 flex-none text-down" /> : <LoaderCircle className="mt-0.5 size-4 flex-none animate-spin text-primary" />}
+            <li key={k} className={cn("flex items-start gap-2", s.done && k < a.steps.length - 1 && "text-muted-foreground", s.refused && "font-medium text-down")}>
+              {s.refused ? <Ban className="mt-0.5 size-4 flex-none text-down" /> : s.done ? <Check className="mt-0.5 size-4 flex-none text-up" strokeWidth={3} /> : stopped ? <CircleAlert className="mt-0.5 size-4 flex-none text-down" /> : <LoaderCircle className="mt-0.5 size-4 flex-none animate-spin text-primary" />}
               <span>{s.text}{!s.done && a.until && <b className="ml-1 font-mono font-medium">{<Left ns={a.until} />}</b>}</span>
             </li>
           );

@@ -183,7 +183,7 @@ export default function Landing() {
               <h1>Memecoins that <em>take each other over.</em></h1>
             </div>
             <div className="lp-hero-right">
-              <p className="lede">Every coin here has its own AI brain. Brains bid for rival coins, holders vote, and the code carries out the deal. No team holds the keys, so nobody can rug.</p>
+              <p className="lede">Mergers and acquisitions for memecoins. Each coin's AI makes an offer, the rival's AI haggles, holders vote, and the two coins merge. No team holds the keys, so nobody can rug.</p>
               <div className="actions">
                 <Enter lg />
                 <Button asChild variant="outline" size="lg" className="h-12 rounded-full px-6 text-base"><a href="#demo">Watch a takeover</a></Button>
@@ -260,7 +260,7 @@ export default function Landing() {
               <div><b>67%</b><span>must say yes</span></div>
               <div><b>10%</b><span>can veto</span></div>
               <div><b>60 days</b><span>simulated to pick these numbers</span></div>
-              <div><b>14</b><span>end-to-end tests, plus fuzzing</span></div>
+              <div><b>15</b><span>end-to-end tests, plus fuzzing</span></div>
             </div>
           </section>
 

@@ -22,7 +22,7 @@ const Row = ({ ok, children }) => (
 );
 
 // In model mode the answer carries NEAR AI Cloud's signature. Both checks run here, in the browser.
-function ModelProof({ a }) {
+function ModelProof({ a, onChain }) {
   const { model, request, response } = parseSigned(a.text);
   const [signer, setSigner] = useState(undefined);
   const [report, setReport] = useState(undefined);
@@ -40,6 +40,7 @@ function ModelProof({ a }) {
       <p className="text-sm text-muted-foreground">{model ? <code className="font-mono text-foreground">{model}</code> : "A model"} on NEAR AI Cloud decided this. {a.kind === "provider_tee" ? "Its sealed hardware" : "NEAR AI's sealed gateway"} signed the exact question and answer.</p>
       <Pre>question sha256 = {request}{"\n"}answer sha256   = {response}{"\n"}signed by       = {a.signing_address}</Pre>
       <ul className="grid gap-1.5 text-sm">
+        {onChain && <Row ok={onChain.toLowerCase() === a.signing_address.toLowerCase()}>The coin's contract checked this signature itself before acting.</Row>}
         <Row ok={sigOk}>{sigOk === false ? "The signature does not match the stated key." : "Signature valid (checked in your browser)."}</Row>
         <Row ok={repOk}>{report === null ? "Could not reach NEAR AI to fetch its attestation report." : repOk === false ? "That key is not in NEAR AI's current attestation report. Keys rotate, so an old decision can fail this check." : <>Key listed in NEAR AI's fresh attestation report{report?.fresh === false && " (the report did not echo our nonce)"}.</>}</Row>
       </ul>
@@ -68,7 +69,7 @@ function Verify({ pick, onClose }) {
           </ol>
           <Pre>brain: {state.brain.source}</Pre>
           </More>
-          {attestOf(d) && <ModelProof a={attestOf(d)} />}
+          {attestOf(d) && <ModelProof a={attestOf(d)} onChain={d.signed_by} />}
           <p className="text-sm text-muted-foreground">What the contract received, and what it did:</p>
           <Pre>{d.output || "(none)"}</Pre>
           <Pre>status: {JSON.stringify(d.status)}</Pre>
