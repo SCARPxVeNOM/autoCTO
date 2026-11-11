@@ -1,6 +1,6 @@
 // Small pieces shared by the app's views.
 import { useEffect, useState } from "react";
-import { Swords } from "lucide-react";
+import { ChevronDown, Swords } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,19 @@ const TONES = {
   up: "bg-up/15 text-up", down: "bg-down/15 text-down", warn: "bg-warn/15 text-warn",
   brand: "bg-primary/15 text-primary", muted: "bg-muted text-muted-foreground",
 };
+/** Secondary detail, folded away until asked for. */
+export function More({ label = "Details", className, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={cn("grid gap-3", className)}>
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="inline-flex items-center gap-1 justify-self-start text-[13px] text-muted-foreground hover:text-foreground">
+        <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />{open ? "Less" : label}
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
 /** A status pill: green, red, amber, brand or grey. */
 export const Pill = ({ tone = "muted", className, ...props }) => (
   <Badge variant="secondary" className={cn("border-transparent font-semibold", TONES[tone], className)} {...props} />

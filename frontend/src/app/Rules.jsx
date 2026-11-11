@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { SectionHead } from "@/components/common";
+import { More, SectionHead } from "@/components/common";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cfg, fmtNear, mins, state } from "@/lib/chain";
 
 const pct = (bps) => `${bps / 100}%`;
@@ -101,14 +102,18 @@ export default function Rules() {
       <section id="rules" className="pb-8 pt-6">
         <SectionHead title="Rules" />
         <div className="grid gap-4 px-6 max-sm:px-4">
-          <p className="max-w-[72ch]">The AI brain only <b>proposes</b>. The contract checks every number against the rules below, and the rules were fixed when the launchpad was created: there is no owner and no way to change them.</p>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,230px),1fr))] gap-2.5">
+          <p className="max-w-[72ch]">The AI only <b>proposes</b>. The contract enforces these limits, and nobody can change them. <span className="text-muted-foreground">Tap a card for what it means.</span></p>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,150px),1fr))] gap-2.5">
             {cards.map(([v, k, t]) => (
-              <Card key={k} className="content-start gap-0.5 rounded-2xl p-3.5 shadow-none">
-                <b className="font-mono text-2xl font-medium leading-tight tracking-tight">{v}</b>
-                <span className="font-display text-[14.5px] font-semibold">{k}</span>
-                <p className="mt-0.5 text-[13px] text-muted-foreground">{t}</p>
-              </Card>
+              <Tooltip key={k}>
+                <TooltipTrigger asChild>
+                  <Card tabIndex={0} className="cursor-help content-start gap-0.5 rounded-2xl p-3.5 shadow-none">
+                    <b className="font-mono text-2xl font-medium leading-tight tracking-tight">{v}</b>
+                    <span className="font-display text-[14.5px] font-semibold">{k}</span>
+                  </Card>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[260px] text-[13px] leading-snug">{t}</TooltipContent>
+              </Tooltip>
             ))}
           </div>
           <Accordion type="single" collapsible className="rounded-2xl border px-4">
@@ -125,10 +130,10 @@ export default function Rules() {
       {sim && (
         <section id="sim" className="border-t border-dashed border-line pb-8 pt-6">
           <SectionHead title="Why these numbers" note={`tested in a ${sim.days}-day simulation`} />
-          {sim.sweep?.length > 0 && <Sweep sim={sim} />}
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3.5 px-6 max-sm:px-4">
             {sim.scenarios.map((s) => <Scenario key={s.title} s={s} />)}
           </div>
+          {sim.sweep?.length > 0 && <More label="The full parameter sweep" className="mt-4 [&>button]:mx-6 max-sm:[&>button]:mx-4"><Sweep sim={sim} /></More>}
         </section>
       )}
     </>

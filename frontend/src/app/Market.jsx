@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { Ago, Avatar, Left, Pill, SectionHead, Term } from "@/components/common";
+import { Ago, Avatar, Left, More, Pill, SectionHead, Term } from "@/components/common";
 import {
   act, allOffers, available, cfg, coinStatus, curveReal, fetchQuote, fmtNear, fmtPct, fmtPrice, fmtRate, fmtTokens, fmtUnits,
   guideSteps, hasWallet, isMerged, liveOffer, lockedOf, marketCap, minOut, modeDec, nearNum, now, parseUnits, priceNum, sameCode,
@@ -22,24 +22,24 @@ import { PlayButton } from "./Autoplay";
 // ---------- first steps ----------
 function Guide() {
   const { go } = useUi();
-  const [hidden, setHidden] = useState(() => store.get("autocto:no-guide") === "1");
+  // One line by default: the next step. The five cards open on request.
+  const [hidden, setHidden] = useState(() => store.get("autocto:guide-open") !== "1");
   const steps = guideSteps();
   const done = steps.filter((s) => s.done).length;
   const next = steps.findIndex((s) => !s.done);
-  const toggle = () => { const h = !hidden; setHidden(h); if (h) store.set("autocto:no-guide", "1"); else store.del("autocto:no-guide"); };
+  const toggle = () => { const h = !hidden; setHidden(h); if (h) store.del("autocto:guide-open"); else store.set("autocto:guide-open", "1"); };
   return (
     <section id="guide" className={cn("border-b border-dashed border-line", hidden ? "py-3.5" : "pb-7 pt-6")}>
       <div className={cn("flex flex-wrap items-center gap-x-4 gap-y-2 px-6 max-sm:px-4", !hidden && "mb-4")}>
-        <h2 className={cn("font-semibold", hidden ? "text-base" : "text-[22px]")}>Your first steps</h2>
+        <h2 className={cn("font-semibold", hidden ? "text-base" : "text-[22px]")}>First steps</h2>
         <div className="flex items-center gap-2.5 text-[12.5px] text-muted-foreground">
-          <Progress value={(done / steps.length) * 100} className="h-1.5 w-24" />
-          {done === steps.length ? "All done. You know how it works." : `${done} of ${steps.length} done`}
+          <Progress value={(done / steps.length) * 100} className="h-1.5 w-20" />{done}/{steps.length}
         </div>
-        <div className="ml-auto flex items-center gap-1.5"><PlayButton /><Button variant="ghost" size="sm" onClick={toggle}>{hidden ? "Show" : "Hide"}</Button></div>
+        {hidden && next >= 0 && <Button size="sm" className="rounded-full" onClick={() => go(steps[next].go)}>Next: {steps[next].title}</Button>}
+        <div className="ml-auto flex items-center gap-1.5"><PlayButton /><Button variant="ghost" size="sm" onClick={toggle}>{hidden ? "All steps" : "Hide"}</Button></div>
       </div>
       {!hidden && (
         <>
-          {cfg.dev_key && <p className="-mt-1 mb-4 max-w-[70ch] px-6 text-[12.5px] text-muted-foreground max-sm:px-4"><b className="font-semibold text-foreground">Demo mode.</b> Everything here is play money on a local chain. Use “playing as” at the top to switch between demo holders and see every side of a deal.</p>}
           <ol className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,200px),1fr))] gap-2.5 px-6 max-sm:px-4 xl:grid-cols-5">
             {steps.map((s, k) => (
               <li key={k}>
@@ -136,7 +136,7 @@ function MarketTable() {
                   <Avatar symbol={i.symbol} />
                   <div className="grid min-w-0 gap-1">
                     <div className="truncate"><b className="font-display text-base font-semibold">${i.symbol}</b> <span className="text-muted-foreground">{i.name}</span></div>
-                    <div className="flex flex-wrap items-center gap-1"><CoinBadges a={a} /></div>
+                    {i.absorbed.length > 0 && <div className="flex flex-wrap items-center gap-1">{i.absorbed.map(([t]) => <Badge key={t} variant="outline" className="h-[19px] rounded-md border-dashed border-primary px-1.5 text-[11px] font-normal text-primary">ate ${sym(t)}</Badge>)}</div>}
                   </div>
                 </div>
               </TableCell>
@@ -171,11 +171,11 @@ function useChart({ a, kind, afterNear }) {
   let html = "", note = "";
   if (kind === "session") {
     html = sessionChart(a, w, H) || "";
-    note = `since you opened this page at ${new Date(state.opened).toLocaleTimeString()}`;
+    note = `since ${new Date(state.opened).toLocaleTimeString()}`;
   } else if (!isMerged(i)) {
     const c = curveChart(i, w, H, afterNear);
     html = c?.svg || "";
-    note = c ? `Every buy moves the dot up the line, every sell moves it down · started at ${fmtPrice(c.start)} per 1M` : "";
+    note = c ? `buys push the price up the curve, sells bring it down` : "";
   }
   return { box, html, note, merged: kind !== "session" && isMerged(i) };
 }
@@ -186,11 +186,19 @@ function CoinPanel({ a, afterNear }) {
   const chart = useChart({ a, kind, afterNear });
   const stats = [
     ["market cap", merged ? "–" : fmtNear(marketCap(i)), "market cap"], ["liquidity", fmtNear(curveReal(i)), "liquidity"],
-    ["treasury", fmtNear(i.treasury), "treasury"], ["in circulation", fmtTokens(i.circulating)],
-    ["locked for votes", fmtTokens(i.total_locked), "lock"], ["total supply", fmtTokens(i.total_supply)],
+    ["treasury", fmtNear(i.treasury), "treasury"], ["locked for votes", fmtTokens(i.total_locked), "lock"],
+  ];
+  const more = [
+    ["in circulation", fmtTokens(i.circulating)], ["total supply", fmtTokens(i.total_supply)],
     ...(BigInt(i.owed || 0) > 0n ? [["owed to converters", fmtTokens(i.owed), "convert"]] : []),
     ["brain spent", fmtNear(i.brain_spent_total), "brain"], ["brain decisions", String(i.decisions)],
+    ["born", <Ago ns={i.born_at} />],
   ];
+  const cell = ([k, v, t]) => (
+    <div key={k} className="px-3 py-2 shadow-[0_0_0_.5px_var(--border)]">
+      <dt className="text-xs text-muted-foreground">{t ? <Term k={t}>{k}</Term> : k}</dt><dd className="font-mono text-sm font-medium">{v}</dd>
+    </div>
+  );
   return (
     <div className="grid min-w-0 content-start gap-4 px-6 pb-7 pt-5 max-sm:px-4">
       <div className="grid gap-2.5">
@@ -198,13 +206,12 @@ function CoinPanel({ a, afterNear }) {
           <Avatar symbol={i.symbol} size={52} />
           <div className="min-w-0 flex-[1_1_160px]">
             <h3 className="text-[26px] font-semibold leading-tight">${i.symbol} <span className="text-[17px] font-medium text-muted-foreground">{i.name}</span></h3>
-            <div className="break-all font-mono text-xs text-muted-foreground">{a}</div>
           </div>
           <div className="ml-auto text-right max-sm:ml-0 max-sm:basis-full max-sm:text-left">
             <div className="font-mono text-[26px] font-medium leading-tight tracking-tight">{merged ? "absorbed" : fmtPrice(priceNum(i))}</div>
             <div className="text-[12.5px] text-muted-foreground">
               {!merged && <>per 1M ${i.symbol}</>}
-              {ch != null && !merged && <> · <span className={cn("font-mono font-medium", ch >= 0 ? "text-up" : "text-down")}>{fmtPct(ch)}</span> since you opened this page</>}
+              {ch != null && !merged && <> · <span className={cn("font-mono font-medium", ch >= 0 ? "text-up" : "text-down")}>{fmtPct(ch)}</span></>}
             </div>
           </div>
         </div>
@@ -226,14 +233,11 @@ function CoinPanel({ a, afterNear }) {
         </div>
       </Card>
 
-      <dl className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] overflow-hidden rounded-xl border">
-        {stats.map(([k, v, t]) => (
-          <div key={k} className="px-3 py-2 shadow-[0_0_0_.5px_var(--border)]">
-            <dt className="text-xs text-muted-foreground">{t ? <Term k={t}>{k}</Term> : k}</dt><dd className="font-mono text-sm font-medium">{v}</dd>
-          </div>
-        ))}
-        <div className="px-3 py-2 shadow-[0_0_0_.5px_var(--border)]"><dt className="text-xs text-muted-foreground">born</dt><dd className="font-mono text-sm font-medium"><Ago ns={i.born_at} /></dd></div>
-      </dl>
+      <dl className="grid grid-cols-2 overflow-hidden rounded-xl border sm:grid-cols-4">{stats.map(cell)}</dl>
+      <More label="More numbers">
+        <dl className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] overflow-hidden rounded-xl border">{more.map(cell)}</dl>
+        <div className="break-all font-mono text-xs text-muted-foreground">{a}</div>
+      </More>
     </div>
   );
 }
@@ -283,10 +287,10 @@ function Ticket({ a, onQuote }) {
   }
 
   const hints = {
-    buy: `You pay NEAR and get $${s} at the current price. ${state.params.trade_fee_bps / 100}% goes to the coin's own treasury.`,
-    sell: `You give $${s} back and get NEAR at the current price. Locked tokens must be unlocked first.`,
-    lock: "Locking gives you a vote. The tokens stay yours and you can unlock later. Lock before a bid is announced, or it won't count for that bid.",
-    unlock: "Makes locked tokens sellable again. Newest locks are released first.",
+    buy: `${state.params.trade_fee_bps / 100}% fee, paid to $${s}'s own treasury.`,
+    sell: "",
+    lock: "Locked tokens are votes. Lock before a bid appears.",
+    unlock: "",
   };
   let note = hints[mode], bad = false, ok = false;
   const quote = q.quote;
@@ -353,11 +357,11 @@ function Ticket({ a, onQuote }) {
         </div>
       )}
       <Button size="lg" className={cn("btn-big h-[46px] w-full text-base font-semibold", tone)} disabled={!ok || state.acting} onClick={submit}>{MODES[mode][0]} ${s}</Button>
-      <p className={cn("min-h-[2.6em] text-[12.5px] text-muted-foreground", bad && "text-down")}>{note}</p>
+      {note && <p className={cn("text-[12.5px] text-muted-foreground", bad && "text-down")}>{note}</p>}
       <Position a={a} />
       <div className="flex items-center gap-2.5 border-t border-dashed border-line pt-3.5">
         <Button id="think" variant="outline" className="flex-none rounded-full" disabled={state.acting} onClick={() => act("think", { coin: a })}><Brain /> Think</Button>
-        <span className="text-[12.5px] text-muted-foreground">Wakes ${s}'s AI to look for a deal. Costs {fmtNear(state.params.brain_fee)}; it has used {fmtNear(i.brain_spent_today)} of {fmtNear(state.params.brain_daily_cap)} today.</span>
+        <span className="text-[12.5px] text-muted-foreground" title={`Used ${fmtNear(i.brain_spent_today)} of ${fmtNear(state.params.brain_daily_cap)} today`}>Wake ${s}'s AI to look for a deal · {fmtNear(state.params.brain_fee)}</span>
       </div>
     </div>
   );
@@ -370,7 +374,7 @@ function Position({ a }) {
     <div className="grid gap-2 border-t border-dashed border-line pt-3.5">
       <h4 className="flex flex-wrap items-baseline justify-between gap-2 text-[15px] font-semibold">Your position <span className="font-mono text-[12.5px] font-normal text-muted-foreground">{who}</span></h4>
       {!who ? (
-        <p className="text-[13.5px] text-muted-foreground">{cfg.dev_key ? "No account selected." : hasWallet() ? "Connect a wallet to see your balances here." : "Type your account at the top to see balances."}</p>
+        <p className="text-[13.5px] text-muted-foreground">{cfg.dev_key ? "No account selected." : hasWallet() ? "Connect a wallet to see your balances." : "Type your account at the top."}</p>
       ) : (
         <dl className="grid gap-1.5 text-[13.5px]">
           <Row k={`$${s} you can sell`}>{fmtTokens(state.me.bal[a] || 0n)}</Row>
@@ -381,10 +385,9 @@ function Position({ a }) {
       )}
       {who && (lots.length ? (
         <div className="grid gap-1">
-          <div className="text-[12.5px] text-muted-foreground">Your locks · each one counts for bids announced after it was made</div>
           {lots.map((l, k) => <div key={k} className="flex items-baseline justify-between gap-2 rounded-lg bg-muted/70 px-2.5 py-1.5 text-[13px]"><span className="font-mono">{fmtTokens(l.amount)} ${s}</span><span className="text-[12.5px] text-muted-foreground">locked <Ago ns={l.since} /></span></div>)}
         </div>
-      ) : <div className="text-[12.5px] text-muted-foreground">Nothing locked yet. Lock some ${s} to vote when another coin bids for it, and to veto ${s}'s own bids.</div>)}
+      ) : null)}
     </div>
   );
 }
@@ -406,7 +409,7 @@ export default function Market() {
       <Guide />
       <Ticker />
       <section id="market" className="border-b border-dashed border-line pb-2 pt-6">
-        <SectionHead title="Market" note="Click a coin to open it" />
+        <SectionHead title="Market" />
         <MarketTable />
       </section>
       {i && (

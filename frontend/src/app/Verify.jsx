@@ -135,21 +135,20 @@ export default function Verify() {
         <Button variant="outline" size="sm" onClick={run} disabled={!all}><RotateCw className="size-3.5" />Run again</Button>
       </SectionHead>
       <div className="grid gap-4 px-6 max-sm:px-4">
-        <p className="max-w-[72ch]">Nothing on this page is taken on trust. Your browser asks the chain{cfg.commit ? ", downloads the files from the public repo," : ""} and checks each claim, right now. Nothing here comes from our servers: there are none.</p>
+        <p className="max-w-[72ch]">Your browser checks each claim against the chain{cfg.commit ? " and the public repo" : ""}, right now. No server of ours is involved.</p>
         <div className="grid gap-2.5">
           {CHECKS.map((c, i) => {
             const r = res[i];
             return (
-              <Card key={c.title} className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-2xl p-4 shadow-none">
-                <span className="row-span-3 mt-0.5">{ICON[r ? String(r.ok) : "wait"]}</span>
-                <b className="font-display text-[15.5px] font-semibold">{c.title}</b>
-                <p className="text-[13.5px] text-muted-foreground">{c.why}</p>
-                <p className="break-words font-mono text-[12.5px]">{r ? r.detail : "…"}</p>
+              <Card key={c.title} title={c.why} className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 rounded-2xl px-4 py-3 shadow-none">
+                <span className="row-span-2 mt-0.5">{ICON[r ? String(r.ok) : "wait"]}</span>
+                <b className="font-display text-[15px] font-semibold">{c.title}</b>
+                <p className="break-words font-mono text-[12.5px] text-muted-foreground">{r ? r.detail : "…"}</p>
               </Card>
             );
           })}
         </div>
-        <p className="max-w-[72ch] text-[13px] text-muted-foreground">Not checked here: the Intel and NVIDIA hardware quotes behind OutLayer and NEAR AI Cloud. Their own verifiers do that; the proof dialog under <a className="text-primary underline" href="#brains">Brains</a> links to both. Chain data comes from <span className="break-all font-mono">{cfg.rpc}</span>; add <span className="font-mono">&amp;rpc=</span> to the address to ask a different node.</p>
+        <p className="max-w-[72ch] text-[13px] text-muted-foreground">Not checked here: the Intel and NVIDIA hardware quotes. The proof under <a className="text-primary underline" href="#brains">Brains</a> links to the verifiers that do.</p>
       </div>
     </section>
   );

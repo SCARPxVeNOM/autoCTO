@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { PlayButton } from "./Autoplay";
-import { Ago, Avatar, Left, Meter, Pill, SectionHead, Term, useTick } from "@/components/common";
+import { Ago, Avatar, Left, Meter, More, Pill, SectionHead, Term, useTick } from "@/components/common";
 import {
   NS, act, allOffers, fmtBps, fmtRate, fmtTokens, getBallot, humanize, now, short, stanceFor, state, statusName, sym,
 } from "@/lib/chain";
@@ -49,12 +49,12 @@ function Offer({ o }) {
   const tone = { Open: "up", Executing: "brand", Sending: "brand", Executed: "muted", Failed: "down" }[st] || "muted";
   const stance = stanceFor(o);
   const B = sym(o.buyer), T = sym(o.target), prem = o.premium_bps / 100;
-  const sayNow = st === "Executed" ? `Done: $${T} is now part of $${B}. Its holders can convert.`
+  const sayNow = st === "Executed" ? `Done: $${T} holders can convert.`
     : st === "Failed" ? `It did not go through: ${o.status.Failed.reason}.`
     : !open ? "The merge is being carried out."
-    : !ended ? `Voting is open. It passes if at least ${quorum}% of $${T} votes and ${p.approval_bps / 100}% of the votes say yes.`
-    : inReveal ? "Voting has ended. Sealed votes are being revealed."
-    : "Voting has ended. Anyone can press Finalize to count the votes.";
+    : !ended ? `Passes with ${p.approval_bps / 100}% yes.`
+    : inReveal ? "Sealed votes are being revealed."
+    : "Voting has ended. Anyone can finalize.";
   // What this account can do here: only lots locked before the bid count.
   const before = (coin) => (state.me.locks[coin] || []).filter((l) => BigInt(l.since) < BigInt(o.created_at)).reduce((x, l) => x + BigInt(l.amount), 0n);
   const vt = before(o.target), vb = before(o.buyer);
@@ -64,32 +64,18 @@ function Offer({ o }) {
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
         <span className="inline-flex flex-wrap items-baseline gap-2 font-display text-[19px] font-semibold"><b>${B}</b><i className="font-sans text-[13px] font-normal not-italic text-muted-foreground">bids for</i><b>${T}</b></span>
         <Pill tone={tone} className="whitespace-normal">{st === "Failed" ? `failed: ${o.status.Failed.reason}` : st.toLowerCase()}</Pill>
-        <span className="inline-flex items-center gap-1 text-[12.5px] text-muted-foreground"><Proposer pr={o.proposer} /> · <Ago ns={o.created_at} /></span>
+        {open && !ended && <span className="ml-auto font-mono text-[13px] font-medium"><Left ns={o.vote_ends} /></span>}
+        {open && inReveal && <span className="ml-auto font-mono text-[13px] font-medium">reveal <Left ns={revealEnds} /></span>}
       </div>
-      <p className="text-[15px]"><b>${B}</b> wants to absorb <b>${T}</b>. Each ${T} would become {fmtRate(o.rate_ppm)} ${B}, <span className={prem >= 0 ? "text-up" : "text-down"}>{Math.abs(prem).toFixed(1)}% {prem >= 0 ? "more" : "less"}</span> than it is worth today. <span className="text-muted-foreground">{sayNow}</span></p>
+      <p className="text-[15px]">1 ${T} → <b className="font-mono font-medium">{fmtRate(o.rate_ppm)}</b> ${B}, <span className={prem >= 0 ? "text-up" : "text-down"}>{Math.abs(prem).toFixed(1)}% {prem >= 0 ? "above" : "below"}</span> today's price. <span className="text-muted-foreground">{sayNow}</span></p>
       {open && !ended && who && (vt > 0n
-        ? <Move can icon={Vote}>You have {fmtTokens(vt)} ${T} locked from before this bid, so you can vote.</Move>
-        : vb > 0n ? <Move can icon={Shield}>You have {fmtTokens(vb)} ${B} locked: you can veto if you think ${B} is overpaying.</Move>
-        : <Move icon={Eye}>You have no ${T} or ${B} that was locked before this bid, so you can only watch this one. Lock tokens now to have a say in the next.</Move>)}
-      <div className="flex flex-wrap gap-x-[18px] gap-y-2">
-        <TermCell label={<Term k="rate" />}><Num>{fmtRate(o.rate_ppm)}</Num> ${B} per ${T}</TermCell>
-        <TermCell label={<Term k="fair rate" />}><Num>{fmtRate(o.fair_rate_ppm)}</Num></TermCell>
-        <TermCell label={<Term k="premium" />}><Num className={o.premium_bps >= 0 ? "text-up" : "text-down"}>{fmtBps(o.premium_bps)}</Num></TermCell>
-        <TermCell label="round"><Num>{o.round}</Num></TermCell>
-        {open && !ended && <TermCell label="vote"><Num><Left ns={o.vote_ends} /></Num></TermCell>}
-        {open && inReveal && <TermCell label="reveal window"><Num><Left ns={revealEnds} /></Num></TermCell>}
-      </div>
-      <Pitch who={`pitch from $${B}'s brain · an ad, not a fact`}>“{humanize(o.pitch)}”</Pitch>
-      {o.counter && <Pitch who={`counter from $${T}: ${fmtRate(o.counter.rate_ppm)}`}>“{humanize(o.counter.pitch)}”</Pitch>}
-      {stance && <Pitch brain who={`what $${T}'s brain tells its holders`}>{humanize(stance)}</Pitch>}
+        ? <Move can icon={Vote}>You can vote with {fmtTokens(vt)} ${T}.</Move>
+        : vb > 0n ? <Move can icon={Shield}>You can veto with {fmtTokens(vb)} ${B}.</Move>
+        : <Move icon={Eye}>Watching only: nothing locked before this bid.</Move>)}
       <div>
         <BarLabel left={<><b className="font-medium text-up">yes {fmtTokens(yes)}</b> · <b className="font-medium text-down">no {fmtTokens(no)}</b>{(sealedMode || sealed > 0n) && <> · sealed {fmtTokens(sealed)} (direction hidden)</>}</>}
-          right={<><Term k="quorum">needs</Term> {quorum}% of {fmtTokens(circ)} to vote</>} />
+          right={<><Term k="quorum">needs</Term> {quorum}% to vote</>} />
         <Meter parts={[[pct(yes), "bg-up"], [pct(no), "bg-down"], [pct(sealed), "bg-muted-foreground/50"]]} mark={quorum} />
-      </div>
-      <div>
-        <BarLabel left={<>${B} holders <Term k="veto">against</Term> {fmtTokens(o.veto || 0)}</>} right={`blocked at ${p.veto_bps / 100}%`} />
-        <Meter parts={[[pct(o.veto || 0, bcirc), "bg-down"]]} mark={p.veto_bps / 100} />
       </div>
       <div className="flex flex-wrap items-center gap-2 empty:hidden">
         {open && !ended && (ballot
@@ -105,6 +91,22 @@ function Offer({ o }) {
           : <span className="text-[12.5px] text-muted-foreground">Reveal window: sealed votes count only once their voters reveal them.</span>)}
         {open && ended && canFinalize && <Button className="rounded-full" disabled={state.acting} onClick={() => act("finalize", { coin: o.target, offer: key })}>Finalize</Button>}
       </div>
+      <More label="Pitches and terms">
+        <div className="flex flex-wrap gap-x-[18px] gap-y-2">
+          <TermCell label={<Term k="rate" />}><Num>{fmtRate(o.rate_ppm)}</Num> ${B} per ${T}</TermCell>
+          <TermCell label={<Term k="fair rate" />}><Num>{fmtRate(o.fair_rate_ppm)}</Num></TermCell>
+          <TermCell label={<Term k="premium" />}><Num className={o.premium_bps >= 0 ? "text-up" : "text-down"}>{fmtBps(o.premium_bps)}</Num></TermCell>
+          <TermCell label="round"><Num>{o.round}</Num></TermCell>
+          <TermCell label="proposed by"><Proposer pr={o.proposer} /></TermCell>
+        </div>
+        <Pitch who={`pitch from $${B}'s brain · an ad, not a fact`}>“{humanize(o.pitch)}”</Pitch>
+        {o.counter && <Pitch who={`counter from $${T}: ${fmtRate(o.counter.rate_ppm)}`}>“{humanize(o.counter.pitch)}”</Pitch>}
+        {stance && <Pitch brain who={`what $${T}'s brain tells its holders`}>{humanize(stance)}</Pitch>}
+        <div>
+          <BarLabel left={<>${B} holders <Term k="veto">against</Term> {fmtTokens(o.veto || 0)}</>} right={`blocked at ${p.veto_bps / 100}%`} />
+          <Meter parts={[[pct(o.veto || 0, bcirc), "bg-down"]]} mark={p.veto_bps / 100} />
+        </div>
+      </More>
     </DealCard>
   );
 }
@@ -129,28 +131,14 @@ function Tender({ coin, t }) {
   return (
     <DealCard live={open}>
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-        <span className="inline-flex flex-wrap items-baseline gap-2 font-display text-[19px] font-semibold"><b>${C}</b><i className="font-sans text-[13px] font-normal not-italic text-muted-foreground">tenders for outside token</i><b className="break-all font-mono text-sm font-medium">{t.token}</b></span>
+        <span className="inline-flex flex-wrap items-baseline gap-2 font-display text-[19px] font-semibold"><b>${C}</b><i className="font-sans text-[13px] font-normal not-italic text-muted-foreground">tenders for</i><b className="break-all font-mono text-sm font-medium">{t.token}</b></span>
         <Pill tone={tone} className="whitespace-normal">{st === "Failed" ? `failed: ${t.status.Failed.reason}` : st.toLowerCase()}</Pill>
-        <span className="inline-flex items-center gap-1 text-[12.5px] text-muted-foreground"><Proposer pr={t.proposer} /> · <Ago ns={t.created_at} /></span>
+        {open && !ended && <span className="ml-auto font-mono text-[13px] font-medium"><Left ns={t.deadline} /></span>}
       </div>
-      <p className="text-[15px]"><b>${C}</b> offers holders of the outside token <b>{short(t.token)}</b> a swap: {fmtRate(t.rate_ppm)} ${C} for each token they deposit. <Term k="tender">All or nothing</Term>: it only happens if {share(t.threshold)} of that token's supply is deposited in time. <span className="text-muted-foreground">{sayNow}</span></p>
-      <div className="flex flex-wrap gap-x-[18px] gap-y-2">
-        <TermCell label="rate"><Num>{fmtRate(t.rate_ppm)}</Num> ${C} per token</TermCell>
-        <TermCell label="all or nothing at"><Num>{share(t.threshold)}</Num> of its supply</TermCell>
-        {open && !ended && <TermCell label="deadline"><Num><Left ns={t.deadline} /></Num></TermCell>}
-      </div>
-      <Pitch who={`pitch from $${C}'s brain`}>“{humanize(t.pitch)}”</Pitch>
+      <p className="text-[15px]">1 {short(t.token)} → <b className="font-mono font-medium">{fmtRate(t.rate_ppm)}</b> ${C}. <Term k="tender">All or nothing</Term> at {share(t.threshold)} of its supply. <span className="text-muted-foreground">{sayNow}</span></p>
       <div>
         <BarLabel left={`deposited ${share(t.deposited)} of supply`} right={`needs ${share(t.threshold)} · cap ${share(t.max_deposit)}`} />
         <Meter parts={[[pct(t.deposited, cap), "bg-up"]]} mark={pct(t.threshold, cap)} />
-      </div>
-      <div>
-        <BarLabel left={<>${C} holders <Term k="backing" /> {fmtTokens(backing)}</>} right={`needs ${p.quorum_bps / 100}% of ${fmtTokens(bsupply)}`} />
-        <Meter parts={[[pct(backing, bsupply), "bg-up"]]} mark={p.quorum_bps / 100} />
-      </div>
-      <div>
-        <BarLabel left={`$${C} veto ${fmtTokens(t.veto)}`} right={`blocks at ${p.veto_bps / 100}%`} />
-        <Meter parts={[[pct(t.veto, bsupply), "bg-down"]]} mark={p.veto_bps / 100} />
       </div>
       <div className="flex flex-wrap items-center gap-2 empty:hidden">
         {open && !ended && <>
@@ -160,6 +148,18 @@ function Tender({ coin, t }) {
         {ended && <Button className="rounded-full" disabled={state.acting} onClick={() => go("settle_tender")}>Settle</Button>}
         {(st === "Succeeded" || st === "Failed") && <Button variant="outline" className="rounded-full" disabled={state.acting} onClick={() => go("claim_tender")}>{st === "Succeeded" ? `Claim $${C}` : "Claim refund"}</Button>}
       </div>
+      <More label="Pitch and backing">
+        <div className="text-[12.5px] text-muted-foreground"><Proposer pr={t.proposer} /> · <Ago ns={t.created_at} /></div>
+        <Pitch who={`pitch from $${C}'s brain`}>“{humanize(t.pitch)}”</Pitch>
+        <div>
+          <BarLabel left={<>${C} holders <Term k="backing" /> {fmtTokens(backing)}</>} right={`needs ${p.quorum_bps / 100}% of ${fmtTokens(bsupply)}`} />
+          <Meter parts={[[pct(backing, bsupply), "bg-up"]]} mark={p.quorum_bps / 100} />
+        </div>
+        <div>
+          <BarLabel left={`$${C} veto ${fmtTokens(t.veto)}`} right={`blocks at ${p.veto_bps / 100}%`} />
+          <Meter parts={[[pct(t.veto, bsupply), "bg-down"]]} mark={p.veto_bps / 100} />
+        </div>
+      </More>
     </DealCard>
   );
 }
@@ -180,7 +180,7 @@ function FoodChain() {
             <div key={`${a}|${t}`} className="flex min-w-0 items-center gap-3 border-dashed border-border px-5 py-3 sm:border-l max-sm:px-4">
               <span className="flex items-center"><Avatar symbol={sym(a)} size={34} /><Avatar symbol={sym(t)} size={24} className="-ml-2 opacity-60 ring-2 ring-background grayscale" /></span>
               <span className="min-w-0 text-[13.5px]"><b className="font-display font-semibold">${sym(a)}</b> <span className="text-muted-foreground">ate</span> <b className="font-display font-semibold">${sym(t)}</b>
-                <span className="block font-mono text-[11.5px] text-muted-foreground">1 ${sym(t)} → {fmtRate(m.rate_ppm)} ${sym(a)} · {done.toFixed(done < 10 ? 1 : 0)}% swapped over</span></span>
+                <span className="block font-mono text-[11.5px] text-muted-foreground">{fmtRate(m.rate_ppm)} each · {done.toFixed(done < 10 ? 1 : 0)}% swapped</span></span>
             </div>
           );
         })}
@@ -197,10 +197,10 @@ export default function Deals() {
   tenders.sort((a, b) => Number(BigInt(b.t.created_at) - BigInt(a.t.created_at)));
   return (
     <section id="deals" className="pb-8 pt-6">
-      <SectionHead title="Deals" note="Takeovers in progress and finished. Pitches are written by AI brains: read them as ads, not facts."><PlayButton className="ml-auto max-sm:ml-0" /></SectionHead>
+      <SectionHead title="Deals" note="takeovers, live and finished"><PlayButton className="ml-auto max-sm:ml-0" /></SectionHead>
       <FoodChain />
       {!offers.length && !tenders.length
-        ? <p className="px-6 text-muted-foreground max-sm:px-4">No deals yet. Open a coin and press <b>Think</b>: its brain looks at the rivals and may make the first bid.</p>
+        ? <p className="px-6 text-muted-foreground max-sm:px-4">No deals yet. Open a coin and press <b>Think</b>.</p>
         : <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,440px),1fr))] gap-3.5 px-6 max-sm:px-4">
           {offers.map((o) => <Offer key={`${o.buyer}#${o.id}`} o={o} />)}
           {tenders.map(({ coin, t }) => <Tender key={`${coin}|${t.id}`} coin={coin} t={t} />)}
