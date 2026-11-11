@@ -275,7 +275,7 @@ function Ticket({ a, onQuote }) {
     return (
       <div className="grid gap-3">
         <p>${s} was absorbed by ${sym(into)} at {fmtRate(i.status.Merged.rate_ppm)} ${sym(into)} per ${s}. Convert swaps everything you hold here, in your wallet and locked, for ${sym(into)}.</p>
-        <Button size="lg" className="h-[46px] w-full rounded-xl text-base font-semibold" disabled={state.acting} onClick={() => act("convert", { coin: a })}>Convert to ${sym(into)}</Button>
+        <Button size="lg" className="btn-big h-[46px] w-full text-base font-semibold" disabled={state.acting} onClick={() => act("convert", { coin: a })}>Convert to ${sym(into)}</Button>
         <Position a={a} />
       </div>
     );
@@ -320,7 +320,7 @@ function Ticket({ a, onQuote }) {
     ? ["0.1", "1", "5", "10"].map((x) => [x, `${x} Ⓝ`])
     : [25, 50, 75, 100].map((p) => [av == null ? null : fmtUnits((av * BigInt(p)) / 100n, modeDec(mode)), p === 100 ? "Max" : `${p}%`]);
   const submit = async () => { if (await act(mode, { coin: a, amount: amt, slip })) setAmt(""); };
-  const tone = { buy: "bg-up text-white hover:bg-up/90 dark:text-[#04261a]", sell: "bg-down text-white hover:bg-down/90 dark:text-[#2b0507]", lock: "", unlock: "" }[mode];
+  const tone = { buy: "btn-up", sell: "btn-down", lock: "", unlock: "" }[mode];
 
   return (
     <div className="grid gap-3">
@@ -351,7 +351,7 @@ function Ticket({ a, onQuote }) {
           </Select>
         </div>
       )}
-      <Button size="lg" className={cn("h-[46px] w-full rounded-xl text-base font-semibold", tone)} disabled={!ok || state.acting} onClick={submit}>{MODES[mode][0]} ${s}</Button>
+      <Button size="lg" className={cn("btn-big h-[46px] w-full text-base font-semibold", tone)} disabled={!ok || state.acting} onClick={submit}>{MODES[mode][0]} ${s}</Button>
       <p className={cn("min-h-[2.6em] text-[12.5px] text-muted-foreground", bad && "text-down")}>{note}</p>
       <Position a={a} />
       <div className="flex items-center gap-2.5 border-t border-dashed border-line pt-3.5">

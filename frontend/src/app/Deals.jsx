@@ -94,8 +94,8 @@ function Offer({ o }) {
         {open && !ended && (ballot
           ? <span className="text-[12.5px] text-muted-foreground">You sealed <b>{ballot.support ? "YES" : "NO"}</b>. Come back to reveal it when the vote ends.</span>
           : <>
-            <Button className="rounded-full bg-up text-white hover:bg-up/90 dark:text-[#04261a]" disabled={state.acting} onClick={() => vote(true)}>{sealedMode ? "Seal YES" : "Vote YES"}</Button>
-            <Button className="rounded-full bg-down text-white hover:bg-down/90 dark:text-[#2b0507]" disabled={state.acting} onClick={() => vote(false)}>{sealedMode ? "Seal NO" : "Vote NO"}</Button>
+            <Button className="rounded-full btn-up" disabled={state.acting} onClick={() => vote(true)}>{sealedMode ? "Seal YES" : "Vote YES"}</Button>
+            <Button className="rounded-full btn-down" disabled={state.acting} onClick={() => vote(false)}>{sealedMode ? "Seal NO" : "Vote NO"}</Button>
           </>)}
         {open && !ended && <Button variant="outline" className="rounded-full" disabled={state.acting} onClick={() => act("veto", { coin: o.buyer, id: o.id })}>Veto (as ${B} holder)</Button>}
         {open && o.counter && <Button variant="outline" className="rounded-full" disabled={state.acting} onClick={() => act("accept_counter", { coin: o.buyer, id: o.id })}>Accept counter</Button>}
@@ -153,7 +153,7 @@ function Tender({ coin, t }) {
       </div>
       <div className="flex flex-wrap items-center gap-2 empty:hidden">
         {open && !ended && <>
-          <Button className="rounded-full bg-up text-white hover:bg-up/90 dark:text-[#04261a]" disabled={state.acting} onClick={() => go("back_tender")}>Back (as ${C} holder)</Button>
+          <Button className="rounded-full btn-up" disabled={state.acting} onClick={() => go("back_tender")}>Back (as ${C} holder)</Button>
           <Button variant="outline" className="rounded-full" disabled={state.acting} onClick={() => go("veto_tender")}>Veto (as ${C} holder)</Button>
         </>}
         {ended && <Button className="rounded-full" disabled={state.acting} onClick={() => go("settle_tender")}>Settle</Button>}

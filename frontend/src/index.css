@@ -20,6 +20,11 @@
   --hatch: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Cpath d='M-1 1l2-2M0 6l6-6M5 7l2-2' stroke='black' stroke-opacity='0.09'/%3E%3C/svg%3E");
   --s0: #0284c7; --s1: #07875a; --s2: #d3212c; --s3: #b26a00; --s4: #64748b; --s5: #a33ea1;
   --ease: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --btn-top: #ffffff; --btn-bot: #f5f5f6; --btn-edge: rgba(0, 0, 0, 0.14);
+  --brand-top: #1aa5ee; --brand-bot: #0284c7; --brand-edge: #0369a1;
+  --up-top: #12a56f; --up-bot: #07875a; --up-edge: #056b47;
+  --down-top: #ec3b46; --down-bot: #d3212c; --down-edge: #a9141e;
+  --drop: 0 1px 1px rgba(0, 0, 0, 0.04), 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 .dark {
   --background: #0f1012; --foreground: #fafafa;
@@ -35,6 +40,11 @@
   --line-strong: rgba(255, 255, 255, 0.19);
   --hatch: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Cpath d='M-1 1l2-2M0 6l6-6M5 7l2-2' stroke='white' stroke-opacity='0.08'/%3E%3C/svg%3E");
   --s0: #38bdf8; --s1: #3ddc97; --s2: #ff6b70; --s3: #f0b429; --s4: #94a3b8; --s5: #e07fdd;
+  --btn-top: #26262a; --btn-bot: #1d1d20; --btn-edge: rgba(255, 255, 255, 0.13);
+  --brand-edge: #38bdf8;
+  --up-top: #17a873; --up-bot: #0b8a5c; --up-edge: #35c489;
+  --down-top: #e8434d; --down-bot: #c92a35; --down-edge: #ff7d84;
+  --drop: 0 1px 1px rgba(0, 0, 0, 0.25), 0 2px 6px rgba(0, 0, 0, 0.3);
   color-scheme: dark;
 }
 
@@ -108,3 +118,14 @@
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* buttons: soft gradient pills that press in. Brand for the main action, green and red for buy/yes and sell/no. */
+.btn { border: 1px solid var(--btn-edge); border-radius: 999px; box-shadow: var(--drop); transition: transform 0.15s var(--ease), filter 0.15s var(--ease), opacity 0.15s; -webkit-tap-highlight-color: transparent; }
+.btn:hover { filter: brightness(1.04); }
+.btn:active { transform: scale(0.97); }
+.btn-plain { color: var(--foreground); background: linear-gradient(var(--btn-top), var(--btn-bot)); }
+.btn-brand, .btn-up, .btn-down { color: #fff; }
+.btn-brand { border-color: var(--brand-edge); background: linear-gradient(rgba(255, 255, 255, 0.14), transparent 50%), linear-gradient(var(--brand-top), var(--brand-bot)); }
+.btn-up { border-color: var(--up-edge); background: linear-gradient(rgba(255, 255, 255, 0.14), transparent 50%), linear-gradient(var(--up-top), var(--up-bot)); }
+.btn-down { border-color: var(--down-edge); background: linear-gradient(rgba(255, 255, 255, 0.14), transparent 50%), linear-gradient(var(--down-top), var(--down-bot)); }
+.btn-big { border-radius: 14px; }
