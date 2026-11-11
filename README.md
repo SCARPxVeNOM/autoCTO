@@ -163,13 +163,33 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 
 | | |
 |---|---|
-| Launchpad | [`v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v2.scarpxvenom.testnet), current code (tenders, sealed votes, the review fixes), locked: 0 access keys |
+| Launchpad | [`v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v3.scarpxvenom.testnet), current code, deployed from commit `37ad97c` |
 | Rules | `params/testnet.json` (10-minute votes, 5-minute newborn protection) |
-| Brain | `outlayer.testnet`, wasm pinned by sha256 `328d0eac…69c554` at commit `493e23f`, rules mode. The signed-answer brain in this repo (`res/autocto-brain.wasm`, sha256 `ac781f9f…19dbb58`) is newer and has only run on the local chain so far |
-| Coins | [`pepe.v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v2.scarpxvenom.testnet) and [`doge.v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v2.scarpxvenom.testnet) (absorbed), each with 0 access keys |
+| Brain | OutLayer project `scarpxvenom.testnet/autocto-brain` on `outlayer.testnet`, version pinned by sha256 `ac781f9f…19dbb58` (`res/autocto-brain.wasm` at commit `37ad97c`). **Model mode**: `z-ai/glm-5.3-flash` on NEAR AI Cloud, the API key held as an OutLayer secret |
+| Coins | [`pepe.v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v3.scarpxvenom.testnet) and [`doge.v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v3.scarpxvenom.testnet) (absorbed), each with 0 access keys |
 | Page | `python3 -m http.server 8080 -d web`, then http://localhost:8080/?network=testnet |
 
-**A whole takeover has run here, with both brains answering through the real `outlayer.testnet`:**
+**A takeover decided by a model, with each answer signed.** Both brains ran inside OutLayer's TEE and asked a model that NEAR AI runs inside its own TEE. Every model decision below carries NEAR AI's signature on chain (`attest` in `get_decision`), and the page's proof dialog verified each one in the browser.
+
+| Step | What happened | Transaction |
+|---|---|---|
+| 1 | PEPE's brain is woken with no target yet. The model waits: "DOGE not biddable and equal size". First signed answer on chain | [`7wJ1KNfi…`](https://testnet.nearblocks.io/txns/7wJ1KNfiHSTGYAA4bXBv5BuP9BzyrDs4tiCUNUxBPoBW) |
+| 2 | After newborn protection, PEPE's brain bids for DOGE at +5% over the fair rate. OutLayer ran 2.7M instructions in 4.7 s and charged 0.0015 NEAR | [`6aMGvWMv…`](https://testnet.nearblocks.io/txns/6aMGvWMvzjwwLhXSeFLmyVKpLtB1ej5q5mVK1MCz3giD) |
+| 3 | DOGE's brain is woken. Its reader marks PEPE's pitch friendly, not an instruction, and the model counters at the +30% cap | [`F5bXcM5F…`](https://testnet.nearblocks.io/txns/F5bXcM5FMkojtAV2VbspxJJj8QCYbYMyubhdaQwJMBBo) |
+| 4 | PEPE's brain is woken twice more. The model tries to counter the counter, which is not an allowed move, so the brain drops the answer and falls back to its rules, which wait. The original bid stays up | [`87fENQNW…`](https://testnet.nearblocks.io/txns/87fENQNWfEPGdKCaBd746nPrVz2MA3uMidMS6jS9tqq1), [`HbwecafX…`](https://testnet.nearblocks.io/txns/HbwecafXdFmiNksv9pvuZAnstFb9giZYyuKJVqEimqNz) |
+| 5 | A DOGE holder votes YES with tokens locked before the bid | [`F3KedJ9y…`](https://testnet.nearblocks.io/txns/F3KedJ9yak4CwajHr5YGjTMj5DM41ENDZXC8Hm9W6iPN) |
+| 6 | After the 10-minute vote, `finalize`: DOGE's curve NEAR and treasury move into PEPE | [`7XGunS1G…`](https://testnet.nearblocks.io/txns/7XGunS1GSAHL7sbmmCayaK1kj3ojPRq39ajEGgRw1W3v) |
+| 7 | The holder converts 28.73M DOGE into 22.28M PEPE at 0.775679 | [`8MVjG8eH…`](https://testnet.nearblocks.io/txns/8MVjG8eHMmHPtdZYaWXkq14cdkMdovxPyaZEfE1LWtLn) |
+
+Step 4 is the design working as meant: a model answer that does not parse into an allowed move never reaches the contract. Those two decisions say `"mode":"rules"` and carry no signature.
+
+One account played every holder in this run, so it shows the mechanism end to end, not a contested vote. Check the result with `near view pepe.v3.scarpxvenom.testnet coin_info` (`absorbed` lists DOGE) and `near view doge.v3.scarpxvenom.testnet get_decision '{"id":0}'` (the signed counter).
+
+`v3` still has its one deploy key, so it is not locked yet; its coins have zero keys already. The NEAR AI key is stored with access limited to `scarpxvenom.testnet`, the account that woke every brain above; what a brain run woken by another account gets has not been tested. Anyone can check that the launchpad's on-chain code hash equals `res/autocto_launchpad.wasm`, that `coin_code_hash` equals `res/autocto_coin.wasm`, and that `get_params` equals `params/testnet.json`.
+
+### Earlier runs
+
+[`v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v2.scarpxvenom.testnet) runs the same contracts with the rules-mode brain (sha256 `328d0eac…69c554`, commit `493e23f`) and is locked: its only key was deleted ([`8VUUph2F…`](https://testnet.nearblocks.io/txns/8VUUph2FjUxUTxDLiUgecJG4BnU2batkzfpUZM8Qtkno)), so it has 0 access keys. A whole takeover ran there too, with a counter that was accepted:
 
 | Step | What happened | Transaction |
 |---|---|---|
@@ -180,11 +200,7 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 | 5 | After the 10-minute vote, `finalize`: DOGE's curve NEAR and treasury move into PEPE | [`B4EtwFnz…`](https://testnet.nearblocks.io/txns/B4EtwFnzxBqPFmBYNdMCAzeA8TKTzqqiHXXPJjybmbaV) |
 | 6 | The holder converts 37.98M DOGE into PEPE at 0.983199 | [`XNByHRah…`](https://testnet.nearblocks.io/txns/XNByHRahR4hfg8jp2BB2bDcjon9BHaDvaS4Eh6qGkVN) |
 
-**A tender for a meme.cooking token.** A PEPE holder nominated [`cook-112.factory.v10.meme-cooking.testnet`](https://testnet.nearblocks.io/address/cook-112.factory.v10.meme-cooking.testnet), a token launched on [meme.cooking](https://meme.cooking)'s testnet factory ([`HYf5HTHG…`](https://testnet.nearblocks.io/txns/HYf5HTHGdR1P8Zn5vYbSb85iPDEKpCGLQvjUUkar4Es3)). PEPE's brain checked that the token's contract has no access keys and opened an all-or-nothing tender at 0.0416 PEPE per token ([`9m74ssUn…`](https://testnet.nearblocks.io/txns/9m74ssUnUe2nTrkM4TUR22YuPbCPWwpR1Q8ycaruDg3V)). Nobody deposited and no PEPE holder backed it, so after the deadline `settle_tender` closed it as failed ([`CszRWyei…`](https://testnet.nearblocks.io/txns/CszRWyeiHtVaex1gEabX4R3nqQmayxS8ebvtfq6AbaAo)). It shows the rug check, the opening and the all-or-nothing close, not a completed swap.
-
-One account played every holder in this run, so it shows the mechanism end to end, not a contested vote. Check the result with `near view pepe.v2.scarpxvenom.testnet coin_info` (`absorbed` lists DOGE) and `near view doge.v2.scarpxvenom.testnet history`.
-
-The launchpad is locked: its only key was deleted ([`8VUUph2F…`](https://testnet.nearblocks.io/txns/8VUUph2FjUxUTxDLiUgecJG4BnU2batkzfpUZM8Qtkno)), so it has 0 access keys and nobody can change it. Its coins have zero keys too. Anyone can check that the launchpad's on-chain code hash equals `res/autocto_launchpad.wasm`, that `coin_code_hash` equals `res/autocto_coin.wasm`, and that `get_params` equals `params/testnet.json`.
+**A tender for a meme.cooking token (on `v2`).** A PEPE holder nominated [`cook-112.factory.v10.meme-cooking.testnet`](https://testnet.nearblocks.io/address/cook-112.factory.v10.meme-cooking.testnet), a token launched on [meme.cooking](https://meme.cooking)'s testnet factory ([`HYf5HTHG…`](https://testnet.nearblocks.io/txns/HYf5HTHGdR1P8Zn5vYbSb85iPDEKpCGLQvjUUkar4Es3)). PEPE's brain checked that the token's contract has no access keys and opened an all-or-nothing tender at 0.0416 PEPE per token ([`9m74ssUn…`](https://testnet.nearblocks.io/txns/9m74ssUnUe2nTrkM4TUR22YuPbCPWwpR1Q8ycaruDg3V)). Nobody deposited and no PEPE holder backed it, so after the deadline `settle_tender` closed it as failed ([`CszRWyei…`](https://testnet.nearblocks.io/txns/CszRWyeiHtVaex1gEabX4R3nqQmayxS8ebvtfq6AbaAo)). It shows the rug check, the opening and the all-or-nothing close, not a completed swap.
 
 An earlier launchpad, [`autocto.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/autocto.scarpxvenom.testnet), was deployed and locked at commit `1290ae4`, before tender offers were added (0 access keys, tx `Cp16UaQE…`). Its one coin, `pepe.autocto.scarpxvenom.testnet`, made the first brain run through `outlayer.testnet` (request 16511).
 
