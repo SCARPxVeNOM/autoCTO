@@ -1,0 +1,110 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* AutoCTO: a framed, monochrome trading desk. Sky blue is the brand, green and red are only ever up and down. */
+:root {
+  --radius: 0.75rem;
+  --background: #ffffff; --foreground: #18181b;
+  --card: #ffffff; --card-foreground: #18181b;
+  --popover: #ffffff; --popover-foreground: #18181b;
+  --primary: #0284c7; --primary-foreground: #ffffff;
+  --secondary: #f4f4f5; --secondary-foreground: #18181b;
+  --muted: #f4f4f5; --muted-foreground: #6b6b74;
+  --accent: #f1f5f9; --accent-foreground: #18181b;
+  --destructive: #d3212c;
+  --border: rgba(0, 0, 0, 0.1); --input: rgba(0, 0, 0, 0.16); --ring: #0ea5e9;
+  --up: #07875a; --down: #d3212c; --warn: #a86200;
+  --line-strong: rgba(0, 0, 0, 0.17);
+  --hatch: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Cpath d='M-1 1l2-2M0 6l6-6M5 7l2-2' stroke='black' stroke-opacity='0.09'/%3E%3C/svg%3E");
+  --s0: #0284c7; --s1: #07875a; --s2: #d3212c; --s3: #b26a00; --s4: #64748b; --s5: #a33ea1;
+  --ease: cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+.dark {
+  --background: #0f1012; --foreground: #fafafa;
+  --card: #17181b; --card-foreground: #fafafa;
+  --popover: #1b1c20; --popover-foreground: #fafafa;
+  --primary: #38bdf8; --primary-foreground: #04202f;
+  --secondary: #222327; --secondary-foreground: #fafafa;
+  --muted: #1f2023; --muted-foreground: #a0a0a8;
+  --accent: #23252a; --accent-foreground: #fafafa;
+  --destructive: #ff6b70;
+  --border: rgba(255, 255, 255, 0.1); --input: rgba(255, 255, 255, 0.16); --ring: #38bdf8;
+  --up: #3ddc97; --down: #ff6b70; --warn: #f0b429;
+  --line-strong: rgba(255, 255, 255, 0.19);
+  --hatch: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Cpath d='M-1 1l2-2M0 6l6-6M5 7l2-2' stroke='white' stroke-opacity='0.08'/%3E%3C/svg%3E");
+  --s0: #38bdf8; --s1: #3ddc97; --s2: #ff6b70; --s3: #f0b429; --s4: #94a3b8; --s5: #e07fdd;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-background: var(--background); --color-foreground: var(--foreground);
+  --color-card: var(--card); --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring);
+  --color-up: var(--up); --color-down: var(--down); --color-warn: var(--warn); --color-line: var(--line-strong);
+  --radius-sm: calc(var(--radius) - 4px); --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius); --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Funnel Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Funnel Display", "Funnel Sans", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-pixel: "Pixelify Sans", "Geist Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { scroll-behavior: smooth; scroll-padding-top: 76px; overflow-x: clip; }
+  body { @apply bg-background text-foreground font-sans antialiased; font-size: 15px; overflow-x: clip; }
+  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.01em; }
+  button:not(:disabled), [role="button"], summary { cursor: pointer; }
+}
+
+@utility hatch { background-image: var(--hatch); background-size: 6px 6px; }
+
+/* a coin's avatar: colour comes from its ticker */
+.ava {
+  flex: none; display: grid; place-items: center; text-transform: uppercase; color: #fff;
+  font-family: var(--font-pixel); font-weight: 600;
+  background: linear-gradient(hsl(var(--h) 70% 56%), hsl(calc(var(--h) + 24) 72% 40%));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 0 0 1px rgba(0, 0, 0, 0.14), 0 2px 5px rgba(0, 0, 0, 0.12);
+}
+
+/* charts (SVG built in code) */
+.chart svg { display: block; max-width: 100%; height: auto; }
+.chart .grid { stroke: var(--border); stroke-dasharray: 3 4; }
+.chart .axis { stroke: var(--line-strong); }
+.chart .guide { stroke: var(--muted-foreground); stroke-dasharray: 2 3; opacity: 0.7; }
+.chart .area { fill: color-mix(in srgb, var(--primary) 14%, transparent); }
+.chart .done { fill: none; stroke: var(--primary); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.chart .rest { fill: none; stroke: var(--muted-foreground); stroke-width: 1.5; stroke-dasharray: 4 5; }
+.chart .now { fill: var(--primary); stroke: var(--card); stroke-width: 2; }
+.chart .now.up { fill: var(--up); } .chart .now.down { fill: var(--down); }
+.chart .pulse { fill: var(--primary); animation: pulse 1.8s var(--ease) infinite; }
+.chart .after { fill: var(--card); stroke-width: 2.5; }
+.chart .after.up { stroke: var(--up); } .chart .after.down { stroke: var(--down); }
+.chart .step { fill: none; stroke: var(--foreground); stroke-width: 2; stroke-linejoin: round; }
+.chart .step.up { stroke: var(--up); } .chart .step.down { stroke: var(--down); }
+.chart .lbl { font: 400 11px var(--font-mono); fill: var(--muted-foreground); }
+.chart .lbl.strong { fill: var(--foreground); font-weight: 600; }
+.chart .lbl.up { fill: var(--up); } .chart .lbl.down { fill: var(--down); }
+.spark path { fill: none; stroke: var(--muted-foreground); stroke-width: 1.5; stroke-linejoin: round; }
+.spark.up path { stroke: var(--up); } .spark.down path { stroke: var(--down); }
+
+@keyframes pulse { from { r: 5px; opacity: 0.55; } to { r: 16px; opacity: 0; } }
+@keyframes blink { 50% { opacity: 0.35; } }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes march { to { stroke-dashoffset: -10; } }
+@keyframes ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 70%, transparent); } 100% { box-shadow: 0 0 0 16px transparent; } }
+.ring-hint { animation: ring 1.6s var(--ease) 2; border-radius: 16px; }
+.blink { animation: blink 2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

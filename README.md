@@ -222,7 +222,8 @@ If the launchpad account runs short of balance for its code storage, the deploy 
 | `tests/` | end-to-end sandbox tests and the invariant fuzz test |
 | `SKILL.md` | the interface for AI agents |
 | `sim/` | simulation and parameter sweep |
-| `web/` | static page; reads coins straight from NEAR RPC, no backend |
+| `frontend/` | the site's source: React, Tailwind and shadcn/ui components, built with Vite. `cd frontend && npm install && npm run build` writes the site into `web/` |
+| `web/` | the built static site (committed, so it serves without Node); reads coins straight from NEAR RPC, no backend |
 | `params/` | `testnet.json` (short clocks) and `recommended.json` (from the sim) |
 
 ## Honest limits
