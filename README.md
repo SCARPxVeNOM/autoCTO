@@ -139,7 +139,7 @@ This is commit-reveal, not the enclave tally from the idea doc: votes become pub
 - **Decider.** Sees numbers, rules and the reader's fields only. It accepts a counter within 80% of the premium cap, opposes flagged bids, counters weak bids at +20%, hunts smaller coins with the best treasury-to-market-cap ratio at +10%, and tenders for nominated outside tokens that pass the rug check.
 - **Modes.** With no key the brain runs deterministic rules. With `NEAR_AI_API_KEY` both parts call a model on NEAR AI Cloud (`BRAIN_MODEL`, default `z-ai/glm-5.3-flash`, which NEAR AI runs inside a TEE) and the output is still clamped to the caps.
 - **Signed model answers.** In model mode the brain asks NEAR AI Cloud for its signature over the deciding call and keeps it only if the signed hashes equal the sha256 of the exact bytes it sent and received. The signature travels in the brain's answer (`attest`), so it lands on chain with the decision. The proof dialog on the page then checks it in the browser: it recovers the signer from the signature (secp256k1, EIP-191) and looks that key up in a fresh attestation report from NEAR AI, requested with its own nonce. The Intel TDX and NVIDIA quotes inside that report are not checked by the page; [NEAR AI's verifier](https://cloud.near.ai/verify) does that. The whole answer is kept under 1000 bytes, because a yielded call on NEAR can be resumed with at most 1024; if it is too long the brain drops the reader notes first and the signature last, never the action.
-- **The coin checks the signature too.** When an answer carries a signature, the coin's contract recovers the signer on chain (`keccak256` and `ecrecover`, EIP-191) and refuses the answer if it does not match the stated key; the decision is stored as `Refused` and nothing moves. A match is recorded as `signed_by` on the decision. This proves the signed text was not altered on the way in. It does not prove the key belongs to sealed hardware: that is the attestation report, which the page checks and a contract cannot fetch. Unsigned answers (rules mode) are still accepted. This check is in the repository head and the local demo; the v3 launchpad on testnet was locked at commit `37ad97c`, before it, and cannot be upgraded. That is the point of locking it.
+- **The coin checks the signature too.** When an answer carries a signature, the coin's contract recovers the signer on chain (`keccak256` and `ecrecover`, EIP-191) and refuses the answer if it does not match the stated key; the decision is stored as `Refused` and nothing moves. A match is recorded as `signed_by` on the decision. This proves the signed text was not altered on the way in. It does not prove the key belongs to sealed hardware: that is the attestation report, which the page checks and a contract cannot fetch. Unsigned answers (rules mode) are still accepted. It runs on testnet on the `v4` launchpad. The older `v3` was locked at commit `37ad97c`, before this check, and cannot be upgraded: that is the point of locking it.
 - **Payment.** `think()` is open to anyone. With a deposit of at least the brain fee the caller pays; otherwise the coin's treasury pays, within its daily cap.
 - **Verify a decision.** Every `think()` stores a Decision with the sha256 of the exact input the brain got, the raw answer and the contract's verdict. The brain wasm is pinned by sha256 in the launchpad's `get_brain`. On the page, every decision has a **proof** link that shows these and explains what ties the answer to the hardware.
 - **Check the attestation.** OutLayer checks its worker's Intel TDX quote on chain once, at registration (`worker.outlayer.testnet`), and only that worker's key can deliver results; a quote is not checked per call because of the gas it costs. Each run's own attestation is kept by OutLayer and can be checked with its tool: `cargo install --git https://github.com/out-layer/outlayer-verify outlayer-verify`, then `outlayer-verify tx <hash of the think transaction> --network testnet` (exit code 0 means proven). We have not run this tool against our own decisions yet.
@@ -163,6 +163,48 @@ This is commit-reveal, not the enclave tally from the idea doc: votes become pub
 The page charts all of it, and `sim/REPORT.md` has the numbers.
 
 ## Live on testnet
+
+| | |
+|---|---|
+| Launchpad | [`v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v4.scarpxvenom.testnet), current code, deployed from commit `f2f2586` |
+| Rules | `params/testnet.json` (10-minute votes, 5-minute newborn protection) |
+| Brain | OutLayer project `scarpxvenom.testnet/autocto-brain` on `outlayer.testnet`, version pinned by sha256 `efc702f6…d3b5a5` (`res/autocto-brain.wasm` at commit `f2f2586`). **Model mode**: `z-ai/glm-5.3-flash` on NEAR AI Cloud, the API key held as an OutLayer secret |
+| Coins | [`pepe.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v4.scarpxvenom.testnet), [`doge.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v4.scarpxvenom.testnet) and [`wojak.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/wojak.v4.scarpxvenom.testnet) (absorbed by PEPE), each with 0 access keys |
+| Page | `python3 -m http.server 8080 -d web`, then http://localhost:8080/?network=testnet |
+
+**The contract checks the model's signature itself.** On `v4` every model answer is checked on chain before it is applied: the coin recovers the signer from NEAR AI's signature (`ecrecover`) and refuses the answer if it is not the stated key. Each decision below has `signed_by` = `0x3b753b4406613c5e70ae640508632b600424fa0c`, the key in NEAR AI's attestation report (`near view pepe.v4.scarpxvenom.testnet get_decision '{"id":0}'`).
+
+| Step | What happened | Transaction |
+|---|---|---|
+| 1 | Holders buy and lock before any bid: `scarpxvenom.testnet` locks 47.05M WOJAK and its DOGE, `tester.scarpxvenom.testnet` its DOGE | [`EV13U9Ru…`](https://testnet.nearblocks.io/txns/EV13U9RuKFRsQBMWT9QNs54K6XbUmBBSDjn4YisP2n9C), [`7opPMrQV…`](https://testnet.nearblocks.io/txns/7opPMrQVehL9GDKzEKWEasS21rNz3Gz6WhikRFVZjT83), [`Fa5ThvVJ…`](https://testnet.nearblocks.io/txns/Fa5ThvVJetS9AxkCxjPyty8FUdXC6gXN2qoyektYfEb3) |
+| 2 | PEPE's brain is woken. The model bids for WOJAK at 0.790452 PEPE per WOJAK: "WOJAK is smaller with a solid ~1 NEAR treasury". The contract checks the signature, then opens the bid. OutLayer ran 3.8M instructions in 13.4 s | [`FowewZMw…`](https://testnet.nearblocks.io/txns/FowewZMwTFnKVX9CTEVi4nRn6uNiUZSbkpmuacj3JYBB) |
+| 3 | `tester` buys WOJAK after the bid, locks it and votes NO. Refused: "no tokens locked before this offer was announced" | [`xtt1Egee…`](https://testnet.nearblocks.io/txns/xtt1Egee5jjnnhfDDwXVKwc2kDh7qDgaGKYyrnLx7Jf), [`9B11xYJi…`](https://testnet.nearblocks.io/txns/9B11xYJijHrjMeQeJ5FY5b6EQK4DKPyhscmszChYHiSq), [`E3SALnXg…`](https://testnet.nearblocks.io/txns/E3SALnXge7oneJdHCuCJM3LEvydFfMkrxDkM3tW8p1Cr) (failed, as meant) |
+| 4 | WOJAK's brain is woken. The model argues against the deal ("Never merge into a bigger coin"), a signed stance, also checked on chain | [`1KSKstLP…`](https://testnet.nearblocks.io/txns/1KSKstLPuPsnCPxGeEEgi7dkQtpAwiQGYHu1QKSXVtL) |
+| 5 | The holders decide, not the brain: `scarpxvenom.testnet` votes YES with its 47.05M locked before the bid | [`6etVVRWk…`](https://testnet.nearblocks.io/txns/6etVVRWkrRsfcV512Q58rGhM9NoRVem5bLEyDJuVeRhW) |
+| 6 | After the 10-minute vote, `finalize`: 100% yes, WOJAK's curve NEAR and treasury move into PEPE | [`2yV8LwHD…`](https://testnet.nearblocks.io/txns/2yV8LwHDdzHwAyqMLdexgrdYGYCJPBD4FTiELcw55aHn) |
+| 7 | Both holders convert at 0.790452, the late buyer included: a late buyer cannot vote, but is not locked out of the deal | [`BhMdwXUX…`](https://testnet.nearblocks.io/txns/BhMdwXUXmgHFgz1tkjK5Kr19Wqdsff2nECmfPNKNHarh), [`9RPXkDic…`](https://testnet.nearblocks.io/txns/9RPXkDicRZ1Nn6v5SVsRgctoDw1GEMJaXBg8voCy9Z6f) |
+
+Both accounts belong to the same person, so this proves the rules, not that strangers showed up. The brain on `v4` is a second version of the same OutLayer project, added without activating it; `v3` keeps its own pinned version.
+
+### Verify it yourself
+
+Open the app's **Verify** page (`app.html?network=testnet#verify`). The browser runs seven checks against the chain and the public repo, with nothing from us in between:
+
+1. the launchpad has 0 access keys;
+2. the launchpad's code hash on chain equals the sha256 of `res/autocto_launchpad.wasm`, which the page downloads from GitHub at the deployed commit;
+3. every coin runs the same code, and that hash equals `res/autocto_coin.wasm`;
+4. every coin has 0 access keys;
+5. the brain hash the launchpad pins equals `res/autocto-brain.wasm`;
+6. `get_params` equals `params/testnet.json`;
+7. the latest model answer's signature is valid and its key is in a fresh NEAR AI attestation report.
+
+On `v4`, checks 2 to 7 pass; check 1 passes once the launchpad's last key is deleted. The page does not check the Intel and NVIDIA hardware quotes; it says so and links to the verifiers that do. It reads the chain through public FastNEAR nodes, which limit request rates, so it asks at most four things at once, every 10 seconds, and moves to a second node when one refuses.
+
+### Earlier runs
+
+### v3: the first model-mode takeovers
+
+`v3` runs the code at commit `37ad97c`, from before the on-chain signature check: its decisions carry the signature, which the page checks, but the contract does not.
 
 | | |
 |---|---|
@@ -203,21 +245,7 @@ Both accounts belong to the same person, so this proves the vote counting and th
 
 The launchpad is locked: its only key was deleted ([`7BCPtpsh…`](https://testnet.nearblocks.io/txns/7BCPtpshg6RF8JfyTKb9qRhLpyCjc87eWsFu3GDmnxJR)), so it has 0 access keys and nobody can change it. Its coins have zero keys too. During the run above the NEAR AI key was readable only by brain runs that `scarpxvenom.testnet` woke; it has since been opened to any caller. A second account, `tester.scarpxvenom.testnet`, then woke PEPE's brain and got a signed model answer too ([`DjK4eg5m…`](https://testnet.nearblocks.io/txns/DjK4eg5mBGBuTQw2UmCqd3QuCXPCdxumw9JLJHontu7g), decision #4). Anyone can check that the launchpad's on-chain code hash equals `res/autocto_launchpad.wasm`, that `coin_code_hash` equals `res/autocto_coin.wasm`, and that `get_params` equals `params/testnet.json`.
 
-### Verify it yourself
 
-Open the app's **Verify** page (`app.html?network=testnet#verify`). The browser runs seven checks against the chain and the public repo, with nothing from us in between:
-
-1. the launchpad has 0 access keys;
-2. the launchpad's code hash on chain equals the sha256 of `res/autocto_launchpad.wasm`, which the page downloads from GitHub at the deployed commit;
-3. every coin runs the same code, and that hash equals `res/autocto_coin.wasm`;
-4. every coin has 0 access keys;
-5. the brain hash the launchpad pins equals `res/autocto-brain.wasm`;
-6. `get_params` equals `params/testnet.json`;
-7. the latest model answer's signature is valid and its key is in a fresh NEAR AI attestation report.
-
-All seven pass on `v3`. The page does not check the Intel and NVIDIA hardware quotes; it says so and links to the verifiers that do. It reads the chain through public FastNEAR nodes, which limit request rates, so it asks at most four things at once, every 10 seconds, and moves to a second node when one refuses.
-
-### Earlier runs
 
 [`v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v2.scarpxvenom.testnet) runs the same contracts with the rules-mode brain (sha256 `328d0eac…69c554`, commit `493e23f`) and is locked: its only key was deleted ([`8VUUph2F…`](https://testnet.nearblocks.io/txns/8VUUph2FjUxUTxDLiUgecJG4BnU2batkzfpUZM8Qtkno)), so it has 0 access keys. A whole takeover ran there too, with a counter that was accepted:
 

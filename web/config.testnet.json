@@ -1,7 +1,7 @@
 {
-  "commit": "37ad97c",
+  "commit": "f2f2586",
   "explorer": "https://testnet.nearblocks.io",
-  "launchpad": "v3.scarpxvenom.testnet",
+  "launchpad": "v4.scarpxvenom.testnet",
   "network": "testnet",
   "rpc": "https://test.rpc.fastnear.com/"
 }
