@@ -8,6 +8,19 @@ Every coin on AutoCTO has an AI brain that runs on [OutLayer](https://outlayer.a
 
 Built for NEAR HACKATHON, track **Memecoins With Mechanics**, with entries for **AI Swarms** and **AI Security**. Source: https://github.com/SCARPxVeNOM/autoCTO
 
+## Architecture
+
+<p align="center">
+  <a href="docs/diagrams/architecture-light.svg">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/architecture-dark.svg">
+      <img alt="AutoCTO architecture. Holders, a keeper and a gasless relayer act on coin contracts on NEAR. A bidder coin sends a bid to a target coin, which counters, and on a yes vote merges its NEAR and treasury into the bidder. A keyless launchpad deploys every coin. Each coin's think() goes through outlayer.testnet to its brain, a WASM program in Intel TDX, which asks NEAR AI Cloud and returns the signed answer; on_brain() checks that signature and every rule cap. Anyone can check the code, the brain, the rules and the attestations." src="docs/diagrams/architecture-light.svg" width="100%">
+    </picture>
+  </a>
+</p>
+
+People and bots only call the coins. A coin asks its brain through OutLayer; the brain runs in sealed hardware and asks NEAR AI, whose signed answer comes back on chain, where the coin checks the signature and the rule caps before doing anything. Click the picture for full size. The sources are in [`docs/diagrams/`](docs/diagrams) and open in [excalidraw.com](https://excalidraw.com).
+
 ## Try it (about 5 minutes)
 
 You need Rust (`rust-toolchain.toml` pins 1.99.1; rustup installs it) and [cargo-near](https://github.com/near/cargo-near) (`cargo install cargo-near`). The first sandbox run downloads the NEAR sandbox node. Node.js is only needed to re-run the simulation.
@@ -40,6 +53,15 @@ You need Rust (`rust-toolchain.toml` pins 1.99.1; rustup installs it) and [cargo
 11. The deadline passes, anyone settles, and erin claims WOJAK at the tender rate. WOJAK now holds the tendered OLDCAT.
 
 ## How a takeover works
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/takeover-dark.svg">
+    <img alt="A takeover in six steps: 1 Lock, holders lock tokens before any bid. 2 Bid, the bidder's brain offers a rate, signed by NEAR AI. 3 Haggle, the target's brain counters or takes a stance. 4 Vote, only pre-bid locks count and the bidder's holders may veto. 5 Finalize, after the vote period with quorum 10% and approval 67%. 6 Merge, NEAR and treasury move and holders convert at the rate." src="docs/diagrams/takeover-light.svg" width="100%">
+  </picture>
+</p>
+
+The calls behind each step:
 
 ```
  PEPE.think() ──► OutLayer worker (TDX) runs the brain wasm pinned by hash
@@ -308,6 +330,7 @@ If the launchpad account runs short of balance for its code storage, the deploy 
 | `demo/` | sandbox harness (`World`), the demo story, the `deploy` tool, the `keeper` bot and the gasless `relayer` |
 | `tests/` | end-to-end sandbox tests and the invariant fuzz test |
 | `proofs/` | OutLayer evidence bundles for two `v4` brain runs; `outlayer-verify bundle <file> --offline` re-checks them |
+| `docs/diagrams/` | the README diagrams: SVGs for light and dark themes, and their `.excalidraw` sources |
 | `SKILL.md` | the interface for AI agents |
 | `sim/` | simulation and parameter sweep |
 | `frontend/` | the site's source: React, Tailwind and shadcn/ui components, built with Vite. `cd frontend && npm install && npm run build` writes the site into `web/` |
