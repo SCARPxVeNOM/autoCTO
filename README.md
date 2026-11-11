@@ -162,22 +162,28 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 
 | | |
 |---|---|
-| Launchpad | [`autocto.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/autocto.scarpxvenom.testnet), locked: 0 access keys (tx `Cp16UaQE…`) |
+| Launchpad | [`v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v2.scarpxvenom.testnet), current code (tenders, sealed votes, the review fixes) |
 | Rules | `params/testnet.json` (10-minute votes, 5-minute newborn protection) |
-| Brain | `outlayer.testnet`, wasm pinned by sha256 `416b32ff…d8b6db` at commit `34c93f8` |
+| Brain | `outlayer.testnet`, wasm pinned by sha256 `328d0eac…69c554` at commit `493e23f`, rules mode |
+| Coins | [`pepe.v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v2.scarpxvenom.testnet) and [`doge.v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v2.scarpxvenom.testnet) (absorbed), each with 0 access keys |
 | Page | `python3 -m http.server 8080 -d web`, then http://localhost:8080/?network=testnet |
 
-This launchpad was deployed and locked at commit `1290ae4`, before tender offers were added, so its coins run the takeover rules without tenders.
+**A whole takeover has run here, with both brains answering through the real `outlayer.testnet`:**
 
-A second launchpad with the current code (tenders, sealed votes, the review fixes) is deployed at [`v2.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v2.scarpxvenom.testnet), brain pinned by sha256 `328d0eac…69c554` at commit `493e23f`. It has no coins yet and still holds its deploy key: it gets locked, and becomes the page's default, once a first coin has been launched and checked on it. Until then tenders run in the local sandbox. Anyone can check the live one: at commit `1290ae4`, its on-chain code hash equals `res/autocto_launchpad.wasm`, `coin_code_hash` equals `res/autocto_coin.wasm`, and `get_params` equals `params/testnet.json`.
+| Step | What happened | Transaction |
+|---|---|---|
+| 1 | PEPE's brain is woken. It bids for DOGE at +10% over the fair rate. OutLayer ran 1.38M instructions in 1.4 s and charged 0.0012 NEAR | [`GWJ6WxJ2…`](https://testnet.nearblocks.io/txns/GWJ6WxJ2mB5WgPVU6JpxYEgWnF5D9VUJBv7ZKQvggsGh) |
+| 2 | DOGE's brain is woken. It counters at +20% | [`CGz2zkje…`](https://testnet.nearblocks.io/txns/CGz2zkjeYMBVzNEg78WzJh8N3X9RdTDB4x4WkxtSxEPu) |
+| 3 | PEPE's brain is woken again and accepts the counter. A new voting round starts | PEPE's decision #1 |
+| 4 | A DOGE holder votes YES with tokens locked before the bid | [`Cn9hBgkZ…`](https://testnet.nearblocks.io/txns/Cn9hBgkZfK1De4g29d97s7dzPTZ9EQuKdhsdpFfBEfQY) |
+| 5 | After the 10-minute vote, `finalize`: DOGE's curve NEAR and treasury move into PEPE | [`B4EtwFnz…`](https://testnet.nearblocks.io/txns/B4EtwFnzxBqPFmBYNdMCAzeA8TKTzqqiHXXPJjybmbaV) |
+| 6 | The holder converts 37.98M DOGE into PEPE at 0.983199 | [`XNByHRah…`](https://testnet.nearblocks.io/txns/XNByHRahR4hfg8jp2BB2bDcjon9BHaDvaS4Eh6qGkVN) |
 
-First coin: [`pepe.autocto.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.autocto.scarpxvenom.testnet). Its decision #0 went through the real `outlayer.testnet` (request 16511):
-- the worker fetched the brain from this repo's commit and checked its sha256;
-- it ran 418k instructions in 1.1 s and answered in 12 s;
-- it cost 0.0012 NEAR, and the rest of the 0.05 fee went back to PEPE's treasury;
-- the contract recorded the decision as Applied.
+One account played every holder in this run, so it shows the mechanism end to end, not a contested vote. Check the result with `near view pepe.v2.scarpxvenom.testnet coin_info` (`absorbed` lists DOGE) and `near view doge.v2.scarpxvenom.testnet history`.
 
-A direct probe confirmed the brain can read testnet RPC from inside the enclave (`rivals_seen: 1`).
+The launchpad account still holds its deploy key; it is to be deleted (`--lock`), after which nobody can change the launchpad. Its coins already have zero keys. Anyone can check that the launchpad's on-chain code hash equals `res/autocto_launchpad.wasm`, that `coin_code_hash` equals `res/autocto_coin.wasm`, and that `get_params` equals `params/testnet.json`.
+
+An earlier launchpad, [`autocto.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/autocto.scarpxvenom.testnet), was deployed and locked at commit `1290ae4`, before tender offers were added (0 access keys, tx `Cp16UaQE…`). Its one coin, `pepe.autocto.scarpxvenom.testnet`, made the first brain run through `outlayer.testnet` (request 16511).
 
 ## Deploy to testnet
 
@@ -231,7 +237,7 @@ If the launchpad account runs short of balance for its code storage, the deploy 
 
 ## Honest limits
 
-- **Testnet covers launch, trading and real brain runs; the full takeover runs locally.** On testnet: the launchpad, a launch, trading, and a brain run through the real `outlayer.testnet`. A complete takeover (bid, vote, merge, convert) has so far run only in the local sandbox, against `mock-outlayer`. The mock has the same call signature and yield/resume flow; its result shape and gas budget are checked against OutLayer's contract source.
+- **The testnet takeover had one holder.** A complete takeover (bid, counter, accept, vote, merge, convert) has run on testnet through the real `outlayer.testnet`, but one account held and voted all the tokens. Contested votes, vetoes, tenders, sealed votes and gasless voting have run only in the local sandbox, against `mock-outlayer`.
 - **Unchecked on OutLayer.** OutLayer's docs give `version_key` as the wasm's sha256, which is what the deploy tool sends, but pinning a project version this way (LLM mode) has not been exercised on testnet.
 - **Sybil resistance is by stake, not by person.** Votes are weighted by tokens locked before the bid, so splitting tokens across accounts gains nothing in an open vote, and buying in after a bid gains nothing either. It does not stop a whale: the quorum, the 67% approval and the bidder-side veto are the answer to that, and the simulation's whale attacks test it. With sealed votes, splitting across accounts does help (see known gaps).
 - **Replay is partial.** The input hash pins what the contract gave the brain, but the brain also reads rival coins live over RPC. Re-running a scouting decision later can differ; trust in LLM mode rests on OutLayer's TEE attestation.

@@ -1,6 +1,6 @@
 {
   "explorer": "https://testnet.nearblocks.io",
-  "launchpad": "autocto.scarpxvenom.testnet",
+  "launchpad": "v2.scarpxvenom.testnet",
   "network": "testnet",
   "rpc": "https://test.rpc.fastnear.com/"
 }
