@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { cn, NETWORK } from "@/lib/utils";
 import { useDark, useTheme } from "@/lib/theme";
 import { Avatar, Logo, Wordmark } from "@/components/common";
+import Footer from "./Footer";
 import "./landing.css";
 
 // Whatever network the visitor came with goes along into the app.
@@ -153,6 +154,15 @@ export default function Landing() {
   const line = useLiveLine();
   const [at, setAt] = useState("");
   const ThemeIcon = THEME_ICON[theme];
+  // The header's "Enter the app" shows only once the hero's own button has scrolled away, so there is one at a time.
+  const heroGo = useRef(null);
+  const [pastHero, setPastHero] = useState(false);
+  useEffect(() => {
+    if (!("IntersectionObserver" in globalThis)) { setPastHero(true); return; }
+    const io = new IntersectionObserver(([en]) => setPastHero(!en.isIntersecting && en.boundingClientRect.top < 0), { rootMargin: "-60px 0px 0px 0px" });
+    io.observe(heroGo.current);
+    return () => io.disconnect();
+  }, []);
 
   // Reveal on scroll (siblings come in one after another), and which section the header marks.
   useEffect(() => {
@@ -182,7 +192,7 @@ export default function Landing() {
         </nav>
         <div className="lp-top-right">
           <Button variant="ghost" size="icon" className="rounded-full" title={`Theme: ${theme}`} aria-label="Switch theme" onClick={cycleTheme}><ThemeIcon /></Button>
-          <Enter />
+          <div className={cn("lp-go", pastHero && "on")}><Enter /></div>
         </div>
       </header>
 
@@ -194,7 +204,7 @@ export default function Landing() {
           </div>
           <div className="lp-hero-right">
             <p className="lede">Mergers and acquisitions for memecoins. Each coin's AI makes an offer, the rival's AI haggles, holders vote, and the two coins merge. No team holds the keys, so nobody can rug.</p>
-            <div className="actions"><Enter lg /></div>
+            <div className="actions" ref={heroGo}><Enter lg /></div>
           </div>
         </section>
 
@@ -276,15 +286,9 @@ export default function Landing() {
             ))}
           </Accordion>
         </section>
-
-        <section className="lp-cta reveal">
-          <h2>See which coin eats which.</h2>
-          <p>Pick a coin, lock a few tokens, wake a brain. It takes about five minutes.</p>
-          <Enter lg />
-        </section>
       </main>
 
-      <footer className="lp-foot text-[12.5px] text-muted-foreground">AutoCTO · <a className="underline underline-offset-2" href="https://github.com/SCARPxVeNOM/autoCTO">Source</a></footer>
+      <Footer />
     </div>
   );
 }

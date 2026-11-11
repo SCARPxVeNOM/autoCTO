@@ -20,6 +20,8 @@
 .lp-links a:hover { color: var(--foreground); background: var(--muted); }
 .lp-links a.on { color: var(--foreground); background: var(--accent); }
 .lp-top-right { display: flex; gap: 8px; align-items: center; }
+.lp-go { visibility: hidden; opacity: 0; transform: translateY(-6px); transition: opacity .25s var(--ease), transform .25s var(--ease), visibility .25s; }
+.lp-go.on { visibility: visible; opacity: 1; transform: none; }
 
 /* hero */
 .lp-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 32px 56px; align-items: end; padding: 84px 40px 56px !important; overflow: clip; border-bottom: 0 !important; }
@@ -33,7 +35,7 @@
 .lp-hero > * { position: relative; }
 .lp-hero-left { display: grid; gap: 22px; justify-items: start; }
 .lp-hero h1 { margin: 0; font: 700 clamp(40px, 6.4vw, 84px)/.98 var(--font-display); letter-spacing: -.04em; text-wrap: balance; }
-.lp-hero h1 em { font-style: normal; color: var(--primary); }
+.lp-hero h1 em { font-style: normal; color: var(--up); }
 .lp-hero-right { display: grid; gap: 20px; padding-bottom: 8px; }
 .lp-hero .lede { font-size: 17.5px; }
 
@@ -175,11 +177,6 @@
 .faq details[open] summary::after { transform: rotate(45deg); }
 .faq p { margin: 0 0 22px; max-width: 70ch; color: var(--muted-foreground); font-size: 15.5px; }
 
-.lp-cta { padding: 88px 40px !important; display: grid; gap: 14px; justify-items: center; text-align: center; position: relative; overflow: clip; }
-.lp-cta::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(50% 80% at 50% 110%, color-mix(in srgb, var(--primary) 30%, transparent), transparent 70%); }
-.lp-cta > * { position: relative; }
-.lp-cta h2 { margin: 0; font: 700 clamp(30px, 4.4vw, 56px)/1.04 var(--font-display); letter-spacing: -.035em; }
-.lp-cta p { margin: 0 0 8px; color: var(--muted-foreground); font-size: 17px; }
 .lp-foot { padding: 20px 24px 28px; text-align: center; }
 
 /* reveal on scroll */
@@ -208,7 +205,6 @@
   .facts div { border-left: 0; border-top: 1px dashed var(--line-strong); padding: 16px 20px; }
   .facts div:nth-child(even) { border-left: 1px dashed var(--line-strong); }
   .faq details { padding: 0 20px; }
-  .lp-cta { padding: 64px 20px !important; }
 }
 @media (max-width: 560px) {
   .steps { grid-template-columns: minmax(0, 1fr); }

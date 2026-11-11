@@ -1,0 +1,23 @@
+/* ---- Footer art (Footer.jsx) ---- */
+.lp-foot.acto-foot { padding: 0; text-align: left; }
+/* The banner keeps its own night sky in both themes. Dark: it runs edge to edge.
+   Light: it sits as a rounded card with a soft shadow on the light page. */
+.acto-art { background: #0d0c16; overflow: hidden; margin: 20px 14px 0; border-radius: 22px 22px 0 0;
+  box-shadow: 0 -12px 44px rgb(76 40 170 / .22); transition: margin .3s, border-radius .3s, box-shadow .3s; }
+.dark .acto-art { margin: 0; border-radius: 0; box-shadow: none; border-top: 1px solid var(--line-strong); }
+.acto-stage { position: relative; width: 100%; aspect-ratio: 2172 / 724; container-type: inline-size; }
+.acto-stage > * { position: absolute; }
+.acto-stage img { user-select: none; -webkit-user-drag: none; pointer-events: none; }
+.acto-base { inset: 0; width: 100%; height: 100%; display: block; }
+.acto-star { width: var(--sz); height: var(--sz); translate: -50% -50%; background: #fff; opacity: .2;
+  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+  animation: acto-twinkle var(--t) ease-in-out var(--d) infinite; }
+.acto-scepter { animation: acto-swing 2.6s ease-in-out infinite; }
+.acto-eye { transform-origin: 50% 55%; animation: acto-blink 4.4s infinite; }
+.acto-bar { display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; align-items: center; padding: 16px 24px 22px;
+  border-top: 1px solid var(--line-strong); }
+@keyframes acto-twinkle { 0%, 100% { opacity: .15; scale: .5; } 50% { opacity: 1; scale: 1.15; } }
+@keyframes acto-swing { 0%, 100% { rotate: -7deg; } 50% { rotate: 6deg; } }
+@keyframes acto-blink { 0%, 86%, 100% { scale: 1 1; } 89%, 91% { scale: 1 .06; } 94% { scale: 1 1; } 96% { scale: 1 .06; } 98% { scale: 1 1; } }
+@media (max-width: 560px) { .acto-art { margin: 0 8px; border-radius: 14px 14px 0 0; } .acto-bar { justify-content: center; text-align: center; } }
+@media (prefers-reduced-motion: reduce) { .acto-star, .acto-scepter, .acto-eye { animation: none; } .acto-star { opacity: .8; } }

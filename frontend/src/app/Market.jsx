@@ -17,7 +17,6 @@ import {
 } from "@/lib/chain";
 import { curveChart, sessionChart, sparkline } from "./charts";
 import { useUi } from "./ui";
-import { PlayButton } from "./Autoplay";
 
 // ---------- first steps ----------
 function Guide() {
@@ -36,7 +35,7 @@ function Guide() {
           <Progress value={(done / steps.length) * 100} className="h-1.5 w-20" />{done}/{steps.length}
         </div>
         {hidden && next >= 0 && <Button size="sm" className="rounded-full" onClick={() => go(steps[next].go)}>Next: {steps[next].title}</Button>}
-        <div className="ml-auto flex items-center gap-1.5"><PlayButton /><Button variant="ghost" size="sm" onClick={toggle}>{hidden ? "All steps" : "Hide"}</Button></div>
+        <Button variant="ghost" size="sm" className="ml-auto" onClick={toggle}>{hidden ? "All steps" : "Hide"}</Button>
       </div>
       {!hidden && (
         <>
@@ -132,7 +131,7 @@ function MarketTable() {
               className={cn("cursor-pointer", a === state.sel && "shadow-[inset_3px_0_0_var(--primary)]")}>
               <TableCell className="py-3 pl-6 max-sm:pl-4">
                 <div className={cn("flex min-w-0 items-center gap-3", merged && "opacity-60")}>
-                  <Avatar symbol={i.symbol} />
+                  <Avatar symbol={i.symbol} icon={i.icon} />
                   <div className="grid min-w-0 gap-1">
                     <div className="truncate"><b className="font-display text-base font-semibold">${i.symbol}</b> <span className="text-muted-foreground">{i.name}</span></div>
                     {i.absorbed.length > 0 && <div className="flex flex-wrap items-center gap-1">{i.absorbed.map(([t]) => <Badge key={t} variant="outline" className="h-[19px] rounded-md border-dashed border-primary px-1.5 text-[11px] font-normal text-primary">ate ${sym(t)}</Badge>)}</div>}
@@ -204,7 +203,7 @@ function CoinPanel({ a, afterNear }) {
     <div className="grid min-w-0 content-start gap-4 px-6 pb-7 pt-5 max-sm:px-4">
       <div className="grid gap-2.5">
         <div className="flex flex-wrap items-center gap-3.5">
-          <Avatar symbol={i.symbol} size={52} />
+          <Avatar symbol={i.symbol} icon={i.icon} size={52} />
           <div className="min-w-0 flex-[1_1_160px]">
             <h3 className="text-[26px] font-semibold leading-tight">${i.symbol} <span className="text-[17px] font-medium text-muted-foreground">{i.name}</span></h3>
           </div>
@@ -373,7 +372,7 @@ function Position({ a }) {
   const until = state.me.until[a] || 0n, lots = state.me.locks[a] || [];
   return (
     <div className="grid gap-2 border-t border-dashed border-line pt-3.5">
-      <h4 className="flex flex-wrap items-baseline justify-between gap-2 text-[15px] font-semibold">Your position <span className="font-mono text-[12.5px] font-normal text-muted-foreground">{who}</span></h4>
+      <h4 className="text-[15px] font-semibold">Your position</h4>
       {!who ? (
         <p className="text-[13.5px] text-muted-foreground">{cfg.dev_key ? "No account selected." : hasWallet() ? "Connect a wallet to see your balances." : "Type your account at the top."}</p>
       ) : (

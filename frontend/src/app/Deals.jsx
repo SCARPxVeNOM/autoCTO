@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { PlayButton } from "./Autoplay";
 import { Ago, Avatar, Left, Meter, More, Pill, SectionHead, Term, useTick } from "@/components/common";
 import {
-  NS, act, allOffers, fmtBps, fmtRate, fmtTokens, getBallot, humanize, now, short, stanceFor, state, statusName, sym,
+  NS, act, allOffers, cfg, fmtBps, fmtRate, fmtTokens, getBallot, humanize, now, short, stanceFor, state, statusName, sym,
 } from "@/lib/chain";
 
 const Proposer = ({ pr }) => (pr.Brain
@@ -59,6 +59,8 @@ function Offer({ o }) {
   const before = (coin) => (state.me.locks[coin] || []).filter((l) => BigInt(l.since) < BigInt(o.created_at)).reduce((x, l) => x + BigInt(l.amount), 0n);
   const vt = before(o.target), vb = before(o.buyer);
   const vote = (support) => act("vote", { coin: o.target, offer: key, round: o.round, support });
+  // Only the buttons this account can use; with no account picked yet, both sides are shown.
+  const canVote = !who || vt > 0n, canVeto = !who || vb > 0n;
   return (
     <DealCard live={open}>
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
@@ -78,13 +80,13 @@ function Offer({ o }) {
         <Meter parts={[[pct(yes), "bg-up"], [pct(no), "bg-down"], [pct(sealed), "bg-muted-foreground/50"]]} mark={quorum} />
       </div>
       <div className="flex flex-wrap items-center gap-2 empty:hidden">
-        {open && !ended && (ballot
+        {open && !ended && canVote && (ballot
           ? <span className="text-[12.5px] text-muted-foreground">You sealed <b>{ballot.support ? "YES" : "NO"}</b>. Come back to reveal it when the vote ends.</span>
           : <>
             <Button className="rounded-full btn-up" disabled={state.acting} onClick={() => vote(true)}>{sealedMode ? "Seal YES" : "Vote YES"}</Button>
             <Button className="rounded-full btn-down" disabled={state.acting} onClick={() => vote(false)}>{sealedMode ? "Seal NO" : "Vote NO"}</Button>
           </>)}
-        {open && !ended && <Button variant="outline" className="rounded-full" disabled={state.acting} onClick={() => act("veto", { coin: o.buyer, id: o.id })}>Veto (as ${B} holder)</Button>}
+        {open && !ended && canVeto && <Button variant="outline" className="rounded-full" disabled={state.acting} onClick={() => act("veto", { coin: o.buyer, id: o.id })}>Veto (as ${B} holder)</Button>}
         {open && o.counter && <Button variant="outline" className="rounded-full" disabled={state.acting} onClick={() => act("accept_counter", { coin: o.buyer, id: o.id })}>Accept counter</Button>}
         {open && inReveal && (ballot
           ? <Button className="rounded-full" disabled={state.acting} onClick={() => act("reveal", { coin: o.target, offer: key, round: o.round })}>Reveal my {ballot.support ? "YES" : "NO"} vote</Button>
@@ -178,7 +180,7 @@ function FoodChain() {
           const done = Math.min(100, Number((BigInt(m.converted || 0) * 1000n) / max) / 10);
           return (
             <div key={`${a}|${t}`} className="flex min-w-0 items-center gap-3 border-dashed border-border px-5 py-3 sm:border-l max-sm:px-4">
-              <span className="flex items-center"><Avatar symbol={sym(a)} size={34} /><Avatar symbol={sym(t)} size={24} className="-ml-2 opacity-60 ring-2 ring-background grayscale" /></span>
+              <span className="flex items-center"><Avatar symbol={sym(a)} icon={state.info[a]?.icon} size={34} /><Avatar symbol={sym(t)} icon={state.info[t]?.icon} size={24}className="-ml-2 opacity-60 ring-2 ring-background grayscale" /></span>
               <span className="min-w-0 text-[13.5px]"><b className="font-display font-semibold">${sym(a)}</b> <span className="text-muted-foreground">ate</span> <b className="font-display font-semibold">${sym(t)}</b>
                 <span className="block font-mono text-[11.5px] text-muted-foreground">{fmtRate(m.rate_ppm)} each · {done.toFixed(done < 10 ? 1 : 0)}% swapped</span></span>
             </div>
@@ -200,7 +202,7 @@ export default function Deals() {
       <SectionHead title="Deals" note="takeovers, live and finished"><PlayButton className="ml-auto max-sm:ml-0" /></SectionHead>
       <FoodChain />
       {!offers.length && !tenders.length
-        ? <p className="px-6 text-muted-foreground max-sm:px-4">No deals yet. Open a coin and press <b>Think</b>.</p>
+        ? <p className="px-6 text-muted-foreground max-sm:px-4">No deals yet. Open a coin in the Market and press <b>Think</b>{cfg.dev_key ? <>, or press <b>Play a takeover for me</b> above</> : ""}.</p>
         : <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,440px),1fr))] gap-3.5 px-6 max-sm:px-4">
           {offers.map((o) => <Offer key={`${o.buyer}#${o.id}`} o={o} />)}
           {tenders.map(({ coin, t }) => <Tender key={`${coin}|${t.id}`} coin={coin} t={t} />)}

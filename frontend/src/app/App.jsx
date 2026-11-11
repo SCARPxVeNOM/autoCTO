@@ -171,7 +171,8 @@ export default function App() {
   const ThemeIcon = THEME_ICON[theme];
   const links = [
     ["Trade"], ["#market", LayoutDashboard, "Market", "market"], ["#deals", Swords, "Deals", "deals", deals], ["#brains", Brain, "Brains & feed", "brains"],
-    ["Build"], ["#launch", Rocket, "Launch a coin", "launch"], ["#rules", Scale, "Rules", "rules"], ["#verify", ShieldCheck, "Verify", "verify"],
+    ["Create"], ["#launch", Rocket, "Launch a coin", "launch"],
+    ["Trust"], ["#rules", Scale, "Rules", "rules"], ["#verify", ShieldCheck, "Verify", "verify"],
   ];
 
   return (

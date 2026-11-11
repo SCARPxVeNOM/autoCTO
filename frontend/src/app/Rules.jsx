@@ -1,15 +1,14 @@
-// Rules view: the limits every coin lives by, and the simulation they were picked with.
+// Rules view: how a takeover runs, every limit in plain words, and the simulation the numbers were picked with.
 import { useEffect, useState } from "react";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
+import { ArrowLeftRight, Brain, Coins, Globe, KeyRound, Merge, Scale, Shield, Swords, Vote } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { More, SectionHead } from "@/components/common";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { More, PageHead, SectionHead } from "@/components/common";
 import { cfg, fmtNear, mins, state } from "@/lib/chain";
 
 const pct = (bps) => `${bps / 100}%`;
+const shortHash = (h) => (h && h.length > 16 ? `${h.slice(0, 8)}…${h.slice(-6)}` : h || "–");
 
 // Supply of each coin over the simulated days, one line per coin.
 function Scenario({ s }) {
@@ -42,8 +41,8 @@ function Sweep({ sim }) {
   const rows = [...new Set(sim.sweep.map((r) => `${r.quorumBps}|${r.approvalBps}`))];
   const c = sim.chosen;
   return (
-    <div className="mb-4 px-6 max-sm:px-4">
-      <p className="mb-3 max-w-[80ch] text-[13px] text-muted-foreground">Each cell: good deals that pass / bad deals that pass, over {c.attacks} whale attacks per row. Chosen: the most conservative row within 0.05 of the best score, <b className="text-foreground">quorum {pct(c.quorumBps)}, approval {pct(c.approvalBps)}, buyer veto {pct(c.vetoBps)}</b>.</p>
+    <div className="grid gap-3">
+      <p className="max-w-[80ch] text-[13px] text-muted-foreground">Each cell: good deals that pass / bad deals that pass, over {c.attacks} whale attacks per row. The highlighted cell is the one in use: the most cautious setting within 0.05 of the best score.</p>
       <Card className="overflow-hidden rounded-2xl p-0 shadow-none">
         <Table className="font-mono text-xs">
           <TableHeader><TableRow className="bg-muted/60 hover:bg-muted/60"><TableHead className="text-right">quorum</TableHead><TableHead className="text-right">approval</TableHead>{vetos.map((v) => <TableHead key={v} className="text-right">veto {pct(v)}</TableHead>)}</TableRow></TableHeader>
@@ -70,70 +69,111 @@ function Sweep({ sim }) {
   );
 }
 
+// One group of limits: [name, value, what it means].
+function Group({ icon: Icon, title, rows }) {
+  return (
+    <Card className="gap-0 overflow-hidden rounded-2xl p-0 shadow-none">
+      <h3 className="flex items-center gap-2 border-b border-dashed border-line bg-muted/40 px-4 py-3 text-[15px] font-semibold"><Icon className="size-4 text-primary" />{title}</h3>
+      <dl className="divide-y divide-dashed divide-border">
+        {rows.map(([k, v, t]) => (
+          <div key={k} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5 px-4 py-3">
+            <dt className="text-[14.5px] font-medium">{k}</dt>
+            <dd className="row-span-2 self-center text-right font-mono text-[15px] font-medium">{v}</dd>
+            <dd className="text-[13px] text-muted-foreground">{t}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  );
+}
+
 export default function Rules() {
   const p = state.params;
   const [sim, setSim] = useState(null);
   useEffect(() => {
     fetch("data/sim.json", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then(setSim).catch(() => {});
   }, []);
-  const cards = [
-    [mins(p.vote_period_sec), "to vote", "Each bid is open for this long. Nothing happens before the vote ends."],
-    [pct(p.quorum_bps), "must take part", "At least this share of the target coin has to vote, or the bid fails."],
-    [pct(p.approval_bps), "must say yes", "Of the votes cast. A simple majority is not enough."],
-    [pct(p.veto_bps), "can block", "If this share of the bidder's own holders vetoes, the bid is off."],
-    [`±${p.max_premium_bps / 100}%`, "price limit", "A bid can be at most this far above or below the fair rate, so nobody is robbed by a silly price."],
-    [mins(p.newborn_protection_sec), "newborn protection", "A new coin cannot be bid for until this much time has passed."],
-    [`${p.max_offers_per_day} a day`, "bids per coin", `And a ${mins(p.rebid_cooldown_sec)} wait before bidding for the same coin again. No spam.`],
-    [pct(p.trade_fee_bps), "trading fee", "Goes to the coin's own treasury, which pays for its brain. No team cut."],
-    ...(p.tender_threshold_bps ? [[pct(p.tender_threshold_bps), "for a tender", `A tender for an outside token only happens if this share of its supply is deposited within ${mins(p.tender_period_sec)}. Otherwise everyone is refunded.`]] : []),
-    ["0 keys", "no owner", "No account can change a coin's code, rules or funds after launch."],
+  const sealed = p.reveal_period_sec > 0;
+
+  const flow = [
+    [Brain, "A brain bids", `It offers a rate within ${pct(p.max_discount_bps)} below to ${pct(p.max_premium_bps)} above the fair rate. The contract refuses anything outside.`],
+    [Vote, "The target's holders vote", `${mins(p.vote_period_sec)} to vote. ${pct(p.quorum_bps)} of the coin must take part and ${pct(p.approval_bps)} of the votes must be yes.`],
+    [Shield, "The bidder's holders can block it", `If ${pct(p.veto_bps)} of the bidder's own holders object, the bid is off.`],
+    [Merge, "The coins merge", "The target's NEAR and treasury move into the bidder."],
+    [ArrowLeftRight, "Holders swap over", "Holders of the absorbed coin convert to the winner at the agreed rate."],
   ];
-  const exact = [
-    `vote ${p.vote_period_sec}s`, ...(p.reveal_period_sec > 0 ? [`sealed votes · reveal ${p.reveal_period_sec}s`] : []),
-    `quorum ${pct(p.quorum_bps)}`, `approval ${pct(p.approval_bps)}`, `buyer veto ${pct(p.veto_bps)}`,
-    `premium ≤ ${pct(p.max_premium_bps)}`, `discount ≤ ${pct(p.max_discount_bps)}`, `dilution ≤ ${pct(p.max_dilution_bps)}`,
-    `newborn protection ${p.newborn_protection_sec}s`, `rebid cooldown ${p.rebid_cooldown_sec}s`, `${p.max_offers_per_day} bids/day`,
-    `brain ${fmtNear(p.brain_fee)}/think, ≤ ${fmtNear(p.brain_daily_cap)}/day`, `fee ${pct(p.trade_fee_bps)}`,
-    ...(p.tender_threshold_bps ? [`tender: ${pct(p.tender_threshold_bps)} of outside supply in ${p.tender_period_sec}s, backed by ${pct(p.quorum_bps)} of holders, mints ≤ ${pct(p.tender_max_dilution_bps)}`] : []),
-    "no owner · no setters",
+  const groups = [
+    [Vote, "Voting", [
+      ["Time to vote", mins(p.vote_period_sec), "A bid stays open this long. Nothing happens before the vote ends."],
+      ...(sealed ? [["Sealed votes", `${mins(p.reveal_period_sec)} reveal`, "Votes stay hidden until voting ends, so nobody can follow the crowd. Each voter then reveals theirs in this window."]] : []),
+      ["Must take part", pct(p.quorum_bps), "Share of the target coin that has to vote, or the bid fails."],
+      ["Must say yes", pct(p.approval_bps), "Of the votes cast. A simple majority is not enough."],
+      ["Bidder's veto", pct(p.veto_bps), "Share of the bidder's own holders that can block a bid, for example when their coin is overpaying."],
+      ["Votes that count", "locked first", "Only tokens locked before a bid count for it, so nobody can buy a vote at the last minute."],
+    ]],
+    [Swords, "Bids", [
+      ["Price limit", `−${pct(p.max_discount_bps)} to +${pct(p.max_premium_bps)}`, "How far a bid's rate may be from the fair rate, so nobody is robbed by a silly price."],
+      ["New tokens per takeover", `≤ ${pct(p.max_dilution_bps)}`, "The most bidder tokens one takeover may create, as a share of the bidder's supply."],
+      ["Newborn protection", mins(p.newborn_protection_sec), "A new coin cannot be bid for until this much time has passed."],
+      ["Bids per coin", `${p.max_offers_per_day} a day`, `After a failed bid, the same coin waits ${mins(p.rebid_cooldown_sec)} before bidding again.`],
+    ]],
+    [Coins, "Money", [
+      ["Trading fee", pct(p.trade_fee_bps), "Goes to the coin's own treasury, which pays for its brain. There is no team cut."],
+      ["One brain decision", fmtNear(p.brain_fee), "Paid by whoever wakes the brain, or by the treasury when they attach less."],
+      ["Treasury's brain budget", `${fmtNear(p.brain_daily_cap)} a day`, "The most a coin's treasury may spend on thinking per day."],
+    ]],
+    ...(p.tender_threshold_bps ? [[Globe, "Tenders for outside tokens", [
+      ["Deposits needed", pct(p.tender_threshold_bps), `Share of the outside token's supply that must be deposited within ${mins(p.tender_period_sec)}. Otherwise everyone is refunded.`],
+      ["Holder backing", pct(p.quorum_bps), "Share of the bidding coin's own holders that must back the tender."],
+      ["New tokens per tender", `≤ ${pct(p.tender_max_dilution_bps)}`, "The most tokens one tender may create, as a share of the coin's supply."],
+    ]]] : []),
+    [KeyRound, "Ownership", [
+      ["Access keys", "0", "No account can change a coin's code, rules or funds after launch, including whoever launched it."],
+      ["Rule changes", "none", "There is no function that changes these numbers. They are fixed for every coin."],
+      ["Coin code", shortHash(state.codeHash), "Every coin runs this exact code. The Verify page checks it against the public repo."],
+    ]],
   ];
+
   return (
     <>
-      <section id="rules" className="pb-8 pt-6">
-        <SectionHead title="Rules" />
-        <div className="grid gap-4 px-6 max-sm:px-4">
-          <p className="max-w-[72ch]">The AI only <b>proposes</b>. The contract enforces these limits, and nobody can change them. <span className="text-muted-foreground">Tap a card for what it means.</span></p>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,150px),1fr))] gap-2.5">
-            {cards.map(([v, k, t]) => (
-              <Tooltip key={k}>
-                <TooltipTrigger asChild>
-                  <Card tabIndex={0} className="cursor-help content-start gap-0.5 rounded-2xl p-3.5 shadow-none">
-                    <b className="font-mono text-2xl font-medium leading-tight tracking-tight">{v}</b>
-                    <span className="font-display text-[14.5px] font-semibold">{k}</span>
-                  </Card>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-[260px] text-[13px] leading-snug">{t}</TooltipContent>
-              </Tooltip>
-            ))}
-          </div>
-          <Accordion type="single" collapsible className="rounded-2xl border px-4">
-            <AccordionItem value="exact" className="border-b-0">
-              <AccordionTrigger className="font-display text-[15px] font-semibold">All rules, exact values</AccordionTrigger>
-              <AccordionContent className="grid gap-3">
-                <div className="flex flex-wrap gap-1.5">{exact.map((t) => <Badge key={t} variant="secondary" className="whitespace-normal font-mono font-normal">{t}</Badge>)}</div>
-                <p className="break-all font-mono text-xs text-muted-foreground">launchpad {cfg.launchpad} · coin code {state.codeHash} · {typeof state.codeMode === "string" ? state.codeMode : "Global"}</p>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </div>
+      <PageHead icon={Scale} title="Rules" lede="The AI only proposes. These limits are written into every coin's contract, they are the same for every coin, and nobody can change them." />
+
+      <section className="border-b border-dashed border-line pb-7 pt-6">
+        <SectionHead title="How a takeover runs" />
+        <ol className="grid gap-2.5 px-6 max-sm:px-4 sm:grid-cols-2 lg:grid-cols-5">
+          {flow.map(([Icon, title, text], k) => (
+            <li key={title}>
+              <Card className="h-full gap-2 rounded-2xl p-4 shadow-none">
+                <div className="flex items-center gap-2.5">
+                  <span className="grid size-7 place-items-center rounded-full border-[1.5px] border-dashed border-primary font-mono text-[13px] font-semibold text-primary">{k + 1}</span>
+                  <Icon className="size-[18px] text-muted-foreground" />
+                </div>
+                <b className="font-display text-[15.5px] font-semibold">{title}</b>
+                <p className="text-[13.5px] text-muted-foreground">{text}</p>
+              </Card>
+            </li>
+          ))}
+        </ol>
       </section>
+
+      <section id="rules" className="pb-8 pt-6">
+        <SectionHead title="Every limit" note="enforced by the contract, whatever a brain says" />
+        <div className="gap-3.5 px-6 max-sm:px-4 lg:columns-2 [&>*]:mb-3.5 [&>*]:break-inside-avoid">
+          {groups.map(([icon, title, rows]) => <Group key={title} icon={icon} title={title} rows={rows} />)}
+        </div>
+        <p className="mt-4 break-all px-6 font-mono text-xs text-muted-foreground max-sm:px-4">launchpad {cfg.launchpad} · coin code {state.codeHash}</p>
+      </section>
+
       {sim && (
         <section id="sim" className="border-t border-dashed border-line pb-8 pt-6">
           <SectionHead title="Why these numbers" note={`tested in a ${sim.days}-day simulation`} />
+          <p className="mb-4 max-w-[72ch] px-6 text-muted-foreground max-sm:px-4">
+            We replayed {sim.days} days of trading with honest holders, lowballers and whales trying to force bad deals through. With the settings in use, {Math.round(sim.chosen.goodPassRate * 100)}% of good deals pass and {Math.round(sim.chosen.badPassRate * 100)}% of bad ones do.
+          </p>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-3.5 px-6 max-sm:px-4">
             {sim.scenarios.map((s) => <Scenario key={s.title} s={s} />)}
           </div>
-          {sim.sweep?.length > 0 && <More label="The full parameter sweep" className="mt-4 [&>button]:mx-6 max-sm:[&>button]:mx-4"><Sweep sim={sim} /></More>}
+          {sim.sweep?.length > 0 && <More label="Every setting we tried" className="mt-4 px-6 max-sm:px-4"><Sweep sim={sim} /></More>}
         </section>
       )}
     </>

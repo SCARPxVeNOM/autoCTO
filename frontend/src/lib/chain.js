@@ -503,7 +503,7 @@ export async function act(what, d = {}) {
       const f = d.form;
       if (!/^[a-z0-9_-]{2,32}$/.test(f.label)) throw new Error("Address: 2 to 32 of a-z, 0-9, - and _");
       const min = BigInt(await view(cfg.launchpad, "min_launch_deposit"));
-      return ["launch", { label: f.label, name: f.name, symbol: f.symbol.toUpperCase(), icon: null, persona: f.persona }, min + YOCTO, cfg.launchpad];
+      return ["launch", { label: f.label, name: f.name.trim(), symbol: f.symbol.toUpperCase(), icon: f.icon || null, persona: f.persona.trim() }, min + YOCTO, cfg.launchpad];
     },
     think: () => ["think", {}, 10n ** 23n],
     // Buy and sell re-quote right before signing and pass min_out, so a moved price is refused by the contract.

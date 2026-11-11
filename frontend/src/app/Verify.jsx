@@ -1,9 +1,11 @@
 // Verify view: the project's claims, checked live against the chain and the public repo by this page.
 import { useCallback, useEffect, useState } from "react";
-import { Check, CircleAlert, LoaderCircle, Minus, RotateCw } from "lucide-react";
+import { Check, CircleAlert, LoaderCircle, Minus, RotateCw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { SectionHead } from "@/components/common";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+import { PageHead, Pill } from "@/components/common";
 import { keyInReport, parseSigned, recoverSigner } from "@/lib/attest";
 import { cfg, rpc, sameCode, state, sym, view } from "@/lib/chain";
 
@@ -29,9 +31,11 @@ async function repoSha(path) {
 }
 const SKIP_REPO = { ok: null, detail: "This network has no pinned commit to compare with (the local demo is built from your own checkout). Open the testnet to run this check." };
 
-/** Each check returns { ok: true | false | null (not applicable), detail }. */
+/** Each check returns { ok: true | false | null (not applicable), detail }. `group` is what it proves. */
+const GROUPS = ["Nobody controls it", "It runs the published code", "The AI's answers are genuine"];
 const CHECKS = [
   {
+    group: 0,
     title: "Nobody owns the launchpad",
     why: "An account with no access keys cannot be signed for by anyone, so its code and rules can never change.",
     run: async () => {
@@ -43,6 +47,7 @@ const CHECKS = [
     },
   },
   {
+    group: 1,
     title: "The launchpad runs the code in the repo",
     why: "The page downloads the contract file from GitHub, hashes it, and compares it with the hash of the code on chain.",
     run: async () => {
@@ -52,6 +57,7 @@ const CHECKS = [
     },
   },
   {
+    group: 1,
     title: "Every coin runs the same code, and it is the code in the repo",
     why: "Coins are created by the launchpad from one fixed contract. No coin can be a special case.",
     run: async () => {
@@ -64,6 +70,7 @@ const CHECKS = [
     },
   },
   {
+    group: 0,
     title: "No coin has a key",
     why: "Not the launchpad, not the person who launched it, not us: no one can move a coin's funds or mint its tokens by hand.",
     run: async () => {
@@ -74,6 +81,7 @@ const CHECKS = [
     },
   },
   {
+    group: 1,
     title: "The brain cannot be swapped",
     why: "The launchpad stores the sha256 of the brain program. OutLayer refuses to run anything else for these coins.",
     run: async () => {
@@ -86,6 +94,7 @@ const CHECKS = [
     },
   },
   {
+    group: 1,
     title: "The rules are the published rules",
     why: "The limits on price, votes and brain spending that the launchpad enforces are the ones in the repo's params file.",
     run: async () => {
@@ -97,6 +106,7 @@ const CHECKS = [
     },
   },
   {
+    group: 2,
     title: "The latest model answer is signed by its enclave",
     why: "In model mode the answer carries NEAR AI Cloud's signature. The page recovers the signer and looks the key up in a fresh attestation report.",
     run: async () => {
@@ -113,43 +123,73 @@ const CHECKS = [
   },
 ];
 
-const ICON = {
-  wait: <LoaderCircle className="size-5 animate-spin text-primary" />,
-  true: <Check className="size-5 text-up" strokeWidth={3} />,
-  false: <CircleAlert className="size-5 text-down" />,
-  null: <Minus className="size-5 text-muted-foreground" />,
+// [icon, tone, label] for a passed, failed, not applicable and still running check.
+const STATUS = {
+  true: [Check, "up", "passed"],
+  false: [CircleAlert, "down", "failed"],
+  null: [Minus, "muted", "not applicable"],
+  wait: [LoaderCircle, "brand", "checking"],
 };
+const DISC = { up: "bg-up/15 text-up", down: "bg-down/15 text-down", muted: "bg-muted text-muted-foreground", brand: "bg-primary/15 text-primary" };
+
+function CheckRow({ c, r }) {
+  const [Icon, tone, label] = STATUS[r ? String(r.ok) : "wait"];
+  return (
+    <Card className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3.5 gap-y-2.5 rounded-2xl p-4 shadow-none sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <span className={cn("grid size-8 place-items-center rounded-full", DISC[tone])}><Icon className={cn("size-4", !r && "animate-spin")} strokeWidth={r?.ok ? 3 : 2} /></span>
+      <div className="grid gap-1">
+        <b className="font-display text-[15.5px] font-semibold leading-snug">{c.title}</b>
+        <p className="text-[13.5px] text-muted-foreground">{c.why}</p>
+      </div>
+      <Pill tone={tone} className="self-start max-sm:col-start-2 max-sm:justify-self-start">{label}</Pill>
+      <p className="col-start-2 break-words rounded-lg bg-muted/60 px-2.5 py-1.5 font-mono text-[12px] text-muted-foreground sm:col-span-2">{r ? r.detail : "asking the chain…"}</p>
+    </Card>
+  );
+}
 
 export default function Verify() {
   const [res, setRes] = useState({});
+  const [at, setAt] = useState(null);
   const run = useCallback(() => {
-    setRes({});
-    CHECKS.forEach((c, i) => c.run().catch((e) => ({ ok: null, detail: `could not check: ${e.message}` })).then((r) => setRes((s) => ({ ...s, [i]: r }))));
+    setRes({}); setAt(null);
+    let left = CHECKS.length;
+    CHECKS.forEach((c, i) => c.run().catch((e) => ({ ok: null, detail: `could not check: ${e.message}` })).then((r) => {
+      setRes((s) => ({ ...s, [i]: r }));
+      if (--left === 0) setAt(new Date());
+    }));
   }, []);
   useEffect(run, [run]);
   const done = Object.values(res), all = done.length === CHECKS.length;
   const passed = done.filter((r) => r.ok === true).length, failed = done.filter((r) => r.ok === false).length, skipped = done.filter((r) => r.ok === null).length;
+  const [Big, tone] = !all ? [LoaderCircle, "brand"] : failed ? [CircleAlert, "down"] : [ShieldCheck, "up"];
+  const headline = !all ? `Checking… ${done.length} of ${CHECKS.length}`
+    : failed ? `${failed} of ${CHECKS.length} checks failed`
+    : skipped ? `${passed} checks passed, ${skipped} not applicable here` : `All ${passed} checks passed`;
+  const against = cfg.commit ? <>the chain and the public repo at <code className="font-mono text-foreground">{cfg.commit.slice(0, 7)}</code></> : "the chain";
   return (
-    <section id="verify" className="pb-8 pt-6">
-      <SectionHead title="Verify it yourself" note={all ? `${passed} passed${failed ? ` · ${failed} failed` : ""}${skipped ? ` · ${skipped} not applicable` : ""}` : "checking…"}>
-        <Button variant="outline" size="sm" onClick={run} disabled={!all}><RotateCw className="size-3.5" />Run again</Button>
-      </SectionHead>
-      <div className="grid gap-4 px-6 max-sm:px-4">
-        <p className="max-w-[72ch]">Your browser checks each claim against the chain{cfg.commit ? " and the public repo" : ""}, right now. No server of ours is involved.</p>
-        <div className="grid gap-2.5">
-          {CHECKS.map((c, i) => {
-            const r = res[i];
-            return (
-              <Card key={c.title} title={c.why} className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 rounded-2xl px-4 py-3 shadow-none">
-                <span className="row-span-2 mt-0.5">{ICON[r ? String(r.ok) : "wait"]}</span>
-                <b className="font-display text-[15px] font-semibold">{c.title}</b>
-                <p className="break-words font-mono text-[12.5px] text-muted-foreground">{r ? r.detail : "…"}</p>
-              </Card>
-            );
-          })}
-        </div>
-        <p className="max-w-[72ch] text-[13px] text-muted-foreground">Not checked here: the Intel and NVIDIA hardware quotes. The proof under <a className="text-primary underline" href="#brains">Brains</a> links to the verifiers that do.</p>
-      </div>
-    </section>
+    <>
+      <PageHead icon={ShieldCheck} title="Verify" lede="Don't take our word for it. Your browser checks each claim below against the chain and the public code, right now. No server of ours is involved.">
+        <Button variant="outline" className="rounded-full" onClick={run} disabled={!all}><RotateCw /> Run again</Button>
+      </PageHead>
+      <section id="verify" className="grid gap-6 px-6 pb-8 pt-6 max-sm:px-4">
+        <Card className={cn("gap-3.5 rounded-2xl p-5 shadow-none", all && (failed ? "border-down/40 bg-down/[0.05]" : "border-up/40 bg-up/[0.05]"))} role="status">
+          <div className="flex items-center gap-4">
+            <span className={cn("grid size-12 flex-none place-items-center rounded-full", DISC[tone])}><Big className={cn("size-6", !all && "animate-spin")} /></span>
+            <div className="grid gap-0.5">
+              <b className="font-display text-xl font-semibold">{headline}</b>
+              <span className="text-[13.5px] text-muted-foreground">{at ? <>Checked at {at.toLocaleTimeString()} against {against}.</> : <>Asking {against}…</>}</span>
+            </div>
+          </div>
+          <Progress value={(done.length / CHECKS.length) * 100} className={cn("h-1.5", all && (failed ? "[&>*]:bg-down" : "[&>*]:bg-up"))} />
+        </Card>
+        {GROUPS.map((g, k) => (
+          <div key={g} className="grid gap-2.5">
+            <h2 className="font-mono text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{g}</h2>
+            {CHECKS.map((c, i) => c.group === k && <CheckRow key={c.title} c={c} r={res[i]} />)}
+          </div>
+        ))}
+        <p className="max-w-[72ch] text-[13px] text-muted-foreground">Not checked here: the Intel and NVIDIA hardware quotes. Every brain decision under <a className="text-primary underline" href="#brains">Brains</a> has a proof that links to the verifiers that do.</p>
+      </section>
+    </>
   );
 }

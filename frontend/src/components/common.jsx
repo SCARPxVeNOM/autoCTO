@@ -24,9 +24,12 @@ export function Logo({ className }) {
 }
 export const Wordmark = () => <span className="font-pixel text-xl font-semibold leading-none">AutoCTO</span>;
 
-export function Avatar({ symbol, size = 38, className }) {
+// A coin's own icon (stored on chain at launch) is shown only if it is an image data URL or an https link.
+const ownIcon = (icon) => (typeof icon === "string" && /^(data:image\/[a-z+.-]+[;,]|https:\/\/)/i.test(icon) ? icon : null);
+
+export function Avatar({ symbol, icon, size = 38, className }) {
   useIcons();
-  const src = iconUrl(symbol);
+  const src = ownIcon(icon) || iconUrl(symbol);
   const [broken, setBroken] = useState(null);
   const style = { "--h": hue(symbol || "?"), width: size, height: size, borderRadius: size * 0.31, fontSize: size * 0.39 };
   if (src && broken !== src) return <img className={cn("ava ava-img", className)} style={style} src={src} alt="" loading="lazy" decoding="async" onError={() => setBroken(src)} />;
@@ -85,6 +88,19 @@ export function Meter({ parts, mark }) {
     </div>
   );
 }
+
+/** The top of a page: what it is for in one line, and its main action on the right. */
+export const PageHead = ({ icon: Icon, title, lede, children }) => (
+  <header className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b border-dashed border-line px-6 pb-6 pt-7 max-sm:px-4 max-sm:pt-5">
+    <div className="grid max-w-[66ch] gap-2">
+      <h1 className="flex items-center gap-3 text-[28px] font-semibold leading-tight max-sm:text-2xl">
+        <span className="grid size-10 flex-none place-items-center rounded-xl bg-primary/12 text-primary" aria-hidden="true"><Icon className="size-5" /></span>{title}
+      </h1>
+      <p className="text-[15px] text-muted-foreground">{lede}</p>
+    </div>
+    {children && <div className="ml-auto flex flex-wrap items-center gap-2 max-sm:ml-0">{children}</div>}
+  </header>
+);
 
 export const SectionHead = ({ title, note, children }) => (
   <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1.5 px-6 max-sm:px-4">
