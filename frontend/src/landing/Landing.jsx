@@ -127,7 +127,7 @@ function useLiveLine() {
       if (!coins.length) return;
       const infos = await Promise.all(coins.map((c) => view(c.account_id, "coin_info").catch(() => null)));
       const merged = infos.filter((i) => i && typeof i.status === "object" && "Merged" in i.status).length;
-      setLine(`Live on ${cfg.dev_key ? "local demo" : network}: ${coins.length} ${coins.length === 1 ? "coin" : "coins"}${merged ? `, ${merged} already absorbed` : ""}`);
+      setLine(`Live on ${cfg.dev_key ? "local demo" : NETWORK}: ${coins.length} ${coins.length === 1 ? "coin" : "coins"}${merged ? `, ${merged} already absorbed` : ""}`);
     })().catch(() => {});
   }, []);
   return line;
