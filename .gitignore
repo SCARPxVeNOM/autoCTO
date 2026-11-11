@@ -6,3 +6,4 @@ web/config.local.json
 .env
 # API keys for local use; never commit
 keys.txt
+pinatakey.txt

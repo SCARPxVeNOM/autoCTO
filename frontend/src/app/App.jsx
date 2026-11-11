@@ -1,6 +1,6 @@
 // The app's shell: sidebar, top bar, one view at a time (picked by the address hash) and the dialogs.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookOpen, Brain, CircleHelp, Copy, LayoutDashboard, ListChecks, Moon, Rocket, Scale, ShieldCheck, Sun, SunMoon, Swords, Wallet } from "lucide-react";
+import { Brain, CircleHelp, Copy, LayoutDashboard, Moon, Rocket, Scale, ShieldCheck, Sun, SunMoon, Swords, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { Logo, Pill, Term, Wordmark } from "@/components/common";
 import {
-  GLOSSARY, NETWORK, allOffers, cfg, closeDialog, connectWallet, guideSteps, hasWallet, isMerged, liveOffer,
+  GLOSSARY, NETWORK, allOffers, cfg, closeDialog, connectWallet, hasWallet, isMerged, liveOffer,
   selectCoin, setActor, setGasless, short, start, state, statusName, useChain,
 } from "@/lib/chain";
 import { UiContext } from "./ui";
@@ -33,12 +33,12 @@ const hashId = () => location.hash.slice(1);
 const HOME = `index.html${location.search}`;
 const THEME_ICON = { auto: SunMoon, dark: Moon, light: Sun };
 
-function NavLink({ href, icon: Icon, on, count, soft, children, ...props }) {
+function NavLink({ href, icon: Icon, on, count, children, ...props }) {
   return (
     <a href={href} aria-current={on ? "page" : undefined} {...props}
       className={cn("flex h-9 items-center gap-2.5 rounded-[10px] px-2.5 text-[14.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground", on && "bg-muted font-medium text-foreground")}>
       <Icon className={cn("size-[17px] flex-none", on && "text-primary")} />{children}
-      {count > 0 && <b className={cn("ml-auto rounded-full px-1.5 font-mono text-[11px] font-semibold leading-[18px]", soft ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground")}>{count}</b>}
+      {count > 0 && <b className="ml-auto rounded-full bg-primary px-1.5 font-mono text-[11px] font-semibold leading-[18px] text-primary-foreground">{count}</b>}
     </a>
   );
 }
@@ -168,7 +168,6 @@ export default function App() {
   const ui = useMemo(() => ({ mode, setMode, amtRef, pointAt, go }), [mode, pointAt, go]);
 
   const deals = state.ready ? allOffers().filter(liveOffer).length + Object.values(state.tenders).flat().filter((t) => ["Open", "Opening"].includes(statusName(t.status))).length : 0;
-  const todo = state.ready ? guideSteps().filter((s) => !s.done).length : 0;
   const ThemeIcon = THEME_ICON[theme];
   const links = [
     ["Trade"], ["#market", LayoutDashboard, "Market", "market"], ["#deals", Swords, "Deals", "deals", deals], ["#brains", Brain, "Brains & feed", "brains"],
@@ -185,10 +184,6 @@ export default function App() {
               {links.map(([href, icon, label, v, count]) => (icon
                 ? <NavLink key={href} href={href} icon={icon} on={view === v} count={count}>{label}</NavLink>
                 : <NavGroup key={href}>{href}</NavGroup>))}
-              <NavGroup>Help</NavGroup>
-              <NavLink href="#guide" icon={ListChecks} count={todo} soft>First steps</NavLink>
-              <NavLink href="#" icon={BookOpen} onClick={(e) => { e.preventDefault(); setGlossary(true); }}>Words explained</NavLink>
-              <NavLink href={HOME} icon={ArrowLeft}>What is AutoCTO</NavLink>
             </nav>
           </aside>
 
@@ -200,7 +195,7 @@ export default function App() {
                   <i className={cn("size-1.5 rounded-full bg-current", state.online && "blink")} />{state.online === false ? `${NETWORK} · offline` : cfg.dev_key ? "local demo" : NETWORK}
                 </Pill>
                 <Who />
-                <Button variant="ghost" size="icon" className="size-8 rounded-full max-sm:hidden" title="Words explained" aria-label="Words explained" onClick={() => setGlossary(true)}><CircleHelp /></Button>
+                <Button variant="ghost" size="icon" className="size-8 rounded-full" title="Words explained" aria-label="Words explained" onClick={() => setGlossary(true)}><CircleHelp /></Button>
                 <Button variant="ghost" size="icon" className="size-8 rounded-full" title={`Theme: ${theme}`} aria-label="Switch theme" onClick={cycleTheme}><ThemeIcon /></Button>
               </div>
             </header>

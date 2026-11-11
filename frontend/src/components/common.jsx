@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { GLOSSARY, ago, hue, left } from "@/lib/chain";
+import { iconUrl, useIcons } from "@/lib/icons";
 
 /** Re-render once a second, so countdowns move between chain refreshes. */
 export function useTick() {
@@ -24,12 +25,12 @@ export function Logo({ className }) {
 export const Wordmark = () => <span className="font-pixel text-xl font-semibold leading-none">AutoCTO</span>;
 
 export function Avatar({ symbol, size = 38, className }) {
-  return (
-    <span className={cn("ava", className)} aria-hidden="true"
-      style={{ "--h": hue(symbol || "?"), width: size, height: size, borderRadius: size * 0.31, fontSize: size * 0.39 }}>
-      {String(symbol || "?").slice(0, 2)}
-    </span>
-  );
+  useIcons();
+  const src = iconUrl(symbol);
+  const [broken, setBroken] = useState(null);
+  const style = { "--h": hue(symbol || "?"), width: size, height: size, borderRadius: size * 0.31, fontSize: size * 0.39 };
+  if (src && broken !== src) return <img className={cn("ava ava-img", className)} style={style} src={src} alt="" loading="lazy" decoding="async" onError={() => setBroken(src)} />;
+  return <span className={cn("ava", className)} aria-hidden="true" style={style}>{String(symbol || "?").slice(0, 2)}</span>;
 }
 
 const TONES = {

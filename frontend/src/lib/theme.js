@@ -24,3 +24,15 @@ export function useTheme() {
   };
   return [theme, cycle];
 }
+
+/** Whether the page is dark right now, following applyTheme. */
+export function useDark() {
+  const html = document.documentElement;
+  const [dark, setDark] = useState(() => html.classList.contains("dark"));
+  useEffect(() => {
+    const mo = new MutationObserver(() => setDark(html.classList.contains("dark")));
+    mo.observe(html, { attributes: true, attributeFilter: ["class"] });
+    return () => mo.disconnect();
+  }, []);
+  return dark;
+}

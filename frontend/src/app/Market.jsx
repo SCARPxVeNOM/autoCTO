@@ -87,7 +87,7 @@ function Ticker() {
   );
 }
 
-// ---------- coin badges ----------
+// ---------- coin badges (status and takeovers are in the market table) ----------
 export function CoinBadges({ a }) {
   const i = state.info[a];
   const same = sameCode(a), noKeys = state.keys[a] === 0;
@@ -96,7 +96,6 @@ export function CoinBadges({ a }) {
     <>
       <Term k="0 keys" className="no-underline"><Badge variant="outline" className={cn(b, noKeys ? "border-up/45 text-up" : "border-down/45 text-down")}>{noKeys ? <><Lock /> 0 keys</> : `${state.keys[a] ?? "?"} keys`}</Badge></Term>
       <Term k="launchpad code" className="no-underline"><Badge variant="outline" className={cn(b, same ? "border-up/45 text-up" : "border-down/45 text-down")}>{same ? <><BadgeCheck /> launchpad code</> : "code ?"}</Badge></Term>
-      {i.absorbed.map(([t]) => <Badge key={t} variant="outline" className={cn(b, "border-dashed border-primary text-primary")}>ate ${sym(t)}</Badge>)}
       {(i.watchlist || []).map((t) => <Term key={t} k="watchlist" className="no-underline"><Badge variant="outline" className={b}><Eye /> {short(t)}</Badge></Term>)}
     </>
   );
@@ -184,18 +183,20 @@ function CoinPanel({ a, afterNear }) {
   const [kind, setKind] = useState("curve");
   const i = state.info[a], merged = isMerged(i), ch = sessionChange(a);
   const chart = useChart({ a, kind, afterNear });
+  // The market table already shows market cap, liquidity and treasury on wider screens.
   const stats = [
-    ["market cap", merged ? "–" : fmtNear(marketCap(i)), "market cap"], ["liquidity", fmtNear(curveReal(i)), "liquidity"],
-    ["treasury", fmtNear(i.treasury), "treasury"], ["locked for votes", fmtTokens(i.total_locked), "lock"],
+    ["market cap", merged ? "–" : fmtNear(marketCap(i)), "market cap", "md:hidden"], ["liquidity", fmtNear(curveReal(i)), "liquidity", "lg:hidden"],
+    ["treasury", fmtNear(i.treasury), "treasury", "lg:hidden"], ["locked for votes", fmtTokens(i.total_locked), "lock"],
+    ["in circulation", fmtTokens(i.circulating)], ["brain decisions", String(i.decisions)],
   ];
   const more = [
-    ["in circulation", fmtTokens(i.circulating)], ["total supply", fmtTokens(i.total_supply)],
+    ["total supply", fmtTokens(i.total_supply)],
     ...(BigInt(i.owed || 0) > 0n ? [["owed to converters", fmtTokens(i.owed), "convert"]] : []),
-    ["brain spent", fmtNear(i.brain_spent_total), "brain"], ["brain decisions", String(i.decisions)],
+    ["brain spent", fmtNear(i.brain_spent_total), "brain"],
     ["born", <Ago ns={i.born_at} />],
   ];
-  const cell = ([k, v, t]) => (
-    <div key={k} className="px-3 py-2 shadow-[0_0_0_.5px_var(--border)]">
+  const cell = ([k, v, t, hide]) => (
+    <div key={k} className={cn("px-3 py-2 shadow-[0_0_0_.5px_var(--border)]", hide)}>
       <dt className="text-xs text-muted-foreground">{t ? <Term k={t}>{k}</Term> : k}</dt><dd className="font-mono text-sm font-medium">{v}</dd>
     </div>
   );
@@ -216,7 +217,7 @@ function CoinPanel({ a, afterNear }) {
           </div>
         </div>
         <p className="max-w-[70ch] text-muted-foreground">{i.persona}</p>
-        <div className="flex flex-wrap items-center gap-1.5"><StatusPill info={i} /><CoinBadges a={a} /></div>
+        <div className="flex flex-wrap items-center gap-1.5"><CoinBadges a={a} /></div>
       </div>
 
       <Card className="gap-0 overflow-hidden rounded-2xl p-0 shadow-none">
@@ -233,7 +234,7 @@ function CoinPanel({ a, afterNear }) {
         </div>
       </Card>
 
-      <dl className="grid grid-cols-2 overflow-hidden rounded-xl border sm:grid-cols-4">{stats.map(cell)}</dl>
+      <dl className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] overflow-hidden rounded-xl border">{stats.map(cell)}</dl>
       <More label="More numbers">
         <dl className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] overflow-hidden rounded-xl border">{more.map(cell)}</dl>
         <div className="break-all font-mono text-xs text-muted-foreground">{a}</div>
@@ -414,11 +415,7 @@ export default function Market() {
       </section>
       {i && (
         <section id="trade" className="pt-6">
-          <SectionHead title="Coin & trade">
-            <div className="ml-auto flex flex-wrap gap-1.5 max-sm:ml-0 max-sm:basis-full">
-              {state.coins.map(({ account_id: c }) => <Button key={c} size="sm" variant={c === a ? "default" : "secondary"} className="h-7 rounded-full px-3 text-[13px]" onClick={() => selectCoin(c)}>${sym(c)}</Button>)}
-            </div>
-          </SectionHead>
+          <SectionHead title="Coin & trade" note="pick a coin in the market above" />
           <div className="grid border-t border-dashed border-line lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px]">
             <CoinPanel a={a} afterNear={quote && quote.coin === a ? previewNear(i, quote) : null} />
             <aside id="ticket" className="min-w-0 border-dashed border-line px-6 pb-7 pt-5 max-lg:border-t max-sm:px-4 lg:border-l"><Ticket a={a} onQuote={setQuote} /></aside>

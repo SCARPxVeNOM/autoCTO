@@ -1,0 +1,10 @@
+{
+  "gateway": "https://violet-changing-alligator-977.mypinata.cloud/ipfs/",
+  "coins": {
+    "PEPE": "bafkreiabgmukn2knble6ztukozcqudxm5t3vj265neulg3ja6sat7ccnxq",
+    "DOGE": "bafkreihwlr7urmbxo6rixtay7bzidq5iyihemis6544dzzrqw5dzjstfza",
+    "WOJAK": "bafkreibmmxhh4sb6gl2qpqd5hfoavxchrwypm4a5a2hxug2wq7tbtpglpy",
+    "CAT": "bafkreiek7sl5zmp5do4bp5g7nymeksncoemh674evzguyhqwovadlpj4ki",
+    "OLDCAT": "bafkreiek7sl5zmp5do4bp5g7nymeksncoemh674evzguyhqwovadlpj4ki"
+  }
+}
