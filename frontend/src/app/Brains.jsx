@@ -1,14 +1,51 @@
 // Brains & feed view: what each coin's AI decided, and everything that happened on chain.
-import { useState } from "react";
-import { Brain } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Brain, Check, CircleAlert, LoaderCircle, ShieldCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Ago, Pill, SectionHead, useTick } from "@/components/common";
+import { keyInReport, parseSigned, recoverSigner } from "@/lib/attest";
 import { NETWORK, cfg, describeAction, fmtNear, humanize, short, state, statusName, sym } from "@/lib/chain";
 
 const Pre = (p) => <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-all rounded-xl border bg-muted/60 px-3 py-2.5 font-mono text-xs leading-normal" {...p} />;
+
+const attestOf = (d) => { try { return JSON.parse(d.output).attest || null; } catch (_) { return null; } };
+
+const Row = ({ ok, children }) => (
+  <li className="flex items-start gap-2">
+    {ok == null ? <LoaderCircle className="mt-0.5 size-4 flex-none animate-spin text-primary" /> : ok ? <Check className="mt-0.5 size-4 flex-none text-up" strokeWidth={3} /> : <CircleAlert className="mt-0.5 size-4 flex-none text-down" />}
+    <span>{children}</span>
+  </li>
+);
+
+// In model mode the answer carries NEAR AI Cloud's signature. Both checks run here, in the browser.
+function ModelProof({ a }) {
+  const { model, request, response } = parseSigned(a.text);
+  const [signer, setSigner] = useState(undefined);
+  const [report, setReport] = useState(undefined);
+  useEffect(() => {
+    let live = true;
+    try { setSigner(recoverSigner(a.text, a.signature)); } catch (_) { setSigner(null); }
+    keyInReport(a.signing_address, a.kind === "provider_tee" ? model : null).then((r) => live && setReport(r), () => live && setReport(null));
+    return () => { live = false; };
+  }, [a.text, a.signature, a.signing_address, a.kind, model]);
+  const sigOk = signer === undefined ? null : !!signer && signer.toLowerCase() === a.signing_address.toLowerCase();
+  const repOk = report === undefined ? null : !!report?.listed;
+  return (
+    <div className="grid gap-2 rounded-xl border border-primary/35 bg-primary/[0.06] px-3.5 py-3">
+      <b className="flex items-center gap-1.5 font-display text-[15px] font-semibold"><ShieldCheck className="size-4 text-primary" /> The model's answer is signed</b>
+      <p className="text-sm text-muted-foreground">This decision was made by {model ? <code className="font-mono text-foreground">{model}</code> : "a model"} on NEAR AI Cloud. {a.kind === "provider_tee" ? "The model runs inside sealed hardware, and a key that never leaves it signed" : "NEAR AI's gateway, which runs inside sealed hardware, signed"} the hash of the exact question the brain asked and the exact answer it got.</p>
+      <Pre>question sha256 = {request}{"\n"}answer sha256   = {response}{"\n"}signed by       = {a.signing_address}</Pre>
+      <ul className="grid gap-1.5 text-sm">
+        <Row ok={sigOk}>{sigOk === false ? "The signature does not match the stated key." : "The signature is valid for that key (recovered here, in your browser)."}</Row>
+        <Row ok={repOk}>{report === null ? "Could not reach NEAR AI to fetch its attestation report." : repOk === false ? "That key is not in NEAR AI's current attestation report. Keys rotate, so an old decision can fail this check." : <>That key is listed in a fresh attestation report from NEAR AI{model && " for this model"}{report?.fresh === false && " (the report did not echo our nonce)"}.</>}</Row>
+      </ul>
+      <p className="text-[12.5px] text-muted-foreground">Not checked here: the Intel TDX and NVIDIA quotes inside that report. <a className="text-primary underline" href="https://cloud.near.ai/verify" target="_blank" rel="noopener">NEAR AI's verifier</a> does that.</p>
+    </div>
+  );
+}
 
 // How anyone can check one brain decision.
 function Verify({ pick, onClose }) {
@@ -28,6 +65,7 @@ function Verify({ pick, onClose }) {
             <li><b className="font-medium text-foreground">Each run has its own attestation.</b> It binds the brain's code, this input hash and the output. OutLayer keeps it off chain, because checking a quote on every call costs too much gas. <a className="text-primary underline" href="https://app.outlayer.ai/docs/tee-attestation" target="_blank" rel="noopener">How to check one</a>.</li>
           </ol>
           <Pre>brain: {state.brain.source}</Pre>
+          {attestOf(d) && <ModelProof a={attestOf(d)} />}
           <p className="text-sm text-muted-foreground">The answer the contract received, and what it did with it:</p>
           <Pre>{d.output || "(none)"}</Pre>
           <Pre>status: {JSON.stringify(d.status)}</Pre>
@@ -73,7 +111,7 @@ export default function Brains() {
                   {out ? <><div className="break-words">“{humanize(out.thought)}”</div><div className="font-medium">→ {describeAction(coin, out.action)}</div></>
                     : st === "Pending" && <div className="text-muted-foreground">Thinking… the answer arrives in a few seconds.</div>}
                   <div className="text-[12.5px] text-muted-foreground">
-                    <Ago ns={d.requested_at} /> · woken by {short(d.requested_by)} · cost {fmtNear(d.paid)}{d.paid_by_treasury ? " from the treasury" : ""} · <button type="button" className="text-primary underline underline-offset-2" onClick={() => setPick({ coin, id: d.id })}>proof</button>
+                    <Ago ns={d.requested_at} /> · woken by {short(d.requested_by)} · cost {fmtNear(d.paid)}{d.paid_by_treasury ? " from the treasury" : ""} · {out?.attest && <span className="inline-flex items-center gap-1 text-primary"><ShieldCheck className="size-3.5" />signed by the model's enclave · </span>}<button type="button" className="text-primary underline underline-offset-2" onClick={() => setPick({ coin, id: d.id })}>proof</button>
                   </div>
                 </Card>
               );

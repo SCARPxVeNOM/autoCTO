@@ -26,6 +26,20 @@ impl autocto_brain::Http for WasiHttp {
         }
         Ok(text)
     }
+
+    fn get(&self, url: &str, headers: &[(&str, &str)]) -> Result<String, String> {
+        let mut req = wasi_http_client::Client::new().get(url).connect_timeout(std::time::Duration::from_secs(20));
+        for (k, v) in headers {
+            req = req.header(*k, *v);
+        }
+        let resp = req.send().map_err(|e| e.to_string())?;
+        let status = resp.status();
+        let bytes = resp.body().map_err(|e| e.to_string())?;
+        if status >= 400 {
+            return Err(format!("http {status}"));
+        }
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
+    }
 }
 
 fn main() {
