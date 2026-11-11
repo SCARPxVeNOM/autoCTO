@@ -20,7 +20,13 @@ function Verify({ pick, onClose }) {
           <DialogHeader><DialogTitle>Proof for decision #{d.id} of ${sym(pick.coin)}</DialogTitle>
             <DialogDescription>When the brain was woken, the coin hashed the exact input it handed over and stored it on chain.</DialogDescription></DialogHeader>
           <Pre>input_sha256 = {d.input_sha256}</Pre>
-          <p className="text-sm text-muted-foreground">The brain was fixed when the coin launched. It runs on <code className="font-mono text-foreground">{state.brain.outlayer}</code> inside sealed hardware whose attestation commits to the code, this input and the output. The answer can only reach the coin as the reply to its own call.</p>
+          <p className="text-sm text-muted-foreground">The brain was fixed when the coin launched and runs on <code className="font-mono text-foreground">{state.brain.outlayer}</code> inside sealed hardware. What ties this answer to that hardware:</p>
+          <ol className="grid list-decimal gap-1.5 pl-5 text-sm text-muted-foreground marker:font-mono marker:text-primary">
+            <li><b className="font-medium text-foreground">The hardware is checked on chain, once.</b> OutLayer's worker registers its Intel TDX quote with a NEAR contract, which checks Intel's signature chain and the approved code measurements.</li>
+            <li><b className="font-medium text-foreground">Only that worker can deliver results.</b> Its registered key is the only one allowed to resolve an execution on OutLayer's contract.</li>
+            <li><b className="font-medium text-foreground">The coin listens to nobody else.</b> An answer can only reach it as the reply to its own call, so no account can speak in the brain's voice.</li>
+            <li><b className="font-medium text-foreground">Each run has its own attestation.</b> It binds the brain's code, this input hash and the output. OutLayer keeps it off chain, because checking a quote on every call costs too much gas. <a className="text-primary underline" href="https://app.outlayer.ai/docs/tee-attestation" target="_blank" rel="noopener">How to check one</a>.</li>
+          </ol>
           <Pre>brain: {state.brain.source}</Pre>
           <p className="text-sm text-muted-foreground">The answer the contract received, and what it did with it:</p>
           <Pre>{d.output || "(none)"}</Pre>

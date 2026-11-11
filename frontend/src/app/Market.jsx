@@ -35,11 +35,11 @@ function Guide() {
           <Progress value={(done / steps.length) * 100} className="h-1.5 w-24" />
           {done === steps.length ? "All done. You know how it works." : `${done} of ${steps.length} done`}
         </div>
-        <Button variant="ghost" size="sm" className="ml-auto" onClick={toggle}>{hidden ? "Show" : "Hide"}</Button>
+        <div className="ml-auto flex items-center gap-1.5"><PlayButton /><Button variant="ghost" size="sm" onClick={toggle}>{hidden ? "Show" : "Hide"}</Button></div>
       </div>
       {!hidden && (
         <>
-          {cfg.dev_key && <p className="-mt-1 mb-4 max-w-[70ch] px-6 text-[12.5px] text-muted-foreground max-sm:px-4"><b className="font-semibold text-foreground">Demo mode.</b> Everything here is play money on a local chain. Use “playing as” at the top to switch between demo holders and see every side of a deal. <PlayButton className="ml-1.5 align-middle" /></p>}
+          {cfg.dev_key && <p className="-mt-1 mb-4 max-w-[70ch] px-6 text-[12.5px] text-muted-foreground max-sm:px-4"><b className="font-semibold text-foreground">Demo mode.</b> Everything here is play money on a local chain. Use “playing as” at the top to switch between demo holders and see every side of a deal.</p>}
           <ol className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,200px),1fr))] gap-2.5 px-6 max-sm:px-4 xl:grid-cols-5">
             {steps.map((s, k) => (
               <li key={k}>
