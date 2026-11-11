@@ -163,7 +163,7 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 
 | | |
 |---|---|
-| Launchpad | [`v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v3.scarpxvenom.testnet), current code, deployed from commit `37ad97c` |
+| Launchpad | [`v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v3.scarpxvenom.testnet), current code, deployed from commit `37ad97c`, locked: 0 access keys |
 | Rules | `params/testnet.json` (10-minute votes, 5-minute newborn protection) |
 | Brain | OutLayer project `scarpxvenom.testnet/autocto-brain` on `outlayer.testnet`, version pinned by sha256 `ac781f9f…19dbb58` (`res/autocto-brain.wasm` at commit `37ad97c`). **Model mode**: `z-ai/glm-5.3-flash` on NEAR AI Cloud, the API key held as an OutLayer secret |
 | Coins | [`pepe.v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v3.scarpxvenom.testnet) and [`doge.v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v3.scarpxvenom.testnet) (absorbed), each with 0 access keys |
@@ -185,7 +185,7 @@ Step 4 is the design working as meant: a model answer that does not parse into a
 
 One account played every holder in this run, so it shows the mechanism end to end, not a contested vote. Check the result with `near view pepe.v3.scarpxvenom.testnet coin_info` (`absorbed` lists DOGE) and `near view doge.v3.scarpxvenom.testnet get_decision '{"id":0}'` (the signed counter).
 
-`v3` still has its one deploy key, so it is not locked yet; its coins have zero keys already. The NEAR AI key is stored with access limited to `scarpxvenom.testnet`, the account that woke every brain above; what a brain run woken by another account gets has not been tested. Anyone can check that the launchpad's on-chain code hash equals `res/autocto_launchpad.wasm`, that `coin_code_hash` equals `res/autocto_coin.wasm`, and that `get_params` equals `params/testnet.json`.
+The launchpad is locked: its only key was deleted ([`7BCPtpsh…`](https://testnet.nearblocks.io/txns/7BCPtpshg6RF8JfyTKb9qRhLpyCjc87eWsFu3GDmnxJR)), so it has 0 access keys and nobody can change it. Its coins have zero keys too. During the run above the NEAR AI key was readable only by brain runs that `scarpxvenom.testnet` woke; it has since been opened to any caller, and a run woken by another account has not been tested yet. Anyone can check that the launchpad's on-chain code hash equals `res/autocto_launchpad.wasm`, that `coin_code_hash` equals `res/autocto_coin.wasm`, and that `get_params` equals `params/testnet.json`.
 
 ### Earlier runs
 
