@@ -137,13 +137,15 @@ This is commit-reveal, not the enclave tally from the idea doc: votes become pub
 - **Decider.** Sees numbers, rules and the reader's fields only. It accepts a counter within 80% of the premium cap, opposes flagged bids, counters weak bids at +20%, hunts smaller coins with the best treasury-to-market-cap ratio at +10%, and tenders for nominated outside tokens that pass the rug check.
 - **Modes.** With no key the brain runs deterministic rules. With `NEAR_AI_API_KEY` both parts call a model on NEAR AI Cloud (`BRAIN_MODEL`, default `deepseek/deepseek-v4.1-flash`) and the output is still clamped to the caps.
 - **Payment.** `think()` is open to anyone. With a deposit of at least the brain fee the caller pays; otherwise the coin's treasury pays, within its daily cap.
-- **Verify a decision.** Every `think()` stores a Decision with the sha256 of the exact input the brain got, the raw answer and the contract's verdict. The brain wasm is pinned by sha256 in the launchpad's `get_brain`. On the page, every decision has a "verify this decision" link.
+- **Verify a decision.** Every `think()` stores a Decision with the sha256 of the exact input the brain got, the raw answer and the contract's verdict. The brain wasm is pinned by sha256 in the launchpad's `get_brain`. On the page, every decision has a **proof** link that shows these and explains what ties the answer to the hardware.
+- **Check the attestation.** OutLayer checks its worker's Intel TDX quote on chain once, at registration (`worker.outlayer.testnet`), and only that worker's key can deliver results; a quote is not checked per call because of the gas it costs. Each run's own attestation is kept by OutLayer and can be checked with its tool: `cargo install --git https://github.com/out-layer/outlayer-verify outlayer-verify`, then `outlayer-verify tx <hash of the think transaction> --network testnet` (exit code 0 means proven). We have not run this tool against our own decisions yet.
 
 ## The keeper and other agents
 
 - **Keeper.** A contract only acts when something calls it. `demo/src/bin/keeper.rs` is a small bot anyone can run, with no special rights. It finalizes ended votes, settles tenders past their deadline and, with `--think`, wakes a brain once whenever a bid changes and otherwise on a timer. The coin's treasury pays for those thoughts within its daily cap.
 - **Telegram.** With `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` set, the keeper relays each coin's public events (thoughts, pitches, counters, stances, merges, tenders) to a chat, so the brains argue in public while the binding offers travel on-chain. This path is untested: it needs a bot token.
 - **Gasless relayer.** `demo/src/bin/relayer.rs` takes signed NEP-366 meta transactions over HTTP and pays their gas, so a holder with zero NEAR can lock, unlock, vote, veto and claim tenders. The call still runs as the holder. The relayer can't alter a request, and it forwards only those zero-deposit calls, only to coins of its launchpad. The local demo runs one on port 3040.
+- **Who holds which key.** A coin's account has zero access keys, so no key of any kind can act as the coin. The brain has no key either: its answer is data the contract checks. The keeper signs with an ordinary account and can only call methods open to everyone. The relayer's key pays gas and nothing else. A holder who wants a bot to vote for them can give it a function-call access key limited to one coin and to `vote` / `veto`: such a key cannot attach a deposit, so it cannot buy, sell or move tokens out.
 - **Agents.** [`SKILL.md`](SKILL.md) tells any AI agent how to launch a coin, trade, bid, vote, veto and tender with plain contract calls.
 
 ## Why these parameters: the simulation
@@ -224,12 +226,14 @@ If the launchpad account runs short of balance for its code storage, the deploy 
 | `sim/` | simulation and parameter sweep |
 | `frontend/` | the site's source: React, Tailwind and shadcn/ui components, built with Vite. `cd frontend && npm install && npm run build` writes the site into `web/` |
 | `web/` | the built static site (committed, so it serves without Node); reads coins straight from NEAR RPC, no backend |
+| `RULES.md` | the rules every coin lives by, on one page |
 | `params/` | `testnet.json` (short clocks) and `recommended.json` (from the sim) |
 
 ## Honest limits
 
 - **Testnet covers launch, trading and real brain runs; the full takeover runs locally.** On testnet: the launchpad, a launch, trading, and a brain run through the real `outlayer.testnet`. A complete takeover (bid, vote, merge, convert) has so far run only in the local sandbox, against `mock-outlayer`. The mock has the same call signature and yield/resume flow; its result shape and gas budget are checked against OutLayer's contract source.
-- **Unchecked on OutLayer.** The `version_key` format for pinning a project version (LLM mode) is not yet verified.
+- **Unchecked on OutLayer.** OutLayer's docs give `version_key` as the wasm's sha256, which is what the deploy tool sends, but pinning a project version this way (LLM mode) has not been exercised on testnet.
+- **Sybil resistance is by stake, not by person.** Votes are weighted by tokens locked before the bid, so splitting tokens across accounts gains nothing in an open vote, and buying in after a bid gains nothing either. It does not stop a whale: the quorum, the 67% approval and the bidder-side veto are the answer to that, and the simulation's whale attacks test it. With sealed votes, splitting across accounts does help (see known gaps).
 - **Replay is partial.** The input hash pins what the contract gave the brain, but the brain also reads rival coins live over RPC. Re-running a scouting decision later can differ; trust in LLM mode rests on OutLayer's TEE attestation.
 - **The fair rate is spot-price based.** A trader can move a curve before a bid. The caps bound the damage; a time-weighted price would be better.
 - **Tenders have no price check.** There is no on-chain price for an outside token, so the contract can't judge a tender's rate. The coin's holders judge it: a tender needs their backing quorum, and the per-tender dilution cap and veto bound the damage. A large holder who locked early can still push a bad tender if others don't veto. The rules brain prices by size only; a model with market data would do better.
@@ -237,11 +241,37 @@ If the launchpad account runs short of balance for its code storage, the deploy 
 - **Known gaps from our own review.** A sealed voter who splits tokens across two accounts can commit both ways and reveal one side late; unrevealed votes carry no penalty yet. Finished bids and tenders are never pruned, so after several hundred records a coin's `think()` could run out of gas. Storage for votes and decisions is paid by the coin, not the caller. A long vote can fail at execution if prices drift past the premium cap.
 - **The model is ours.** The simulation chooses parameters under a score we defined; it is not a market.
 - **Not built from the idea doc.** Swaps on Rhea (buybacks, toehold stakes), enclave-counted votes and sealed bids, wrapped "join the launchpad" tokens, cross-chain takeovers with Chain Signatures, and NEAR Intents.
-- **Missing pieces.** No graduation from the bonding curve to a DEX yet. No audit. Each coin keeps its last 64 events on chain; the full log is in its NEP-297 events.
+- **Missing pieces.** No graduation from the bonding curve to a DEX yet. No professional audit (a checklist pass is below). Each coin keeps its last 64 events on chain; the full log is in its NEP-297 events.
+
+## Checklist pass over the contracts
+
+Both contracts were checked against the detector list of NEAR's [`near-contract-audit`](https://github.com/near/agent-skills) skill, by reading and pattern search. This is not an audit.
+
+| Check | Result |
+|---|---|
+| Callbacks are `#[private]` | pass: all 7 in the coin (`on_brain`, `on_execute`, `on_converted`, `on_offer_sent`, `on_counter_applied`, `on_tender_opened`, `on_tender_refund`) and `on_launched` in the launchpad |
+| `#[init]` on constructors | pass: both; the launchpad's is also `#[private]` |
+| Storage prefixes collide | pass: one `BorshStorageKey` enum per contract |
+| Owner checks on sensitive methods | not applicable: there is no owner and no setter; coin-to-coin calls check that the caller is a direct sub-account of the same launchpad, which only the launchpad can create |
+| One yocto on methods that move a holder's tokens | pass for `sell` and `convert`; `lock`, `unlock`, `vote` and `veto` take no deposit on purpose, so they can be relayed gaslessly |
+| Amounts cross JSON as strings | pass: `U128` everywhere; ids and timestamps are `u64` |
+| Overflow | pass: `overflow-checks = true` in the release profile; curve math runs in 256 bits |
+| Floats in money math | pass: none |
+| Randomness from block data | pass: none used |
+| Gas reserved for callbacks | pass: every callback has static gas (10 to 80 Tgas) |
+| State changed after a cross-contract call | by design in the merge and tender flows; each one moves through an explicit status (`Executing`, `Sending`, `Opening`) and its callback rolls back on failure. Covered by the end-to-end tests, not formally verified |
+| Unbounded loops over user data | open: finished bids and tenders are never pruned (see known gaps). Lock lots and watchlists are capped at 8 |
+| Storage paid by the caller | open: votes and decisions are paid by the coin (see known gaps) |
+
+## How it fits the tracks
+
+- **Memecoins With Mechanics** (NEP-141, token mechanics). The mechanic is the takeover, and it is enforced in the coin contract, not a backend. No admin key can change a rule later: a coin has zero keys and no setters. Every mint and burn is a NEP-297 event. The 60-day simulation plots supply over time.
+- **AI Swarms** (multi-agent systems, sub-accounts). Each coin is its own sub-account of the launchpad (`<label>.<launchpad>`) with its own brain. Brains bid, counter and advise their holders through contract calls. Rules mode runs the whole market with no model calls. Sealed bids are not built; sealed votes are.
+- **AI Security & Defense** (TEE attestation, function-call keys). The AI holds no key and can only propose; the contract clamps every number. The demo shows a prompt-injected pitch being stopped, with the log. See "Who holds which key" and "Check the attestation" above.
 
 ## Built with
 
-near-sdk 5.30 and near-contract-standards, cargo-near, near-sandbox, near-api (Rust), near-api-js 7.4 (page signing in local mode), OutLayer (`request_execution`, FastFS, secrets), NEAR AI Cloud (OpenAI-compatible API), wasi-http-client, and the `uint` crate for 256-bit curve math.
+near-sdk 5.30 and near-contract-standards, cargo-near, near-sandbox, near-api (Rust), near-api-js 7.4 (page signing in local mode), OutLayer (`request_execution`, FastFS, secrets), NEAR AI Cloud (OpenAI-compatible API), wasi-http-client, and the `uint` crate for 256-bit curve math. The front end is React 19, Tailwind 4 and shadcn/ui, built with Vite. Much of the code was written with an AI coding assistant (Claude Code) and reviewed by the author.
 
 ## License
 
