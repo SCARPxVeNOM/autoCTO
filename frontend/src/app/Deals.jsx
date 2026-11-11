@@ -3,6 +3,7 @@ import { Brain, Eye, Hand, Shield, Swords, Vote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { PlayButton } from "./Autoplay";
 import { Ago, Avatar, Left, Meter, Pill, SectionHead, Term, useTick } from "@/components/common";
 import {
   NS, act, allOffers, fmtBps, fmtRate, fmtTokens, getBallot, humanize, now, short, stanceFor, state, statusName, sym,
@@ -196,7 +197,7 @@ export default function Deals() {
   tenders.sort((a, b) => Number(BigInt(b.t.created_at) - BigInt(a.t.created_at)));
   return (
     <section id="deals" className="pb-8 pt-6">
-      <SectionHead title="Deals" note="Takeovers in progress and finished. Pitches are written by AI brains: read them as ads, not facts." />
+      <SectionHead title="Deals" note="Takeovers in progress and finished. Pitches are written by AI brains: read them as ads, not facts."><PlayButton className="ml-auto max-sm:ml-0" /></SectionHead>
       <FoodChain />
       {!offers.length && !tenders.length
         ? <p className="px-6 text-muted-foreground max-sm:px-4">No deals yet. Open a coin and press <b>Think</b>: its brain looks at the rivals and may make the first bid.</p>

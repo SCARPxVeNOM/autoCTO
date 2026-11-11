@@ -29,6 +29,7 @@ export const state = {
   samples: {}, opened: Date.now(),
   sel: null, actor: "", wallet: null, gasless: false, acting: false,
   dialog: null, // { type: "cli" | "salt", ... } for the page to show
+  auto: null, // the demo's "play a takeover" run: { running, steps: [{ text, done }], error, until }
 };
 
 // ---------- store ----------
@@ -563,6 +564,13 @@ export async function act(what, d = {}) {
     state.acting = false; bump();
     refresh();
   }
+}
+
+/** Demo only: sign one call as any of the sandbox's demo accounts. */
+export async function devCall(as, contract, method, args = {}, deposit = 0n) {
+  if (!cfg.dev_key) throw new Error("Only the local demo can sign for its holders.");
+  nearApi ??= await import(/* @vite-ignore */ NEAR_API);
+  return new nearApi.Account(as, cfg.rpc, cfg.dev_key).callFunction({ contractId: contract, methodName: method, args, deposit, gas: GAS });
 }
 
 // ---------- first steps ----------

@@ -22,6 +22,7 @@ import Deals from "./Deals";
 import Brains from "./Brains";
 import Launch from "./Launch";
 import Rules from "./Rules";
+import { AutoPanel } from "./Autoplay";
 
 // Which view each address hash belongs to.
 const VIEW_OF = { market: "market", guide: "market", trade: "market", deals: "deals", brains: "brains", feed: "brains", launch: "launch", rules: "rules", sim: "rules" };
@@ -224,6 +225,7 @@ export default function App() {
             <footer className="border-t border-dashed border-line px-6 py-5 text-[12.5px] text-muted-foreground max-sm:px-4">AutoCTO · <a className="underline underline-offset-2" href="https://github.com/SCARPxVeNOM/autoCTO">Source</a></footer>
           </div>
         </div>
+        <AutoPanel />
         <Dialogs glossary={glossary} setGlossary={setGlossary} />
         <Toaster position="bottom-center" />
       </TooltipProvider>
