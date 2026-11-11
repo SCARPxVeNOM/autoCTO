@@ -1,9 +1,9 @@
 // Deals view: takeover bids and tender offers, each said in plain words first.
-import { Brain, Eye, Hand, Shield, Vote } from "lucide-react";
+import { Brain, Eye, Hand, Shield, Swords, Vote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Ago, Left, Meter, Pill, SectionHead, Term, useTick } from "@/components/common";
+import { Ago, Avatar, Left, Meter, Pill, SectionHead, Term, useTick } from "@/components/common";
 import {
   NS, act, allOffers, fmtBps, fmtRate, fmtTokens, getBallot, humanize, now, short, stanceFor, state, statusName, sym,
 } from "@/lib/chain";
@@ -163,6 +163,31 @@ function Tender({ coin, t }) {
   );
 }
 
+// Who has eaten whom so far, and how many of the absorbed coin's holders have swapped over.
+function FoodChain() {
+  const rows = [];
+  for (const { account_id: a } of state.coins) for (const [t, m] of state.info[a]?.absorbed || []) rows.push({ a, t, m });
+  if (!rows.length) return null;
+  return (
+    <div className="mb-5 border-y border-dashed border-line">
+      <div className="flex flex-wrap items-stretch">
+        <div className="flex items-center gap-2 px-6 py-3 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-sm:basis-full max-sm:px-4 max-sm:pb-0"><Swords className="size-3.5 text-primary" /> Food chain</div>
+        {rows.map(({ a, t, m }) => {
+          const max = BigInt(m.max_target_amount || 0) || 1n;
+          const done = Math.min(100, Number((BigInt(m.converted || 0) * 1000n) / max) / 10);
+          return (
+            <div key={`${a}|${t}`} className="flex min-w-0 items-center gap-3 border-dashed border-border px-5 py-3 sm:border-l max-sm:px-4">
+              <span className="flex items-center"><Avatar symbol={sym(a)} size={34} /><Avatar symbol={sym(t)} size={24} className="-ml-2 opacity-60 ring-2 ring-background grayscale" /></span>
+              <span className="min-w-0 text-[13.5px]"><b className="font-display font-semibold">${sym(a)}</b> <span className="text-muted-foreground">ate</span> <b className="font-display font-semibold">${sym(t)}</b>
+                <span className="block font-mono text-[11.5px] text-muted-foreground">1 ${sym(t)} → {fmtRate(m.rate_ppm)} ${sym(a)} · {done.toFixed(done < 10 ? 1 : 0)}% swapped over</span></span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Deals() {
   useTick();
   const offers = allOffers();
@@ -172,6 +197,7 @@ export default function Deals() {
   return (
     <section id="deals" className="pb-8 pt-6">
       <SectionHead title="Deals" note="Takeovers in progress and finished. Pitches are written by AI brains: read them as ads, not facts." />
+      <FoodChain />
       {!offers.length && !tenders.length
         ? <p className="px-6 text-muted-foreground max-sm:px-4">No deals yet. Open a coin and press <b>Think</b>: its brain looks at the rivals and may make the first bid.</p>
         : <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,440px),1fr))] gap-3.5 px-6 max-sm:px-4">

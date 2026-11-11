@@ -280,3 +280,24 @@
 .guard i svg, .verdict svg, .proof svg, .inject svg, .tag svg { display: inline; width: 13px; height: 13px; vertical-align: -2px; }
 .guard i svg { stroke-width: 3; }
 .swap svg { width: 15px; height: 15px; }
+
+/* what's different */
+.versus { border-top: 1px solid var(--line-strong); }
+.vs-row { display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, 1fr) minmax(0, 1.25fr); border-bottom: 1px dashed var(--line-strong); }
+.vs-row:last-child { border-bottom: 0; }
+.vs-row > * { margin: 0; padding: 18px 26px; min-width: 0; }
+.vs-row > * + * { border-left: 1px dashed var(--line-strong); }
+.vs-row > span { font: 500 12px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted-foreground); padding-left: 40px; }
+.vs-row p { font-size: 15px; color: var(--muted-foreground); text-wrap: pretty; }
+.vs-row .us { color: var(--foreground); background: color-mix(in srgb, var(--primary) 7%, transparent); display: flex; gap: 10px; align-items: flex-start; }
+.vs-row .us svg { flex: none; width: 16px; height: 16px; margin-top: 3px; color: var(--primary); stroke-width: 3; }
+.vs-top b { font: 600 15px var(--font-display); color: var(--muted-foreground); }
+.vs-top b.us { color: var(--primary); }
+@media (max-width: 760px) {
+  .vs-row { grid-template-columns: minmax(0, 1fr); }
+  .vs-row > * { padding: 10px 20px; }
+  .vs-row > * + * { border-left: 0; }
+  .vs-row > span { padding: 16px 20px 0; }
+  .vs-top { display: none; }
+  .vs-row p:not(.us) { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--down) 60%, transparent); }
+}

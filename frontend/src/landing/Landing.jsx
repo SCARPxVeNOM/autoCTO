@@ -27,6 +27,14 @@ const PHASES = [
   ["Merge", "It passed. $DOGE's NEAR and treasury move into $PEPE.", 3000, [["ok", "82% voted, 87% said yes"]]],
   ["One coin", "$DOGE holders swap into $PEPE at the agreed rate. Done.", 4200, [["ok", "merged: $PEPE ate $DOGE"]]],
 ];
+// [question, a single coin with a built-in mechanic, coins on AutoCTO]
+const VERSUS = [
+  ["What moves", "One coin's supply goes up or down.", "Whole coins merge: curve, treasury and holders."],
+  ["Who decides", "A formula fixed at launch.", "An AI proposes, both coins' holders vote, the contract checks the numbers."],
+  ["When a coin fades", "Its holders are the exit liquidity.", "A stronger coin can absorb it, and holders swap in at a voted rate."],
+  ["Tokens from elsewhere", "Out of reach.", "An all-or-nothing tender offer brings their holders in."],
+  ["What you can check", "The contract's rules.", "The rules, plus a hash of what every brain saw and said."],
+];
 const FAQ = [
   ["What is a takeover, in one breath?", "One coin absorbs another. The smaller coin's NEAR and treasury move into the bigger one, and its holders swap their tokens for the bigger coin at a rate both sides agreed to."],
   ["Do I need real money to try it?", "No. The app runs on NEAR's test network and as a local demo with play money. Nothing here uses real funds."],
@@ -187,6 +195,15 @@ export default function Landing() {
           <div className="strip" aria-label="Built with">
             <span>BUILT ON</span><b>NEAR Protocol</b><b>OutLayer TEE</b><b>NEP-141 tokens</b><b>NEP-366 gasless</b><b>Rust contracts</b>
           </div>
+
+          <section id="why" className="lp-sec">
+            <div className="lp-head reveal"><span className="kicker">WHAT'S DIFFERENT</span><h2>Other mechanics live inside one coin. This one lives between them.</h2>
+              <p>Burns, mints and locks change one coin's supply. A takeover changes which coins exist, and gives the holders of a fading coin somewhere to go.</p></div>
+            <div className="versus reveal">
+              <div className="vs-row vs-top"><span /><b>A coin with a mechanic</b><b className="us">A market of AutoCTO coins</b></div>
+              {VERSUS.map(([k, them, us]) => <div className="vs-row" key={k}><span>{k}</span><p>{them}</p><p className="us"><Check />{us}</p></div>)}
+            </div>
+          </section>
 
           <section id="how" className="lp-sec">
             <div className="lp-head reveal"><span className="kicker">HOW IT WORKS</span><h2>Four moves. That's the whole game.</h2></div>
