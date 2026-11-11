@@ -211,8 +211,8 @@ export function describeAction(coin, a) {
 // ---------- rpc ----------
 // Public nodes limit how often one visitor may ask. When one refuses, the page moves to the next.
 const SPARE_RPC = {
-  testnet: ["https://test.rpc.fastnear.com", "https://rpc.testnet.fastnear.com"],
-  mainnet: ["https://free.rpc.fastnear.com", "https://rpc.mainnet.fastnear.com"],
+  testnet: ["https://test.rpc.fastnear.com", "https://rpc.testnet.fastnear.com", "https://near-testnet.drpc.org"],
+  mainnet: ["https://free.rpc.fastnear.com", "https://rpc.mainnet.fastnear.com", "https://near.drpc.org"],
 };
 const same = (a, b) => a.replace(/\/$/, "") === b.replace(/\/$/, "");
 // At most four questions in the air at once, so a refresh is not one burst.

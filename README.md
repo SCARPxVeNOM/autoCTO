@@ -142,7 +142,7 @@ This is commit-reveal, not the enclave tally from the idea doc: votes become pub
 - **The coin checks the signature too.** When an answer carries a signature, the coin's contract recovers the signer on chain (`keccak256` and `ecrecover`, EIP-191) and refuses the answer if it does not match the stated key; the decision is stored as `Refused` and nothing moves. A match is recorded as `signed_by` on the decision. This proves the signed text was not altered on the way in. It does not prove the key belongs to sealed hardware: that is the attestation report, which the page checks and a contract cannot fetch. Unsigned answers (rules mode) are still accepted. It runs on testnet on the `v4` launchpad. The older `v3` was locked at commit `37ad97c`, before this check, and cannot be upgraded: that is the point of locking it.
 - **Payment.** `think()` is open to anyone. With a deposit of at least the brain fee the caller pays; otherwise the coin's treasury pays, within its daily cap.
 - **Verify a decision.** Every `think()` stores a Decision with the sha256 of the exact input the brain got, the raw answer and the contract's verdict. The brain wasm is pinned by sha256 in the launchpad's `get_brain`. On the page, every decision has a **proof** link that shows these and explains what ties the answer to the hardware.
-- **Check the attestation.** OutLayer checks its worker's Intel TDX quote on chain once, at registration (`worker.outlayer.testnet`), and only that worker's key can deliver results; a quote is not checked per call because of the gas it costs. Each run's own attestation is kept by OutLayer and can be checked with its tool: `cargo install --git https://github.com/out-layer/outlayer-verify outlayer-verify`, then `outlayer-verify tx <hash of the think transaction> --network testnet` (exit code 0 means proven). We have not run this tool against our own decisions yet.
+- **Check the attestation.** OutLayer checks its worker's Intel TDX quote on chain once, at registration (`worker.outlayer.testnet`), and only that worker's key can deliver results; a quote is not checked per call because of the gas it costs. Each run's own attestation is kept by OutLayer and can be checked with its tool: `cargo install --git https://github.com/out-layer/outlayer-verify outlayer-verify`, then `outlayer-verify tx <hash of the think transaction> --network testnet` (exit code 0 means proven). OutLayer's in-browser verifier, which runs the same three checks, passes for the `v4` takeover bid (job 62732, under "Live on testnet").
 
 ## The keeper and other agents
 
@@ -184,6 +184,8 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 | 6 | After the 10-minute vote, `finalize`: 100% yes, WOJAK's curve NEAR and treasury move into PEPE | [`2yV8LwHD…`](https://testnet.nearblocks.io/txns/2yV8LwHDdzHwAyqMLdexgrdYGYCJPBD4FTiELcw55aHn) |
 | 7 | Both holders convert at 0.790452, the late buyer included: a late buyer cannot vote, but is not locked out of the deal | [`BhMdwXUX…`](https://testnet.nearblocks.io/txns/BhMdwXUXmgHFgz1tkjK5Kr19Wqdsff2nECmfPNKNHarh), [`9RPXkDic…`](https://testnet.nearblocks.io/txns/9RPXkDicRZ1Nn6v5SVsRgctoDw1GEMJaXBg8voCy9Z6f) |
 
+**The hardware attestation for step 2 checks out.** OutLayer's attestation for that run is [job 62732](https://app.outlayer.ai/attestation/62732?network=testnet) (raw: `https://testnet-api.outlayer.ai/attestations/62732`). Its in-browser verifier reports the Intel signature valid with TCB status UpToDate, the five measurements approved on `worker.outlayer.testnet`, and a quote that commits to this input, output, code and caller. The hashes it binds match the chain: input `d358d186…4318b1` equals the coin's stored `input_sha256`, output `46aa9564…beefd9` equals the sha256 of the 788 bytes the coin received, and the wasm `efc702f6…d3b5a5` equals `res/autocto-brain.wasm` at `f2f2586`. The same checks run offline with OutLayer's open-source verifier: `cargo install --git https://github.com/out-layer/outlayer-verify outlayer-verify`, then `outlayer-verify job 62732 --network testnet`.
+
 Both accounts belong to the same person, so this proves the rules, not that strangers showed up. The brain on `v4` is a second version of the same OutLayer project, added without activating it; `v3` keeps its own pinned version.
 
 ### Verify it yourself
@@ -198,7 +200,7 @@ Open the app's **Verify** page (`app.html?network=testnet#verify`). The browser 
 6. `get_params` equals `params/testnet.json`;
 7. the latest model answer's signature is valid and its key is in a fresh NEAR AI attestation report.
 
-All seven pass on `v4`. The page does not check the Intel and NVIDIA hardware quotes; it says so and links to the verifiers that do. It reads the chain through public FastNEAR nodes, which limit request rates, so it asks at most four things at once, every 10 seconds, and moves to a second node when one refuses.
+All seven pass on `v4`. The page does not check the Intel and NVIDIA hardware quotes; it says so and links to the verifiers that do. It reads the chain through public nodes (FastNEAR, then dRPC), which limit request rates, so it asks at most four things at once, every 10 seconds, and moves to the next node when one refuses.
 
 ### Earlier runs
 
@@ -283,7 +285,7 @@ python3 -m http.server 8080 -d web   # http://localhost:8080/?network=testnet
 
 The key comes from `~/.near-credentials/testnet/<you>.testnet.json`, or from `NEAR_PRIVATE_KEY`. The brain can also go to OutLayer's FastFS with `outlayer upload res/autocto-brain.wasm` (OutLayer CLI).
 
-The tool checks the deployed rules against the params file, prints the coin code hash and launch deposit, and writes `web/config.testnet.json`. On testnet the page signs through a wallet: **Connect wallet** opens the [NEAR Connect](https://github.com/hot-dao/near-selector) picker (Meteor, Intear, Ledger, NEAR CLI and others), and each action is approved there. The picker has been opened on testnet; a full signed action through a wallet has not been run yet.
+The tool checks the deployed rules against the params file, prints the coin code hash and launch deposit, and writes `web/config.testnet.json`. On testnet the page signs through a wallet: **Connect wallet** opens the [NEAR Connect](https://github.com/hot-dao/near-selector) picker (Meteor, Intear, Ledger, NEAR CLI and others), and each action is approved there. A wallet-signed buy has run on `v4`: `nearnook8323.testnet`, a fresh Meteor Wallet account, connected through the picker and approved a 0.1 NEAR buy of $PEPE in Meteor ([`D8tCfL1J…`](https://testnet.nearblocks.io/txns/D8tCfL1J6C1ntnut1KtsEPpxM6WmkmQD6pzzSK7m8wVq)); it received 6.44M PEPE, as quoted. The page reads the chain through public nodes (FastNEAR, then dRPC) and moves to the next when one refuses.
 
 If the launchpad account runs short of balance for its code storage, the deploy stops after creating it. Re-run with `--top-up <NEAR>` to add to the existing account and deploy.
 
