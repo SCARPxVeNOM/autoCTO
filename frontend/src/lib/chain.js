@@ -209,14 +209,43 @@ export function describeAction(coin, a) {
 }
 
 // ---------- rpc ----------
-async function rpc(method, params) {
-  const r = await fetch(cfg.rpc, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: "page", method, params }),
-  });
-  const j = await r.json();
-  if (j.error) throw new Error(JSON.stringify(j.error));
-  return j.result;
+// Public nodes limit how often one visitor may ask. When one refuses, the page moves to the next.
+const SPARE_RPC = {
+  testnet: ["https://test.rpc.fastnear.com", "https://rpc.testnet.fastnear.com"],
+  mainnet: ["https://free.rpc.fastnear.com", "https://rpc.mainnet.fastnear.com"],
+};
+const same = (a, b) => a.replace(/\/$/, "") === b.replace(/\/$/, "");
+// At most four questions in the air at once, so a refresh is not one burst.
+let flying = 0;
+const waiting = [];
+async function slot() {
+  if (flying >= 4) await new Promise((go) => waiting.push(go));
+  flying++;
+}
+const done = () => { flying--; waiting.shift()?.(); };
+export async function rpc(method, params) {
+  await slot();
+  try { return await ask(method, params); } finally { done(); }
+}
+async function ask(method, params) {
+  const nodes = [cfg.rpc, ...(qs.get("rpc") ? [] : SPARE_RPC[NETWORK] || []).filter((u) => !same(u, cfg.rpc))];
+  let last;
+  // Two rounds: a node that said "too many requests" usually answers again a moment later.
+  for (const url of [...nodes, null, ...nodes]) {
+    if (!url) { await new Promise((r) => setTimeout(r, 1500)); continue; }
+    try {
+      const r = await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "page", method, params }),
+      });
+      if (!r.ok) throw new Error(`${new URL(url).host} answered ${r.status}`);
+      const j = await r.json();
+      if (j.error) return Promise.reject(new Error(JSON.stringify(j.error)));
+      cfg.rpc = url; // stay with the node that answered
+      return j.result;
+    } catch (e) { last = e; }
+  }
+  throw last;
 }
 export async function view(account, method, args = {}) {
   const res = await rpc("query", {
@@ -284,12 +313,16 @@ async function load() {
     state.launchMin = BigInt(await view(cfg.launchpad, "min_launch_deposit"));
   }
   state.coins = (await view(cfg.launchpad, "list_coins", { limit: 100 })).filter((c) => c.state === "Live");
+  tick++;
   await Promise.all(state.coins.map(async ({ account_id: a }) => {
+    // A merged coin only changes when someone converts: look at it less often.
+    if (state.info[a] && isMerged(state.info[a]) && tick % 6) return;
     const [info, offers, history, decisions, tenders, acct, keys] = await Promise.all([
       view(a, "coin_info"), view(a, "list_offers"), view(a, "history"), view(a, "list_decisions", { limit: 12 }),
       view(a, "list_tenders").catch(() => []),
-      rpc("query", { request_type: "view_account", finality: "optimistic", account_id: a }).catch(() => null),
-      rpc("query", { request_type: "view_access_key_list", finality: "optimistic", account_id: a }).catch(() => null),
+      // An account with no keys can never get one or change its code: ask once.
+      state.keys[a] === 0 ? state.account[a] : rpc("query", { request_type: "view_account", finality: "optimistic", account_id: a }).catch(() => null),
+      state.keys[a] === 0 ? { keys: [] } : rpc("query", { request_type: "view_access_key_list", finality: "optimistic", account_id: a }).catch(() => null),
     ]);
     state.info[a] = info;
     state.offers[a] = offers; state.history[a] = history; state.decisions[a] = decisions; state.tenders[a] = tenders;
@@ -311,7 +344,7 @@ async function load() {
   state.ready = true;
 }
 
-let busy = false, again = false;
+let busy = false, again = false, tick = 0;
 export async function refresh() {
   if (busy) { again = true; return; }
   busy = true;
@@ -327,7 +360,13 @@ let started = false;
 export function start() {
   if (started) return;
   started = true;
-  loadConfig().then(() => { refresh(); setInterval(refresh, 3000); }).catch((e) => console.warn(e));
+  // A local chain can be asked as often as we like; a public node cannot.
+  const every = cfg => (cfg.dev_key ? 3000 : 10000);
+  loadConfig().then(() => {
+    refresh();
+    setInterval(() => { if (!document.hidden) refresh(); }, every(cfg));
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+  }).catch((e) => console.warn(e));
 }
 
 export function selectCoin(a) {

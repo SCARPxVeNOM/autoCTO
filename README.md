@@ -16,7 +16,7 @@ You need Rust (`rust-toolchain.toml` pins 1.99.1; rustup installs it) and [cargo
 | `cargo test -p autocto-tests` | 14 end-to-end takeover, tender, gasless-voting and sealed-voting tests, plus an invariant fuzz run, pass in a local NEAR sandbox (~4 min) |
 | `cargo test -p autocto-coin -p autocto-brain` | 10 unit tests (curve math, brain reader and decider) |
 | `cargo run -p autocto-demo` | a narrated takeover and tender story (~4 min); it ends with "The chain keeps running" |
-| `python3 -m http.server 8080 -d web`, then open http://localhost:8080/?network=local | the landing page, with an animated takeover and how it works; **Enter the app** opens `app.html`, the trading page: market table, a coin panel with the bonding-curve chart and a buy/sell/lock ticket with live quotes, deals (bids and tenders), brain decisions, live feed, simulation. In the local demo, **Play a takeover for me** runs a whole takeover with the demo holders (lock, bid, vote, count), and launches a rival coin first when only one coin is left |
+| `python3 -m http.server 8080 -d web`, then open http://localhost:8080/?network=local | the landing page, with an animated takeover and how it works; **Enter the app** opens `app.html`, the trading page: market table, a coin panel with the bonding-curve chart and a buy/sell/lock ticket with live quotes, deals (bids and tenders), brain decisions, live feed, simulation, and a **Verify** page (below). In the local demo, **Play a takeover for me** runs a whole takeover with the demo holders (lock, bid, vote, count), and launches a rival coin first when only one coin is left |
 | on the page: follow **Your first steps**, or pick a holder under "playing as", buy or sell in the ticket, press **Think** on a coin, back or veto a deal, or fill **Launch a coin** | trades settle against the coin's curve; the demo process answers the brain run within seconds |
 | on the page: play as **zed.sandbox** (holds 0 NEAR), pick $WOJAK, open **Lock** in the trade ticket and lock some; then tick **gasless** and try again | the first try fails (zed can't pay for gas), the second works: zed signs, the demo's relayer pays |
 | with the demo running: `NEAR_PRIVATE_KEY=<dev_key from web/config.local.json> cargo run -p autocto-demo --bin keeper -- --owner dev.sandbox --network http://127.0.0.1:3030 --think --think-every 1 --interval 4` | the keeper wakes the brains and they negotiate by themselves: a bid, a counter, an accept, a stance |
@@ -166,7 +166,7 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 | Launchpad | [`v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v3.scarpxvenom.testnet), current code, deployed from commit `37ad97c`, locked: 0 access keys |
 | Rules | `params/testnet.json` (10-minute votes, 5-minute newborn protection) |
 | Brain | OutLayer project `scarpxvenom.testnet/autocto-brain` on `outlayer.testnet`, version pinned by sha256 `ac781f9f…19dbb58` (`res/autocto-brain.wasm` at commit `37ad97c`). **Model mode**: `z-ai/glm-5.3-flash` on NEAR AI Cloud, the API key held as an OutLayer secret |
-| Coins | [`pepe.v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v3.scarpxvenom.testnet) and [`doge.v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v3.scarpxvenom.testnet) (absorbed), each with 0 access keys |
+| Coins | [`pepe.v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v3.scarpxvenom.testnet), [`doge.v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v3.scarpxvenom.testnet) and [`wojak.v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/wojak.v3.scarpxvenom.testnet) (both absorbed), each with 0 access keys |
 | Page | `python3 -m http.server 8080 -d web`, then http://localhost:8080/?network=testnet |
 
 **A takeover decided by a model, with each answer signed.** Both brains ran inside OutLayer's TEE and asked a model that NEAR AI runs inside its own TEE. Every model decision below carries NEAR AI's signature on chain (`attest` in `get_decision`), and the page's proof dialog verified each one in the browser.
@@ -183,9 +183,36 @@ The page charts all of it, and `sim/REPORT.md` has the numbers.
 
 Step 4 is the design working as meant: a model answer that does not parse into an allowed move never reaches the contract. Those two decisions say `"mode":"rules"` and carry no signature.
 
-One account played every holder in this run, so it shows the mechanism end to end, not a contested vote. Check the result with `near view pepe.v3.scarpxvenom.testnet coin_info` (`absorbed` lists DOGE) and `near view doge.v3.scarpxvenom.testnet get_decision '{"id":0}'` (the signed counter).
+**A contested vote, with a late buyer.** PEPE then went after a third coin, [`wojak.v3.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/wojak.v3.scarpxvenom.testnet), with two holders on opposite sides:
+
+| Step | What happened | Transaction |
+|---|---|---|
+| 1 | Two accounts buy WOJAK and lock it before any bid: `scarpxvenom.testnet` 55.96M, `tester.scarpxvenom.testnet` 17.22M | [`J1b6JJ6h…`](https://testnet.nearblocks.io/txns/J1b6JJ6h3DDVXMDrnPbB5AThMDWgjL24vuLErLixA1Mw), [`BGRbSW6i…`](https://testnet.nearblocks.io/txns/BGRbSW6i5N929ajtHMb52nnibZ9FkCzFg8To25wcfDRU) |
+| 2 | PEPE's brain is woken 3 seconds before WOJAK's newborn protection ends. The model sees no biddable rival and waits | [`xJd2qdeY…`](https://testnet.nearblocks.io/txns/xJd2qdeYBMh6ZsfF9JMVDNoN2ZUMCLNrPeSmpJdwCDN) |
+| 3 | Woken again after protection, the model bids for WOJAK at +8% (signed answer, decision #6) | [`9JjCh5Kr…`](https://testnet.nearblocks.io/txns/9JjCh5Kr3msqmLcs4a7gnJd88T1r758vXMSEjiLDs5oH) |
+| 4 | `tester` buys 8.43M more WOJAK after the bid and locks it | [`CLHAsinb…`](https://testnet.nearblocks.io/txns/CLHAsinbgPbGixnwhghDCUnwMiSB5spgYkMeTox3xhta) |
+| 5 | `tester` votes NO. Only the 17.22M locked before the bid count; the late 8.43M add nothing | [`ztrjdr8W…`](https://testnet.nearblocks.io/txns/ztrjdr8WnbtcgAMTcKJjgK5TqpJ5xUxmLvewvYMYHsE) |
+| 6 | `scarpxvenom.testnet` votes YES with 55.96M: 76.5% yes, above the 67% needed | [`Fdykd8MN…`](https://testnet.nearblocks.io/txns/Fdykd8MN36frk3JsYtA3Qr4v5Jq1AsX6oUpiYVJrcW9t) |
+| 7 | After the vote, `finalize`: WOJAK merges into PEPE at 0.855089 | [`5Zut42au…`](https://testnet.nearblocks.io/txns/5Zut42auiVspPou7DCWrr5Fc5HJxP63i6rj2rybd1kdX) |
+| 8 | Both holders convert, the NO voter included: `tester` gets 21.93M PEPE for all 25.64M WOJAK | [`HWsjXYez…`](https://testnet.nearblocks.io/txns/HWsjXYezQmv35DFkHXCKrmTjbksGWKgRYTLkVjs78AmR), [`EPk3oSEc…`](https://testnet.nearblocks.io/txns/EPk3oSEcvSiaaW1VNR7DdnQuo1KCTdEXaED6shfU8U9i) |
+
+Both accounts belong to the same person, so this proves the vote counting and the snapshot, not that strangers showed up. Check the results with `near view pepe.v3.scarpxvenom.testnet coin_info` (`absorbed` lists DOGE and WOJAK) and `near view doge.v3.scarpxvenom.testnet get_decision '{"id":0}'` (the signed counter).
 
 The launchpad is locked: its only key was deleted ([`7BCPtpsh…`](https://testnet.nearblocks.io/txns/7BCPtpshg6RF8JfyTKb9qRhLpyCjc87eWsFu3GDmnxJR)), so it has 0 access keys and nobody can change it. Its coins have zero keys too. During the run above the NEAR AI key was readable only by brain runs that `scarpxvenom.testnet` woke; it has since been opened to any caller. A second account, `tester.scarpxvenom.testnet`, then woke PEPE's brain and got a signed model answer too ([`DjK4eg5m…`](https://testnet.nearblocks.io/txns/DjK4eg5mBGBuTQw2UmCqd3QuCXPCdxumw9JLJHontu7g), decision #4). Anyone can check that the launchpad's on-chain code hash equals `res/autocto_launchpad.wasm`, that `coin_code_hash` equals `res/autocto_coin.wasm`, and that `get_params` equals `params/testnet.json`.
+
+### Verify it yourself
+
+Open the app's **Verify** page (`app.html?network=testnet#verify`). The browser runs seven checks against the chain and the public repo, with nothing from us in between:
+
+1. the launchpad has 0 access keys;
+2. the launchpad's code hash on chain equals the sha256 of `res/autocto_launchpad.wasm`, which the page downloads from GitHub at the deployed commit;
+3. every coin runs the same code, and that hash equals `res/autocto_coin.wasm`;
+4. every coin has 0 access keys;
+5. the brain hash the launchpad pins equals `res/autocto-brain.wasm`;
+6. `get_params` equals `params/testnet.json`;
+7. the latest model answer's signature is valid and its key is in a fresh NEAR AI attestation report.
+
+All seven pass on `v3`. The page does not check the Intel and NVIDIA hardware quotes; it says so and links to the verifiers that do. It reads the chain through public FastNEAR nodes, which limit request rates, so it asks at most four things at once, every 10 seconds, and moves to a second node when one refuses.
 
 ### Earlier runs
 
@@ -256,7 +283,7 @@ If the launchpad account runs short of balance for its code storage, the deploy 
 
 ## Honest limits
 
-- **The testnet takeover had one holder.** A complete takeover (bid, counter, accept, vote, merge, convert) has run on testnet through the real `outlayer.testnet`, but one account held and voted all the tokens. Contested votes, vetoes, tenders, sealed votes and gasless voting have run only in the local sandbox, against `mock-outlayer`.
+- **The testnet holders are ours.** Two complete takeovers have run on testnet through the real `outlayer.testnet`, one with a contested vote and a late buyer, but both voting accounts are ours. Vetoes, sealed votes and gasless voting have run only in the local sandbox, against `mock-outlayer`; the one testnet tender did not reach its threshold.
 - **Unchecked on OutLayer.** OutLayer's docs give `version_key` as the wasm's sha256, which is what the deploy tool sends, but pinning a project version this way (LLM mode) has not been exercised on testnet.
 - **Sybil resistance is by stake, not by person.** Votes are weighted by tokens locked before the bid, so splitting tokens across accounts gains nothing in an open vote, and buying in after a bid gains nothing either. It does not stop a whale: the quorum, the 67% approval and the bidder-side veto are the answer to that, and the simulation's whale attacks test it. With sealed votes, splitting across accounts does help (see known gaps).
 - **Replay is partial.** The input hash pins what the contract gave the brain, but the brain also reads rival coins live over RPC. Re-running a scouting decision later can differ; trust in LLM mode rests on OutLayer's TEE attestation.

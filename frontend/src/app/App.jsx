@@ -1,6 +1,6 @@
 // The app's shell: sidebar, top bar, one view at a time (picked by the address hash) and the dialogs.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookOpen, Brain, CircleHelp, Copy, LayoutDashboard, ListChecks, Moon, Rocket, Scale, Sun, SunMoon, Swords, Wallet } from "lucide-react";
+import { ArrowLeft, BookOpen, Brain, CircleHelp, Copy, LayoutDashboard, ListChecks, Moon, Rocket, Scale, ShieldCheck, Sun, SunMoon, Swords, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -22,11 +22,12 @@ import Deals from "./Deals";
 import Brains from "./Brains";
 import Launch from "./Launch";
 import Rules from "./Rules";
+import Verify from "./Verify";
 import { AutoPanel } from "./Autoplay";
 
 // Which view each address hash belongs to.
-const VIEW_OF = { market: "market", guide: "market", trade: "market", deals: "deals", brains: "brains", feed: "brains", launch: "launch", rules: "rules", sim: "rules" };
-const VIEWS = { market: Market, deals: Deals, brains: Brains, launch: Launch, rules: Rules };
+const VIEW_OF = { market: "market", guide: "market", trade: "market", deals: "deals", brains: "brains", feed: "brains", launch: "launch", rules: "rules", sim: "rules", verify: "verify" };
+const VIEWS = { market: Market, deals: Deals, brains: Brains, launch: Launch, rules: Rules, verify: Verify };
 const hashId = () => location.hash.slice(1);
 // "What is AutoCTO" keeps the network the visitor is on.
 const HOME = `index.html${location.search}`;
@@ -171,7 +172,7 @@ export default function App() {
   const ThemeIcon = THEME_ICON[theme];
   const links = [
     ["Trade"], ["#market", LayoutDashboard, "Market", "market"], ["#deals", Swords, "Deals", "deals", deals], ["#brains", Brain, "Brains & feed", "brains"],
-    ["Build"], ["#launch", Rocket, "Launch a coin", "launch"], ["#rules", Scale, "Rules", "rules"],
+    ["Build"], ["#launch", Rocket, "Launch a coin", "launch"], ["#rules", Scale, "Rules", "rules"], ["#verify", ShieldCheck, "Verify", "verify"],
   ];
 
   return (

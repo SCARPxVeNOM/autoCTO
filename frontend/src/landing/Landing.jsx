@@ -33,7 +33,7 @@ const VERSUS = [
   ["Who decides", "A formula fixed at launch.", "An AI proposes, both coins' holders vote, the contract checks the numbers."],
   ["When a coin fades", "Its holders are the exit liquidity.", "A stronger coin can absorb it, and holders swap in at a voted rate."],
   ["Tokens from elsewhere", "Out of reach.", "An all-or-nothing tender offer brings their holders in."],
-  ["What you can check", "The contract's rules.", "The rules, plus a hash of what every brain saw and said."],
+  ["What you can check", "The contract's rules.", "The rules, what every brain saw and said, and the AI model's own signature on its answer."],
 ];
 const FAQ = [
   ["What is a takeover, in one breath?", "One coin absorbs another. The smaller coin's NEAR and treasury move into the bigger one, and its holders swap their tokens for the bigger coin at a rate both sides agreed to."],
@@ -41,6 +41,7 @@ const FAQ = [
   ["What is the AI allowed to do?", "Propose: make a bid, answer a bid with a counter-offer, or tell its holders what it thinks. It cannot move funds, change rules or force a deal. Holders vote, and the contract checks every number."],
   ["What if a deal is bad for me?", "If you hold the target, vote no. If you hold the bidder, veto. If the deal passes anyway, you can sell before it executes: the price curve always buys back."],
   ["Can it take over tokens from outside?", "Yes, with a tender offer: holders of an outside token deposit it and get the coin back. It is all or nothing, so if too little is deposited by the deadline everyone is refunded. The brain refuses tokens whose owner could still rug."],
+  ["How do I know nobody can pull the rug?", <>Don't take our word for it. The app has a <a className="text-primary underline underline-offset-2" href={`${APP}#verify`}>Verify page</a> where your own browser asks the chain: the launchpad and every coin have zero keys, the code on chain is the code in the public repo, and the brain is pinned by its hash.</>],
   ["Is the code open?", <>Yes, MIT licensed: <a className="text-primary underline underline-offset-2" href="https://github.com/SCARPxVeNOM/autoCTO">github.com/SCARPxVeNOM/autoCTO</a>.</>],
 ];
 
