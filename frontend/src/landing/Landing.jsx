@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, NETWORK } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { Logo, Wordmark } from "@/components/common";
 import "./landing.css";
@@ -112,8 +112,7 @@ function useLiveLine() {
   const [line, setLine] = useState("Memecoins on NEAR");
   useEffect(() => {
     (async () => {
-      const network = new URLSearchParams(location.search).get("network") || "local";
-      const cfg = await fetch(`config.${network}.json`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      const cfg = await fetch(`config.${NETWORK}.json`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
       if (!cfg?.rpc || !cfg?.launchpad) return;
       const view = async (account, method, args = {}) => {
         const r = await fetch(cfg.rpc, {

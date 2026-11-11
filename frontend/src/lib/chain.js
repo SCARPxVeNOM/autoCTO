@@ -1,12 +1,13 @@
 // AutoCTO chain layer: reads every coin straight from NEAR RPC and sends actions. No backend.
 // ?network=local   -> config.local.json (written by `cargo run -p autocto-demo`)
 // ?network=testnet -> config.testnet.json (written by `cargo run -p autocto-demo --bin deploy`)
-// ?rpc=...&launchpad=... override either.
+// Without it: local on localhost, testnet anywhere else. ?rpc=...&launchpad=... override either.
 import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
+import { NETWORK } from "@/lib/utils";
 
+export { NETWORK };
 const qs = new URLSearchParams(location.search);
-export const NETWORK = qs.get("network") || "local";
 const GAS = 300_000_000_000_000n;
 export const YOCTO = 10n ** 24n;
 export const UNIT = 10n ** 18n;
