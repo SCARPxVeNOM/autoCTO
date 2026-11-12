@@ -202,14 +202,16 @@ export function createArena(host, replay, { calm, start = 0, labels, bubble, onB
     const faceCanvas = document.createElement("canvas"); faceCanvas.width = faceCanvas.height = 512;
     drawFace(faceCanvas, c.symbol, null);
     const front = keep(new THREE.CanvasTexture(faceCanvas)); front.colorSpace = THREE.SRGBColorSpace; front.anisotropy = 4;
-    front.center.set(0.5, 0.5); front.rotation = -Math.PI / 2;
-    const back = keep(front.clone()); back.rotation = Math.PI / 2; back.repeat.set(-1, 1);
+    // A cap's UVs lie on their side (u runs down the face, v across it): a quarter turn stands the picture up.
+    // Seen from outside, both caps are laid out alike, so the back wears the same texture and reads upright too.
+    front.center.set(0.5, 0.5); front.rotation = Math.PI / 2;
     const metal = new THREE.Color().setHSL(((h + 12) % 360) / 360, 0.5, 0.62);
     const edge = keep(new THREE.MeshStandardMaterial({ color: metal, metalness: 1, roughness: 0.32, bumpMap: reeds, bumpScale: 1.5 }));
     const lipMat = keep(new THREE.MeshStandardMaterial({ color: metal, metalness: 1, roughness: 0.22 }));
     // A soft lacquer: shiny enough to catch the light, not so shiny that the picture washes out as it turns.
     const faceMat = (map) => keep(new THREE.MeshPhysicalMaterial({ map, metalness: 0.15, roughness: 0.5, clearcoat: 0.45, clearcoatRoughness: 0.35, envMapIntensity: 0.7 }));
-    const body = new THREE.Mesh(COIN, [edge, faceMat(front), faceMat(back)]);
+    const face = faceMat(front);
+    const body = new THREE.Mesh(COIN, [edge, face, face]);
     body.userData.id = c.id;
     const spin = new THREE.Group();
     spin.add(body);
@@ -226,7 +228,7 @@ export function createArena(host, replay, { calm, start = 0, labels, bubble, onB
       paint.src = src;
       const img = new Image();
       img.crossOrigin = "anonymous";
-      img.onload = () => { drawFace(faceCanvas, c.symbol, img); front.needsUpdate = back.needsUpdate = true; invalidate(); };
+      img.onload = () => { drawFace(faceCanvas, c.symbol, img); front.needsUpdate = true; invalidate(); };
       img.src = src;
     };
     return { ...c, h, group, spin, body, halo, paint, base: new THREE.Vector3(), s: radius(c.before), sv: 0, phase: n * 1.7, awake: 0, hover: 0, hue: new THREE.Color(`hsl(${h}, 70%, 56%)`) };

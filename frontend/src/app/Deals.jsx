@@ -87,7 +87,7 @@ function Offer({ o }) {
             <Button className="rounded-full btn-down" disabled={state.acting} onClick={() => vote(false)}>{sealedMode ? "Seal NO" : "Vote NO"}</Button>
           </>)}
         {open && !ended && canVeto && <Button variant="outline" className="rounded-full" disabled={state.acting} onClick={() => act("veto", { coin: o.buyer, id: o.id })}>Veto (as ${B} holder)</Button>}
-        {open && o.counter && <Button variant="outline" className="rounded-full" disabled={state.acting} onClick={() => act("accept_counter", { coin: o.buyer, id: o.id })}>Accept counter</Button>}
+        {open && o.counter && <Button variant="outline" className="rounded-full" disabled={state.acting} onClick={() => act("accept_counter", { coin: o.buyer, id: o.id, rate: o.counter.rate_ppm })}>Accept counter</Button>}
         {open && inReveal && (ballot
           ? <Button className="rounded-full" disabled={state.acting} onClick={() => act("reveal", { coin: o.target, offer: key, round: o.round })}>Reveal my {ballot.support ? "YES" : "NO"} vote</Button>
           : <span className="text-[12.5px] text-muted-foreground">Reveal window: sealed votes count only once their voters reveal them.</span>)}

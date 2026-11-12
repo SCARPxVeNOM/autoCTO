@@ -12,10 +12,7 @@ use near_contract_standards::fungible_token::events::FtMint;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::json_types::U128;
 use near_sdk::serde_json::json;
-use near_sdk::{
-    AccountId, Gas, NearToken, Promise, PromiseError, PromiseOrValue, env, ext_contract, near,
-    require,
-};
+use near_sdk::{AccountId, Gas, NearToken, Promise, PromiseError, PromiseOrValue, env, ext_contract, near, require};
 
 use crate::market::fmt_tokens;
 use crate::math::{bps_of, mul_div};
@@ -77,9 +74,16 @@ impl Coin {
     #[private]
     pub fn on_tender_opened(&mut self, id: u64) -> bool {
         let Some(t) = self.tenders.get(&id).cloned() else { return false };
-        // Read the raw answer: a token that returns something odd must fail
-        // the tender, not leave it stuck in Opening.
-        let supply = env::promise_result_checked(0, 128)
+        // Result 0 is the registration: if the token would not register us, no
+        // deposit could ever reach us, so the tender must not open. Only whether
+        // it went through matters, not what it returned.
+        if matches!(env::promise_result_checked(0, 0), Err(PromiseError::Failed)) {
+            self.fail_tender(id, "the token would not register this coin");
+            return false;
+        }
+        // Result 1 is the supply. Read the raw answer: a token that returns
+        // something odd must fail the tender, not leave it stuck in Opening.
+        let supply = env::promise_result_checked(1, 128)
             .ok()
             .and_then(|b| near_sdk::serde_json::from_slice::<U128>(&b).ok())
             .map(|s| s.0)
@@ -227,11 +231,11 @@ impl Coin {
                         .with_attached_deposit(NearToken::from_yoctonear(1))
                         .with_static_gas(GAS_FT_TRANSFER)
                         .ft_transfer(who.clone(), U128(amount), Some("tender refunded".into()))
-                        .then(
-                            Self::ext(self.me())
-                                .with_static_gas(GAS_ON_TENDER_REFUND)
-                                .on_tender_refund(tender_id, who, U128(amount)),
-                        ),
+                        .then(Self::ext(self.me()).with_static_gas(GAS_ON_TENDER_REFUND).on_tender_refund(
+                            tender_id,
+                            who,
+                            U128(amount),
+                        )),
                 )
             }
             _ => env::panic_str("the tender is not settled yet"),
@@ -356,7 +360,7 @@ impl Coin {
             .with_attached_deposit(REGISTRATION)
             .with_static_gas(GAS_FT_REGISTER)
             .storage_deposit(Some(self.me()), Some(true))
-            .then(ext_ft::ext(token).with_static_gas(GAS_FT_VIEW).ft_total_supply())
+            .and(ext_ft::ext(token).with_static_gas(GAS_FT_VIEW).ft_total_supply())
             .then(Self::ext(self.me()).with_static_gas(GAS_ON_TENDER_OPENED).on_tender_opened(id)))
     }
 
@@ -365,10 +369,7 @@ impl Coin {
     fn tender_ballot(&mut self, tender_id: u64) -> (AccountId, u128, Tender) {
         let who = env::predecessor_account_id();
         let t = self.tenders.get(&tender_id).cloned().expect("unknown tender");
-        require!(
-            t.status == TenderStatus::Open && self.now() < t.deadline,
-            "the tender is closed"
-        );
+        require!(t.status == TenderStatus::Open && self.now() < t.deadline, "the tender is closed");
         let weight = self.weight_at(&who, t.created_at);
         require!(weight > 0, "no tokens locked before this tender was announced");
         require!(self.voted.insert(format!("tender|{tender_id}|{who}")), "already backed or vetoed");

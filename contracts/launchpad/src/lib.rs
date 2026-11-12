@@ -12,9 +12,7 @@
 use near_sdk::json_types::{Base58CryptoHash, U128};
 use near_sdk::serde_json::json;
 use near_sdk::store::IterableMap;
-use near_sdk::{
-    AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise, env, near, require,
-};
+use near_sdk::{AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise, env, near, require};
 
 /// The coin contract every launch deploys (built by `scripts/build.sh`).
 const COIN_CODE: &[u8] = include_bytes!("../../../res/autocto_coin.wasm");
@@ -143,9 +141,7 @@ impl Launchpad {
         if let Some(icon) = &icon {
             require!(icon.len() <= 4096, "icon: at most 4096 chars (use a small data URL)");
         }
-        let account_id: AccountId = format!("{label}.{}", env::current_account_id())
-            .parse()
-            .expect("bad account id");
+        let account_id: AccountId = format!("{label}.{}", env::current_account_id()).parse().expect("bad account id");
         require!(!self.coins.contains_key(&account_id), "this label is taken");
         let deposit = env::attached_deposit();
         let min = self.min_launch_deposit();
@@ -180,24 +176,19 @@ impl Launchpad {
         let mut p = Promise::new(account_id.clone()).create_account().transfer(deposit);
         p = match &self.code_mode {
             CodeMode::Embedded => p.deploy_contract(COIN_CODE.to_vec()),
-            CodeMode::Global { code_hash } => {
-                p.use_global_contract(near_sdk::CryptoHash::from(*code_hash))
-            }
+            CodeMode::Global { code_hash } => p.use_global_contract(near_sdk::CryptoHash::from(*code_hash)),
         };
         p.function_call("new", init_args, NearToken::from_yoctonear(0), GAS_COIN_INIT).then(
-            Self::ext(env::current_account_id())
-                .with_static_gas(GAS_ON_LAUNCHED)
-                .on_launched(account_id, creator, U128(deposit.as_yoctonear())),
+            Self::ext(env::current_account_id()).with_static_gas(GAS_ON_LAUNCHED).on_launched(
+                account_id,
+                creator,
+                U128(deposit.as_yoctonear()),
+            ),
         )
     }
 
     #[private]
-    pub fn on_launched(
-        &mut self,
-        account_id: AccountId,
-        creator: AccountId,
-        deposit: U128,
-    ) -> bool {
+    pub fn on_launched(&mut self, account_id: AccountId, creator: AccountId, deposit: U128) -> bool {
         // The coin's init returns no value, so read the raw result.
         if env::promise_result_checked(0, 0).is_ok() {
             let entry = self.coins.get_mut(&account_id).expect("unknown coin");
@@ -211,9 +202,7 @@ impl Launchpad {
         } else {
             // The whole batch rolled back and the deposit came back to us.
             self.coins.remove(&account_id);
-            Promise::new(creator)
-                .transfer(NearToken::from_yoctonear(deposit.0))
-                .detach();
+            Promise::new(creator).transfer(NearToken::from_yoctonear(deposit.0)).detach();
             false
         }
     }

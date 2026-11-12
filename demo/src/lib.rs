@@ -144,9 +144,7 @@ impl World {
         let config = near_sandbox::SandboxConfig { rpc_port, ..Default::default() };
         let sandbox = near_sandbox::Sandbox::start_sandbox_with_config(config).await?;
         let net = NetworkConfig::from_rpc_url("sandbox", sandbox.rpc_addr.parse()?);
-        let signer = Signer::from_secret_key(
-            near_sandbox::config::DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY.parse()?,
-        )?;
+        let signer = Signer::from_secret_key(near_sandbox::config::DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY.parse()?)?;
         let caller = Caller { net, signer };
         let root: AccountId = "sandbox".parse()?;
 
@@ -211,11 +209,7 @@ impl World {
 
     pub async fn new_account(&mut self, name: &str, near: u128) -> Result<AccountId> {
         let id: AccountId = format!("{name}.{}", self.root).parse()?;
-        self.sandbox
-            .create_account(id.as_str().parse()?)
-            .initial_balance(NearToken::from_near(near))
-            .send()
-            .await?;
+        self.sandbox.create_account(id.as_str().parse()?).initial_balance(NearToken::from_near(near)).send().await?;
         Ok(id)
     }
 
@@ -248,7 +242,13 @@ impl World {
     /// Deploy a plain NEP-141 token that knows nothing about AutoCTO, with the
     /// whole supply at `owner`. `keyless` deletes its access key, like a token
     /// whose developer has given up control.
-    pub async fn deploy_token(&mut self, name: &str, owner: &AccountId, supply: u128, keyless: bool) -> Result<AccountId> {
+    pub async fn deploy_token(
+        &mut self,
+        name: &str,
+        owner: &AccountId,
+        supply: u128,
+        keyless: bool,
+    ) -> Result<AccountId> {
         let id = self.new_account(name, 10).await?;
         Contract::deploy(id.clone())
             .use_code(read_res("mock_ft.wasm")?)
@@ -314,13 +314,7 @@ impl World {
                 }
             };
             self.caller
-                .ok(
-                    &self.worker,
-                    &self.outlayer,
-                    "resolve",
-                    json!({ "request_id": id, "output": out.to_string() }),
-                    0,
-                )
+                .ok(&self.worker, &self.outlayer, "resolve", json!({ "request_id": id, "output": out.to_string() }), 0)
                 .await?;
             outs.push(out);
         }
@@ -334,7 +328,13 @@ impl World {
     }
 
     /// Like `think`, but OutLayer returns `forced` instead of running the brain.
-    pub async fn think_forced(&self, by: &AccountId, coin: &AccountId, deposit: u128, forced: Value) -> Result<(Value, Value)> {
+    pub async fn think_forced(
+        &self,
+        by: &AccountId,
+        coin: &AccountId,
+        deposit: u128,
+        forced: Value,
+    ) -> Result<(Value, Value)> {
         self.think_answered(by, coin, deposit, Some(forced)).await
     }
 
@@ -367,6 +367,34 @@ impl World {
     }
 }
 
+// ---------- shared by the deploy, keeper and relayer binaries ----------
+
+/// The value after `name` on the command line.
+pub fn arg(args: &[String], name: &str) -> Option<String> {
+    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned()
+}
+
+/// `--network testnet` (the default) or an RPC URL; returns the config and the
+/// name its config file and credentials go by. `tool` never runs on mainnet.
+pub fn network_arg(args: &[String], tool: &str) -> Result<(NetworkConfig, &'static str)> {
+    match arg(args, "--network").as_deref().unwrap_or("testnet") {
+        "testnet" => Ok((NetworkConfig::testnet(), "testnet")),
+        "mainnet" => Err(anyhow!("the {tool} does not run on mainnet")),
+        url => Ok((NetworkConfig::from_rpc_url("custom", url.parse()?), "local")),
+    }
+}
+
+/// `--launchpad`, or else the launchpad in web/config.<network>.json.
+pub fn launchpad_arg(args: &[String], net_name: &str) -> Result<AccountId> {
+    if let Some(l) = arg(args, "--launchpad") {
+        return Ok(l.parse()?);
+    }
+    let path = res_dir().join(format!("../web/config.{net_name}.json"));
+    let text = std::fs::read_to_string(&path).with_context(|| format!("no --launchpad and no {}", path.display()))?;
+    let cfg: Value = serde_json::from_str(&text)?;
+    Ok(cfg["launchpad"].as_str().context("config has no launchpad")?.parse()?)
+}
+
 /// The signing key for `owner`: NEAR_PRIVATE_KEY, or else the near-cli
 /// credentials file ~/.near-credentials/<network>/<owner>.json.
 pub fn load_signer(network: &str, owner: &AccountId) -> Result<Arc<Signer>> {
@@ -382,9 +410,5 @@ pub fn load_signer(network: &str, owner: &AccountId) -> Result<Arc<Signer>> {
 }
 
 pub fn sha256_hex(data: &[u8]) -> String {
-    near_api::types::CryptoHash::hash(data)
-        .0
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    near_api::types::CryptoHash::hash(data).0.iter().map(|b| format!("{b:02x}")).collect()
 }

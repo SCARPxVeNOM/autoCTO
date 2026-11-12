@@ -1,0 +1,3 @@
+# Matches the code as written: long lines, short constructs kept on one line.
+max_width = 120
+use_small_heuristics = "Max"

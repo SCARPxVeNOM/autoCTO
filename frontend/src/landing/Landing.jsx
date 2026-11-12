@@ -14,6 +14,10 @@ import Footer from "./Footer";
 import Arena, { ArenaWait, canArena } from "./Arena";
 import { Note, Underline } from "./Pen";
 import { readReplay, reader, rpcQuery } from "./replay";
+import HEAD_DARK from "@/assets/headline-dark.webp";
+import HEAD_LIGHT from "@/assets/headline-light.webp";
+import HEAD_WIDE_DARK from "@/assets/headline-wide-dark.webp";
+import HEAD_WIDE_LIGHT from "@/assets/headline-wide-light.webp";
 import "./landing.css";
 
 // Whatever network the visitor came with goes along into the app.
@@ -75,6 +79,22 @@ const RECEIPTS = [
 
 const Enter = ({ lg, children = "Enter the app" }) => (
   <Button asChild size={lg ? "lg" : "default"} className={cn("rounded-full", lg && "h-12 px-6 text-base")}><a href={APP}>{children}{lg && <ArrowRight />}</a></Button>
+);
+
+// The headline as 3D lettering (scripts/lettering.py), in the box its text took and with its pen line.
+// Where the text fitted on one line (the single-column hero at 646 to 980px), the wide render takes over.
+const WIDE = "(min-width: 646px) and (max-width: 980px)";
+const Headline = ({ dark }) => (
+  <h1>
+    <span className="sr-only">Memecoins that take each other over.</span>
+    <span className="lp-h1" aria-hidden="true">
+      <picture>
+        <source media={WIDE} srcSet={dark ? HEAD_WIDE_DARK : HEAD_WIDE_LIGHT} />
+        <img src={dark ? HEAD_DARK : HEAD_LIGHT} alt="" draggable="false" fetchPriority="high" />
+      </picture>
+      <span className="lp-h1-over"><Underline /></span>
+    </span>
+  </h1>
 );
 
 // A "how it works" tile: a short rendered loop on the page's own colour, or its still frame for reduced motion.
@@ -305,7 +325,7 @@ export default function Landing() {
               <span className="eyebrow"><i /><span>{line}</span></span>
               {line.startsWith("Live") && <Note arrow="left" className="pen-live">real coins, live right now</Note>}
             </div>
-            <h1>Memecoins that <em>take each other <Underline>over.</Underline></em></h1>
+            <Headline dark={dark} />
           </div>
           <div className="lp-hero-right">
             <p className="lede">Mergers and acquisitions for memecoins. Each coin's AI makes an offer, the rival's AI haggles, holders vote, and the two coins merge. No team holds the keys, so nobody can rug.</p>

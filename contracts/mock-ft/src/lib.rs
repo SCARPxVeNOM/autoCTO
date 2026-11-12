@@ -4,16 +4,10 @@
 use near_contract_standards::fungible_token::metadata::{
     FT_METADATA_SPEC, FungibleTokenMetadata, FungibleTokenMetadataProvider,
 };
-use near_contract_standards::fungible_token::{
-    FungibleToken, FungibleTokenCore, FungibleTokenResolver,
-};
-use near_contract_standards::storage_management::{
-    StorageBalance, StorageBalanceBounds, StorageManagement,
-};
+use near_contract_standards::fungible_token::{FungibleToken, FungibleTokenCore, FungibleTokenResolver};
+use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds, StorageManagement};
 use near_sdk::json_types::U128;
-use near_sdk::{
-    AccountId, BorshStorageKey, NearToken, PanicOnDefault, PromiseOrValue, env, near,
-};
+use near_sdk::{AccountId, BorshStorageKey, NearToken, PanicOnDefault, PromiseOrValue, env, near};
 
 #[near]
 #[derive(BorshStorageKey)]

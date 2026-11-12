@@ -19,8 +19,7 @@ impl Coin {
         let buyer = env::predecessor_account_id();
         let mut deposit = env::attached_deposit().as_yoctonear();
         if !self.token.accounts.contains_key(&buyer) {
-            let cost = self.token.account_storage_usage as u128
-                * env::storage_byte_cost().as_yoctonear();
+            let cost = self.token.account_storage_usage as u128 * env::storage_byte_cost().as_yoctonear();
             require!(deposit > cost, "attach more NEAR: part of it pays for storage");
             deposit -= cost;
             self.token.internal_register_account(&buyer);
@@ -54,10 +53,7 @@ impl Coin {
         let amount = amount.0;
         require!(amount > 0, "nothing to sell");
         let gross = amm_out(self.amm_tokens, self.amm_near, amount);
-        require!(
-            self.amm_near - gross >= self.params.virtual_near.0,
-            "the curve has no real NEAR left for this sale"
-        );
+        require!(self.amm_near - gross >= self.params.virtual_near.0, "the curve has no real NEAR left for this sale");
         let fee = bps_of(gross, self.params.trade_fee_bps);
         let out = gross - fee;
         if let Some(min) = min_out {
@@ -172,9 +168,7 @@ impl Coin {
 
     /// Weight an account had locked strictly before `t`.
     pub(crate) fn weight_at(&self, who: &near_sdk::AccountId, t: u64) -> u128 {
-        self.locks
-            .get(who)
-            .map_or(0, |lots| lots.iter().filter(|l| l.since < t).map(|l| l.amount.0).sum())
+        self.locks.get(who).map_or(0, |lots| lots.iter().filter(|l| l.since < t).map(|l| l.amount.0).sum())
     }
 }
 

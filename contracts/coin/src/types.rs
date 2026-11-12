@@ -81,9 +81,15 @@ pub struct BrainConfig {
 pub enum CoinStatus {
     Active,
     /// A passed takeover is being executed by the buyer; trading and new offers pause.
-    MergePending { into: AccountId },
+    MergePending {
+        into: AccountId,
+    },
     /// Convert-only: holders swap into `into` at `rate_ppm`.
-    Merged { into: AccountId, rate_ppm: U128, at: u64 },
+    Merged {
+        into: AccountId,
+        rate_ppm: U128,
+        at: u64,
+    },
 }
 
 #[near(serializers = [borsh, json])]
@@ -110,7 +116,9 @@ pub enum OfferStatus {
     /// Target side only: vote passed, waiting for the buyer to execute.
     Executing,
     Executed,
-    Failed { reason: String },
+    Failed {
+        reason: String,
+    },
 }
 
 #[near(serializers = [borsh, json])]
@@ -214,7 +222,9 @@ pub enum DecisionStatus {
     Pending,
     Applied,
     /// The brain answered, but the contract refused the proposal.
-    Refused { reason: String },
+    Refused {
+        reason: String,
+    },
     /// OutLayer returned nothing (failed run or timeout).
     NoAnswer,
 }
@@ -256,7 +266,9 @@ pub enum TenderStatus {
     /// Depositors claim our tokens at the tender rate.
     Succeeded,
     /// Depositors claim their deposit back.
-    Failed { reason: String },
+    Failed {
+        reason: String,
+    },
 }
 
 /// An all-or-nothing offer to holders of a token from outside the launchpad:
@@ -295,13 +307,34 @@ pub struct Tender {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BrainAction {
     None,
-    Offer { target: AccountId, rate_ppm: U128, pitch: String },
-    Counter { offer: String, rate_ppm: U128, pitch: String },
-    AcceptCounter { offer_id: u64 },
+    Offer {
+        target: AccountId,
+        rate_ppm: U128,
+        pitch: String,
+    },
+    Counter {
+        offer: String,
+        rate_ppm: U128,
+        pitch: String,
+    },
+    AcceptCounter {
+        offer_id: u64,
+        /// The counter's rate as the brain saw it: refused if it changed since.
+        #[serde(default)]
+        rate_ppm: Option<U128>,
+    },
     /// Public opinion on an offer; carries no power.
-    Stance { offer: String, support: bool, pitch: String },
+    Stance {
+        offer: String,
+        support: bool,
+        pitch: String,
+    },
     /// Tender for an outside token. Only tokens holders put on the watchlist.
-    Tender { token: AccountId, rate_ppm: U128, pitch: String },
+    Tender {
+        token: AccountId,
+        rate_ppm: U128,
+        pitch: String,
+    },
 }
 
 #[near(serializers = [json])]

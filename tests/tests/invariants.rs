@@ -72,7 +72,10 @@ impl Fuzz {
             let tenders = self.w.caller.view(coin, "list_tenders", json!({})).await?;
             for t in tenders.as_array().into_iter().flatten() {
                 let deposited = u128_of(&t["deposited"]);
-                assert!(deposited <= u128_of(&t["max_deposit"]) || t["status"] == "Opening", "[{step}] {coin}: tender over its cap");
+                assert!(
+                    deposited <= u128_of(&t["max_deposit"]) || t["status"] == "Opening",
+                    "[{step}] {coin}: tender over its cap"
+                );
                 assert!(u128_of(&t["claimed"]) <= deposited, "[{step}] {coin}: tender claims exceed deposits");
                 if t["status"] == "Succeeded" {
                     let mint = deposited * u128_of(&t["rate_ppm"]) / 1_000_000;
@@ -161,23 +164,43 @@ async fn random_actions_never_break_the_rules() -> Result<()> {
         let kind = if offer.is_some() && rng.below(2) == 0 { 6 + rng.below(3) } else { rng.below(15) };
         let (name, r) = match kind {
             0 => ("buy", c.call(&who, &coin, "buy", json!({}), (1 + rng.below(4) as u128) * ONE_NEAR).await?),
-            1 => ("sell", c.call(&who, &coin, "sell", json!({ "amount": (bal / (1 + rng.below(4) as u128)).to_string() }), 1).await?),
+            1 => (
+                "sell",
+                c.call(&who, &coin, "sell", json!({ "amount": (bal / (1 + rng.below(4) as u128)).to_string() }), 1)
+                    .await?,
+            ),
             2 => ("lock", c.call(&who, &coin, "lock", json!({ "amount": (bal / 2).to_string() }), 0).await?),
             3 => {
                 let locked = u128_of(&c.view(&coin, "locks_of", json!({ "account_id": who })).await?[0]["amount"]);
-                ("unlock", c.call(&who, &coin, "unlock", json!({ "amount": (locked / 2).max(1).to_string() }), 0).await?)
+                (
+                    "unlock",
+                    c.call(&who, &coin, "unlock", json!({ "amount": (locked / 2).max(1).to_string() }), 0).await?,
+                )
             }
             4 | 5 => {
                 // A bid at a random premium, sometimes outside the caps.
                 let p = |i: &Value| u128_of(&i["amm_near"]) as f64 / u128_of(&i["amm_tokens"]) as f64;
                 let fair = p(&f.w.info(&other).await?) / p(&f.w.info(&coin).await?) * 1e6;
                 let rate = (fair * (0.6 + rng.below(90) as f64 / 100.0)) as u128;
-                ("propose_offer", c.call(&who, &coin, "propose_offer", json!({ "target": other, "rate_ppm": rate.to_string(), "pitch": "fuzz" }), 0).await?)
+                (
+                    "propose_offer",
+                    c.call(
+                        &who,
+                        &coin,
+                        "propose_offer",
+                        json!({ "target": other, "rate_ppm": rate.to_string(), "pitch": "fuzz" }),
+                        0,
+                    )
+                    .await?,
+                )
             }
             6 | 7 => match &offer {
                 Some(o) if o["target"] == coin.to_string() => {
                     let key = format!("{}#{}", o["buyer"].as_str().unwrap(), o["id"]);
-                    ("vote", c.call(&who, &coin, "vote", json!({ "offer": key, "support": rng.below(4) > 0 }), 0).await?)
+                    (
+                        "vote",
+                        c.call(&who, &coin, "vote", json!({ "offer": key, "support": rng.below(4) > 0 }), 0).await?,
+                    )
                 }
                 Some(o) => ("veto", c.call(&who, &coin, "veto", json!({ "offer_id": o["id"] }), 0).await?),
                 None => continue,
@@ -194,7 +217,17 @@ async fn random_actions_never_break_the_rules() -> Result<()> {
             10 => {
                 let circ = u128_of(&f.w.info(&coin).await?["circulating"]);
                 let rate = (circ / (5 + rng.below(40) as u128)) * 1_000_000 / (old_supply / 10 * 4);
-                ("propose_tender", c.call(&who, &coin, "propose_tender", json!({ "token": f.old, "rate_ppm": rate.max(1).to_string(), "pitch": "fuzz" }), 0).await?)
+                (
+                    "propose_tender",
+                    c.call(
+                        &who,
+                        &coin,
+                        "propose_tender",
+                        json!({ "token": f.old, "rate_ppm": rate.max(1).to_string(), "pitch": "fuzz" }),
+                        0,
+                    )
+                    .await?,
+                )
             }
             12 => ("back_tender", c.call(&who, &coin, "back_tender", json!({ "tender_id": tender_id }), 0).await?),
             11 => {

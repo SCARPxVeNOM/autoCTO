@@ -22,18 +22,12 @@ use near_contract_standards::fungible_token::events::{FtBurn, FtMint};
 use near_contract_standards::fungible_token::metadata::{
     FT_METADATA_SPEC, FungibleTokenMetadata, FungibleTokenMetadataProvider,
 };
-use near_contract_standards::fungible_token::{
-    FungibleToken, FungibleTokenCore, FungibleTokenResolver,
-};
-use near_contract_standards::storage_management::{
-    StorageBalance, StorageBalanceBounds, StorageManagement,
-};
+use near_contract_standards::fungible_token::{FungibleToken, FungibleTokenCore, FungibleTokenResolver};
+use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds, StorageManagement};
 use near_sdk::json_types::U128;
 use near_sdk::serde_json::{self, json};
 use near_sdk::store::{IterableMap, LookupMap, LookupSet, Vector};
-use near_sdk::{
-    AccountId, BorshStorageKey, NearToken, PanicOnDefault, PromiseOrValue, env, near, require,
-};
+use near_sdk::{AccountId, BorshStorageKey, NearToken, PanicOnDefault, PromiseOrValue, env, near, require};
 
 use crate::math::mul_div;
 use crate::types::*;
@@ -162,10 +156,7 @@ impl Coin {
     ) -> Self {
         let me = env::current_account_id();
         let launchpad = parent_of(&me).expect("a coin must be a sub-account of its launchpad");
-        require!(
-            env::predecessor_account_id() == launchpad,
-            "only the launchpad can create a coin"
-        );
+        require!(env::predecessor_account_id() == launchpad, "only the launchpad can create a coin");
         require!(params.total_supply.0 > 0 && params.virtual_near.0 > 0, "bad curve");
 
         let mut this = Self {
@@ -247,11 +238,7 @@ impl Coin {
             price_yocto: U128(self.price_yocto()),
             treasury: U128(self.treasury()),
             brain_spent_total: U128(self.brain_spent_total),
-            brain_spent_today: U128(if now / DAY_NS == self.brain_day {
-                self.brain_spent_today
-            } else {
-                0
-            }),
+            brain_spent_today: U128(if now / DAY_NS == self.brain_day { self.brain_spent_today } else { 0 }),
             last_think: self.last_think,
             decisions: self.decisions.len() as u64,
             absorbed: self.absorbed.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
@@ -270,12 +257,7 @@ impl Coin {
     /// Offers this coin received and made. `live_only` hides finished ones.
     pub fn list_offers(&self, live_only: Option<bool>) -> Vec<Offer> {
         let live_only = live_only.unwrap_or(false);
-        self.incoming
-            .values()
-            .chain(self.outgoing.values())
-            .filter(|o| !live_only || o.is_live())
-            .cloned()
-            .collect()
+        self.incoming.values().chain(self.outgoing.values()).filter(|o| !live_only || o.is_live()).cloned().collect()
     }
 
     pub fn get_incoming(&self, offer: String) -> Option<Offer> {
@@ -290,9 +272,7 @@ impl Coin {
         let len = self.decisions.len() as u64;
         let limit = limit.unwrap_or(20).min(100);
         let from = from_index.unwrap_or(len.saturating_sub(limit));
-        (from..len.min(from + limit))
-            .filter_map(|i| self.decisions.get(i as u32).cloned())
-            .collect()
+        (from..len.min(from + limit)).filter_map(|i| self.decisions.get(i as u32).cloned()).collect()
     }
 
     pub fn get_decision(&self, id: u64) -> Option<Decision> {
@@ -302,9 +282,7 @@ impl Coin {
     /// The last events, oldest first.
     pub fn history(&self) -> Vec<HistoryEntry> {
         let len = self.history.len();
-        (0..len)
-            .filter_map(|i| self.history.get((self.history_head + i) % len.max(1)).cloned())
-            .collect()
+        (0..len).filter_map(|i| self.history.get((self.history_head + i) % len.max(1)).cloned()).collect()
     }
 
     // ---------- internals shared by the modules ----------
@@ -356,10 +334,7 @@ impl Coin {
         let balance = env::account_balance().as_yoctonear();
         let storage = env::storage_usage() as u128 * env::storage_byte_cost().as_yoctonear();
         let curve_real = self.amm_near.saturating_sub(self.params.virtual_near.0);
-        balance
-            .saturating_sub(storage)
-            .saturating_sub(curve_real)
-            .saturating_sub(self.params.reserve.0)
+        balance.saturating_sub(storage).saturating_sub(curve_real).saturating_sub(self.params.reserve.0)
     }
 
     fn assert_active(&self) {
@@ -431,14 +406,8 @@ impl FungibleTokenCore for Coin {
 #[near]
 impl FungibleTokenResolver for Coin {
     #[private]
-    fn ft_resolve_transfer(
-        &mut self,
-        sender_id: AccountId,
-        receiver_id: AccountId,
-        amount: U128,
-    ) -> U128 {
-        let (used, burned) =
-            self.token.internal_ft_resolve_transfer(&sender_id, receiver_id, amount);
+    fn ft_resolve_transfer(&mut self, sender_id: AccountId, receiver_id: AccountId, amount: U128) -> U128 {
+        let (used, burned) = self.token.internal_ft_resolve_transfer(&sender_id, receiver_id, amount);
         if burned > 0 {
             FtBurn { owner_id: &sender_id, amount: U128(burned), memo: None }.emit();
         }
@@ -449,11 +418,7 @@ impl FungibleTokenResolver for Coin {
 #[near]
 impl StorageManagement for Coin {
     #[payable]
-    fn storage_deposit(
-        &mut self,
-        account_id: Option<AccountId>,
-        registration_only: Option<bool>,
-    ) -> StorageBalance {
+    fn storage_deposit(&mut self, account_id: Option<AccountId>, registration_only: Option<bool>) -> StorageBalance {
         self.token.storage_deposit(account_id, registration_only)
     }
 
@@ -465,10 +430,7 @@ impl StorageManagement for Coin {
     #[payable]
     fn storage_unregister(&mut self, force: Option<bool>) -> bool {
         let who = env::predecessor_account_id();
-        require!(
-            self.locks.get(&who).is_none_or(|l| l.is_empty()),
-            "unlock your tokens before unregistering"
-        );
+        require!(self.locks.get(&who).is_none_or(|l| l.is_empty()), "unlock your tokens before unregistering");
         if let Some((account_id, balance)) = self.token.internal_storage_unregister(force) {
             if balance > 0 {
                 FtBurn { owner_id: &account_id, amount: U128(balance), memo: None }.emit();

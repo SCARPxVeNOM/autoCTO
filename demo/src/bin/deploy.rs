@@ -24,13 +24,9 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, anyhow, bail};
-use autocto_demo::{ONE_NEAR, load_signer, read_res, res_dir, sha256_hex, u128_of};
+use autocto_demo::{ONE_NEAR, arg, load_signer, read_res, res_dir, sha256_hex, u128_of};
 use near_api::{Account, AccountId, Contract, CryptoHash, NearToken, NetworkConfig};
 use serde_json::{Value, json};
-
-fn arg(args: &[String], name: &str) -> Option<String> {
-    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned()
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -47,8 +43,7 @@ async fn main() -> Result<()> {
         .or(default_outlayer.map(String::from))
         .context("--outlayer is required with a custom RPC")?
         .parse()?;
-    let launchpad: AccountId =
-        arg(&args, "--launchpad").unwrap_or_else(|| format!("autocto.{owner}")).parse()?;
+    let launchpad: AccountId = arg(&args, "--launchpad").unwrap_or_else(|| format!("autocto.{owner}")).parse()?;
     if !launchpad.is_sub_account_of(&owner) {
         bail!("{launchpad} must be a sub-account of {owner}");
     }
@@ -58,7 +53,8 @@ async fn main() -> Result<()> {
 
     // Rules and brain are fixed at deploy time; the launchpad has no setters.
     let params_path = arg(&args, "--params").unwrap_or_else(|| "params/testnet.json".into());
-    let params: Value = serde_json::from_str(&std::fs::read_to_string(&params_path).with_context(|| params_path.clone())?)?;
+    let params: Value =
+        serde_json::from_str(&std::fs::read_to_string(&params_path).with_context(|| params_path.clone())?)?;
     let brain_wasm = read_res("autocto-brain.wasm")?;
     let brain_sha = sha256_hex(&brain_wasm);
     let source = match (arg(&args, "--brain-url"), arg(&args, "--brain-project")) {
@@ -159,7 +155,8 @@ async fn main() -> Result<()> {
     let keys = Account(launchpad.clone()).list_keys().fetch_from(&net).await?.data;
 
     let rpc = net.rpc_endpoints[0].url.to_string();
-    let config_path = arg(&args, "--web-config").map(PathBuf::from).unwrap_or_else(|| res_dir().join("../web/config.testnet.json"));
+    let config_path =
+        arg(&args, "--web-config").map(PathBuf::from).unwrap_or_else(|| res_dir().join("../web/config.testnet.json"));
     let cfg = json!({
         "network": net_name,
         "rpc": rpc,

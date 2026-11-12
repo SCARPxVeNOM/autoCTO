@@ -1,8 +1,14 @@
 use crate::types::{BPS, RATE_SCALE};
 use near_sdk::env;
 
-uint::construct_uint! {
-    pub struct U256(4);
+pub use u256::U256;
+
+// Kept in its own module so the lint below covers only the uint crate's generated code.
+#[allow(clippy::manual_div_ceil)]
+mod u256 {
+    uint::construct_uint! {
+        pub struct U256(4);
+    }
 }
 
 /// a * b / c, rounded down, with a 256-bit intermediate.

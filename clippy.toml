@@ -1,0 +1,2 @@
+# The coin's constructor and OutLayer's request_execution both take eight arguments.
+too-many-arguments-threshold = 8

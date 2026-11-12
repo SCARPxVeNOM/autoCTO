@@ -30,7 +30,8 @@ async fn cast_with(global: bool, params: Value) -> Result<Cast> {
     let bob = w.new_account("bob", 100).await?;
     let carol = w.new_account("carol", 100).await?;
     let dave = w.new_account("dave", 100).await?;
-    let pepe = w.launch(&dev, "pepe", "Pepe", "PEPE", "A smug frog that wants to own every meme.", 2 * ONE_NEAR).await?;
+    let pepe =
+        w.launch(&dev, "pepe", "Pepe", "PEPE", "A smug frog that wants to own every meme.", 2 * ONE_NEAR).await?;
     let doge = w.launch(&dev, "doge", "Doge", "DOGE", "A friendly dog. Much wow.", ONE_NEAR).await?;
 
     let c = &w.caller;
@@ -57,11 +58,16 @@ fn fair_ppm(buyer: &Value, target: &Value) -> f64 {
 async fn bid(c: &Cast, premium: f64, pitch: &str) -> Result<(String, u128)> {
     let fair = fair_ppm(&c.w.info(&c.pepe).await?, &c.w.info(&c.doge).await?);
     let rate = (fair * (1.0 + premium)) as u128;
-    let sent = c
-        .w
-        .caller
-        .ok(&c.alice, &c.pepe, "propose_offer", json!({ "target": c.doge, "rate_ppm": rate.to_string(), "pitch": pitch }), 0)
-        .await?;
+    let sent =
+        c.w.caller
+            .ok(
+                &c.alice,
+                &c.pepe,
+                "propose_offer",
+                json!({ "target": c.doge, "rate_ppm": rate.to_string(), "pitch": pitch }),
+                0,
+            )
+            .await?;
     assert_eq!(sent, Value::Bool(true), "target should accept the bid for voting");
     Ok((format!("{}#0", c.pepe), rate))
 }
@@ -150,8 +156,16 @@ async fn buyer_holders_can_veto() -> Result<()> {
         let ours = w.caller.view(&c.pepe, "get_outgoing", json!({ "offer_id": 0 })).await?;
         assert!(ours["status"]["Failed"].is_object());
         // Cooldown: the same buyer cannot bid again right away.
-        let again = w.caller.call(&c.alice, &c.pepe, "propose_offer",
-            json!({ "target": c.doge, "rate_ppm": offer["rate_ppm"], "pitch": "again" }), 0).await?;
+        let again = w
+            .caller
+            .call(
+                &c.alice,
+                &c.pepe,
+                "propose_offer",
+                json!({ "target": c.doge, "rate_ppm": offer["rate_ppm"], "pitch": "again" }),
+                0,
+            )
+            .await?;
         assert_eq!(again.json::<Value>().unwrap_or(Value::Null), Value::Bool(false));
     } else {
         panic!("test setup: veto weight {vetoed} below threshold {veto_needed}");
@@ -172,18 +186,36 @@ async fn caps_and_safety_rules() -> Result<()> {
     let r = propose(&c, &c.alice, &c.pepe, &c.doge, (fair * 0.01).max(1.0)).await?;
     assert_eq!(r, Value::Bool(false));
     // Only coins from the same launchpad can be targets.
-    let r = w.caller.call(&c.alice, &c.pepe, "propose_offer",
-        json!({ "target": c.bob, "rate_ppm": "1000000", "pitch": "x" }), 0).await?;
+    let r = w
+        .caller
+        .call(&c.alice, &c.pepe, "propose_offer", json!({ "target": c.bob, "rate_ppm": "1000000", "pitch": "x" }), 0)
+        .await?;
     assert!(r.is_failure());
     // Holders without enough locked tokens cannot propose by hand.
-    let r = w.caller.call(&c.dave, &c.pepe, "propose_offer",
-        json!({ "target": c.doge, "rate_ppm": (fair as u128).to_string(), "pitch": "x" }), 0).await?;
+    let r = w
+        .caller
+        .call(
+            &c.dave,
+            &c.pepe,
+            "propose_offer",
+            json!({ "target": c.doge, "rate_ppm": (fair as u128).to_string(), "pitch": "x" }),
+            0,
+        )
+        .await?;
     assert!(r.is_failure());
     // Daily offer cap is 3: two used above, one left.
     bid_ok(&c, fair * 1.05).await?;
     // One open offer per pair: DOGE cannot bid back at PEPE, PEPE cannot bid twice.
-    let r = w.caller.call(&c.alice, &c.pepe, "propose_offer",
-        json!({ "target": c.doge, "rate_ppm": (fair as u128).to_string(), "pitch": "x" }), 0).await?;
+    let r = w
+        .caller
+        .call(
+            &c.alice,
+            &c.pepe,
+            "propose_offer",
+            json!({ "target": c.doge, "rate_ppm": (fair as u128).to_string(), "pitch": "x" }),
+            0,
+        )
+        .await?;
     assert!(r.is_failure());
 
     // Newborn protection: a coin born just now cannot be bid for.
@@ -195,24 +227,60 @@ async fn caps_and_safety_rules() -> Result<()> {
     assert_eq!(r, Value::Bool(false), "newborn protection");
 
     // Launch rules: labels are unique and must be valid.
-    assert!(w.caller.call(&c.dev, &w.launchpad, "launch",
-        json!({ "label": "pepe", "name": "x", "symbol": "X", "persona": "" }), 10 * ONE_NEAR).await?.is_failure());
-    assert!(w.caller.call(&c.dev, &w.launchpad, "launch",
-        json!({ "label": "Bad.Label", "name": "x", "symbol": "X", "persona": "" }), 10 * ONE_NEAR).await?.is_failure());
+    assert!(
+        w.caller
+            .call(
+                &c.dev,
+                &w.launchpad,
+                "launch",
+                json!({ "label": "pepe", "name": "x", "symbol": "X", "persona": "" }),
+                10 * ONE_NEAR
+            )
+            .await?
+            .is_failure()
+    );
+    assert!(
+        w.caller
+            .call(
+                &c.dev,
+                &w.launchpad,
+                "launch",
+                json!({ "label": "Bad.Label", "name": "x", "symbol": "X", "persona": "" }),
+                10 * ONE_NEAR
+            )
+            .await?
+            .is_failure()
+    );
     Ok(())
 }
 
 /// A bid by hand; returns the buyer's verdict (false when the target refused).
 async fn propose(c: &Cast, who: &AccountId, buyer: &AccountId, target: &AccountId, rate: f64) -> Result<Value> {
-    let r = c.w.caller.call(who, buyer, "propose_offer",
-        json!({ "target": target, "rate_ppm": (rate as u128).to_string(), "pitch": "x" }), 0).await?;
+    let r =
+        c.w.caller
+            .call(
+                who,
+                buyer,
+                "propose_offer",
+                json!({ "target": target, "rate_ppm": (rate as u128).to_string(), "pitch": "x" }),
+                0,
+            )
+            .await?;
     assert!(r.is_success(), "{:?}", r.logs());
     Ok(r.json::<Value>().unwrap_or(Value::Null))
 }
 
 async fn bid_ok(c: &Cast, rate: f64) -> Result<()> {
-    let r = c.w.caller.ok(&c.alice, &c.pepe, "propose_offer",
-        json!({ "target": c.doge, "rate_ppm": (rate as u128).to_string(), "pitch": "fair and square" }), 0).await?;
+    let r =
+        c.w.caller
+            .ok(
+                &c.alice,
+                &c.pepe,
+                "propose_offer",
+                json!({ "target": c.doge, "rate_ppm": (rate as u128).to_string(), "pitch": "fair and square" }),
+                0,
+            )
+            .await?;
     assert_eq!(r, Value::Bool(true));
     Ok(())
 }
@@ -259,11 +327,13 @@ async fn brains_negotiate_offer_counter_accept() -> Result<()> {
     assert_eq!(decision["paid_by_treasury"], true);
     let offer = w.caller.view(&c.doge, "get_incoming", json!({ "offer": key })).await?;
     assert!(offer["counter"].is_object());
+    let countered = offer["counter"]["rate_ppm"].clone();
 
     // PEPE's brain accepts the counter: terms change and the vote restarts (round 1).
     w.wait_secs(6).await?; // think cooldown
     let (out, _) = w.think(&c.dev, &c.pepe, ONE_NEAR / 10).await?;
     assert_eq!(out["action"]["type"], "accept_counter", "brain output: {out}");
+    assert_eq!(out["action"]["rate_ppm"], countered, "the brain names the rate it accepts");
     let offer = w.caller.view(&c.doge, "get_incoming", json!({ "offer": key })).await?;
     assert_eq!(offer["round"], 1);
     assert!(offer["premium_bps"].as_i64().unwrap() >= 1900);
@@ -323,7 +393,8 @@ async fn chain_of_takeovers_leaves_no_holder_stranded() -> Result<()> {
     assert_eq!(c.w.caller.ok(&c.dev, &c.doge, "finalize", json!({ "offer": key }), 0).await?, Value::Bool(true));
     // bob converts DOGE into PEPE right away; carol waits.
     c.w.caller.ok(&c.bob, &c.doge, "convert", json!({}), 1).await?;
-    let carol_doge = u128_of(&c.w.caller.view(&c.doge, "locks_of", json!({ "account_id": c.carol })).await?[0]["amount"]);
+    let carol_doge =
+        u128_of(&c.w.caller.view(&c.doge, "locks_of", json!({ "account_id": c.carol })).await?[0]["amount"]);
     let pepe = c.w.info(&c.pepe).await?;
     assert!(carol_doge > 0 && u128_of(&pepe["owed"]) > 0, "PEPE still owes carol");
 
@@ -405,8 +476,13 @@ async fn tender_rate(c: &Cast, old_supply: u128) -> Result<u128> {
 
 async fn deposit(c: &Cast, who: &AccountId, old: &AccountId, amount: u128, tender: u64) -> Result<()> {
     c.w.caller
-        .ok(who, old, "ft_transfer_call",
-            json!({ "receiver_id": c.pepe, "amount": amount.to_string(), "msg": tender.to_string() }), 1)
+        .ok(
+            who,
+            old,
+            "ft_transfer_call",
+            json!({ "receiver_id": c.pepe, "amount": amount.to_string(), "msg": tender.to_string() }),
+            1,
+        )
         .await?;
     Ok(())
 }
@@ -421,8 +497,12 @@ async fn tender_for_an_outside_token_swaps_everyone_or_refunds_everyone() -> Res
     let tender = json!({ "token": old, "rate_ppm": rate.to_string(), "pitch": "OLD holders, swap into PEPE" });
 
     // A sibling coin cannot be tendered for.
-    assert!(w.caller.call(&c.alice, &c.pepe, "propose_tender",
-        json!({ "token": c.doge, "rate_ppm": "1", "pitch": "x" }), 0).await?.is_failure());
+    assert!(
+        w.caller
+            .call(&c.alice, &c.pepe, "propose_tender", json!({ "token": c.doge, "rate_ppm": "1", "pitch": "x" }), 0)
+            .await?
+            .is_failure()
+    );
 
     // Tender 0: only 35% of OLD shows up, below the 40% threshold. Everyone is refunded.
     assert_eq!(w.caller.ok(&c.alice, &c.pepe, "propose_tender", tender.clone(), 0).await?, Value::Bool(true));
@@ -430,24 +510,39 @@ async fn tender_for_an_outside_token_swaps_everyone_or_refunds_everyone() -> Res
     assert_eq!(t["status"], "Open");
     assert_eq!(u128_of(&t["threshold"]), supply / 10 * 4);
     deposit(&c, &c.dave, &old, supply / 100 * 35, 0).await?;
-    assert!(w.caller.call(&c.dave, &c.pepe, "claim_tender", json!({ "tender_id": 0 }), 0).await?.is_failure(), "not settled yet");
-    assert!(w.caller.call(&c.dev, &c.pepe, "settle_tender", json!({ "tender_id": 0 }), 0).await?.is_failure(), "too early");
+    assert!(
+        w.caller.call(&c.dave, &c.pepe, "claim_tender", json!({ "tender_id": 0 }), 0).await?.is_failure(),
+        "not settled yet"
+    );
+    assert!(
+        w.caller.call(&c.dev, &c.pepe, "settle_tender", json!({ "tender_id": 0 }), 0).await?.is_failure(),
+        "too early"
+    );
     w.wait_secs(61).await?;
     assert_eq!(w.caller.ok(&c.dev, &c.pepe, "settle_tender", json!({ "tender_id": 0 }), 0).await?, Value::Bool(false));
     w.caller.ok(&c.dave, &c.pepe, "claim_tender", json!({ "tender_id": 0 }), 0).await?;
     assert_eq!(w.balance(&old, &c.dave).await?, supply, "refund returns exactly what was deposited");
     assert_eq!(w.balance(&c.pepe, &c.dave).await?, 0);
-    assert!(w.caller.call(&c.dave, &c.pepe, "claim_tender", json!({ "tender_id": 0 }), 0).await?.is_failure(), "double claim");
+    assert!(
+        w.caller.call(&c.dave, &c.pepe, "claim_tender", json!({ "tender_id": 0 }), 0).await?.is_failure(),
+        "double claim"
+    );
 
     // Tender 1: dave sends 90%; the dilution cap accepts 80% and returns the rest.
     assert_eq!(w.caller.ok(&c.alice, &c.pepe, "propose_tender", tender.clone(), 0).await?, Value::Bool(true));
     deposit(&c, &c.dave, &old, supply / 100 * 90, 1).await?;
     // Whoever opens a tender, it needs a quorum of the coin's own holders behind it.
     w.caller.ok(&c.alice, &c.pepe, "back_tender", json!({ "tender_id": 1 }), 0).await?;
-    assert!(w.caller.call(&c.alice, &c.pepe, "veto_tender", json!({ "tender_id": 1 }), 0).await?.is_failure(), "one ballot each");
+    assert!(
+        w.caller.call(&c.alice, &c.pepe, "veto_tender", json!({ "tender_id": 1 }), 0).await?.is_failure(),
+        "one ballot each"
+    );
     // Dust deposits are refused (every depositor costs the coin storage): the token returns them.
     let before = w.balance(&old, &c.dave).await?;
-    let _ = w.caller.call(&c.dave, &old, "ft_transfer_call", json!({ "receiver_id": c.pepe, "amount": "5", "msg": "9" }), 1).await?;
+    let _ = w
+        .caller
+        .call(&c.dave, &old, "ft_transfer_call", json!({ "receiver_id": c.pepe, "amount": "5", "msg": "9" }), 1)
+        .await?;
     assert_eq!(w.balance(&old, &c.dave).await?, before);
     let t = w.caller.view(&c.pepe, "get_tender", json!({ "tender_id": 1 })).await?;
     let accepted = u128_of(&t["deposited"]);
@@ -464,7 +559,11 @@ async fn tender_for_an_outside_token_swaps_everyone_or_refunds_everyone() -> Res
     assert_eq!(w.balance(&c.pepe, &c.dave).await?, minted);
     let after = w.info(&c.pepe).await?;
     assert_eq!(u128_of(&after["owed"]), 0);
-    assert_eq!(u128_of(&after["total_supply"]) - u128_of(&before["total_supply"]), minted, "supply grows only by the claim");
+    assert_eq!(
+        u128_of(&after["total_supply"]) - u128_of(&before["total_supply"]),
+        minted,
+        "supply grows only by the claim"
+    );
     assert_eq!(w.balance(&old, &c.pepe).await?, accepted, "PEPE now holds the tendered OLD");
 
     // Tender 2: PEPE's own holders veto it (alice locked 20% before; the line is 10%).
@@ -516,8 +615,16 @@ async fn brain_tenders_for_nominated_tokens_and_refuses_ruggable_ones() -> Resul
 
     // By hand, a rate where the threshold alone would mint 30% of PEPE breaks the 20% cap.
     let rate = tender_rate(&c, supply).await?;
-    let greedy = w.caller.ok(&c.alice, &c.pepe, "propose_tender",
-        json!({ "token": rug, "rate_ppm": (rate * 3).to_string(), "pitch": "x" }), 0).await?;
+    let greedy = w
+        .caller
+        .ok(
+            &c.alice,
+            &c.pepe,
+            "propose_tender",
+            json!({ "token": rug, "rate_ppm": (rate * 3).to_string(), "pitch": "x" }),
+            0,
+        )
+        .await?;
     assert_eq!(greedy, Value::Bool(false));
 
     // The brain's tender has deposits but no holder backed it: it cannot succeed.
@@ -540,7 +647,15 @@ async fn a_holder_with_zero_near_votes_through_a_relayer() -> Result<()> {
     // zed is given DOGE but has no NEAR at all: without a relayer, zed cannot act.
     w.caller.ok(&c.dave, &c.doge, "buy", json!({}), 2 * ONE_NEAR).await?;
     let gift = w.balance(&c.doge, &c.dave).await?;
-    w.caller.ok(&c.dave, &c.doge, "storage_deposit", json!({ "account_id": zed, "registration_only": true }), ONE_NEAR / 100).await?;
+    w.caller
+        .ok(
+            &c.dave,
+            &c.doge,
+            "storage_deposit",
+            json!({ "account_id": zed, "registration_only": true }),
+            ONE_NEAR / 100,
+        )
+        .await?;
     w.caller.ok(&c.dave, &c.doge, "ft_transfer", json!({ "receiver_id": zed, "amount": gift.to_string() }), 1).await?;
     let direct = w.caller.call(&zed, &c.doge, "lock", json!({ "amount": gift.to_string() }), 0).await;
     assert!(direct.is_err() || direct.unwrap().is_failure(), "zed cannot pay for gas");
@@ -581,33 +696,76 @@ async fn sealed_votes_stay_hidden_until_the_reveal() -> Result<()> {
     let c = cast_with(false, params).await?;
     let w = &c.w;
     let (key, _) = bid(&c, 0.20, "Join the frog.").await?;
-    let seal = |who: &AccountId, support: bool, salt: &str| autocto_demo::sha256_hex(format!("{key}|0|{who}|{support}|{salt}").as_bytes());
+    let seal = |who: &AccountId, support: bool, salt: &str| {
+        autocto_demo::sha256_hex(format!("{key}|0|{who}|{support}|{salt}").as_bytes())
+    };
 
     // Open votes are off; holders commit a hash instead.
     assert!(w.caller.call(&c.bob, &c.doge, "vote", json!({ "offer": key, "support": true }), 0).await?.is_failure());
-    w.caller.ok(&c.bob, &c.doge, "vote_sealed", json!({ "offer": key, "commitment": seal(&c.bob, true, "bob-salt") }), 0).await?;
-    w.caller.ok(&c.carol, &c.doge, "vote_sealed", json!({ "offer": key, "commitment": seal(&c.carol, false, "carol-salt") }), 0).await?;
-    assert!(w.caller.call(&c.bob, &c.doge, "vote_sealed", json!({ "offer": key, "commitment": seal(&c.bob, false, "x") }), 0).await?.is_failure(), "one ballot each");
+    w.caller
+        .ok(&c.bob, &c.doge, "vote_sealed", json!({ "offer": key, "commitment": seal(&c.bob, true, "bob-salt") }), 0)
+        .await?;
+    w.caller
+        .ok(
+            &c.carol,
+            &c.doge,
+            "vote_sealed",
+            json!({ "offer": key, "commitment": seal(&c.carol, false, "carol-salt") }),
+            0,
+        )
+        .await?;
+    assert!(
+        w.caller
+            .call(&c.bob, &c.doge, "vote_sealed", json!({ "offer": key, "commitment": seal(&c.bob, false, "x") }), 0)
+            .await?
+            .is_failure(),
+        "one ballot each"
+    );
 
     // While the vote runs, the chain shows how much voted but not which way.
     let o = w.caller.view(&c.doge, "get_incoming", json!({ "offer": key })).await?;
     assert_eq!((u128_of(&o["yes"]), u128_of(&o["no"])), (0, 0));
     let (bob_w, carol_w) = (w.balance(&c.doge, &c.doge).await?, u128_of(&o["sealed"]));
     assert!(carol_w > 0 && bob_w > 0);
-    assert!(w.caller.call(&c.bob, &c.doge, "reveal_vote", json!({ "offer": key, "support": true, "salt": "bob-salt" }), 0).await?.is_failure(), "no early reveal");
+    assert!(
+        w.caller
+            .call(&c.bob, &c.doge, "reveal_vote", json!({ "offer": key, "support": true, "salt": "bob-salt" }), 0)
+            .await?
+            .is_failure(),
+        "no early reveal"
+    );
 
     // The vote ends: reveals open, and the deal cannot be closed before they end.
     w.wait_secs(61).await?;
-    assert!(w.caller.call(&c.dev, &c.doge, "finalize", json!({ "offer": key }), 0).await?.is_failure(), "reveals still running");
-    assert!(w.caller.call(&c.bob, &c.doge, "reveal_vote", json!({ "offer": key, "support": false, "salt": "bob-salt" }), 0).await?.is_failure(), "cannot change the vote");
-    let bob_weight = u128_of(&w.caller.ok(&c.bob, &c.doge, "reveal_vote", json!({ "offer": key, "support": true, "salt": "bob-salt" }), 0).await?);
+    assert!(
+        w.caller.call(&c.dev, &c.doge, "finalize", json!({ "offer": key }), 0).await?.is_failure(),
+        "reveals still running"
+    );
+    assert!(
+        w.caller
+            .call(&c.bob, &c.doge, "reveal_vote", json!({ "offer": key, "support": false, "salt": "bob-salt" }), 0)
+            .await?
+            .is_failure(),
+        "cannot change the vote"
+    );
+    let bob_weight = u128_of(
+        &w.caller
+            .ok(&c.bob, &c.doge, "reveal_vote", json!({ "offer": key, "support": true, "salt": "bob-salt" }), 0)
+            .await?,
+    );
     let o = w.caller.view(&c.doge, "get_incoming", json!({ "offer": key })).await?;
     assert_eq!(u128_of(&o["yes"]), bob_weight);
     assert_eq!(u128_of(&o["sealed"]), carol_w - bob_weight, "carol's vote is still sealed");
 
     // carol misses the window: her vote does not count, and bob's YES carries it.
     w.wait_secs(31).await?;
-    assert!(w.caller.call(&c.carol, &c.doge, "reveal_vote", json!({ "offer": key, "support": false, "salt": "carol-salt" }), 0).await?.is_failure(), "window closed");
+    assert!(
+        w.caller
+            .call(&c.carol, &c.doge, "reveal_vote", json!({ "offer": key, "support": false, "salt": "carol-salt" }), 0)
+            .await?
+            .is_failure(),
+        "window closed"
+    );
     assert_eq!(w.caller.ok(&c.dev, &c.doge, "finalize", json!({ "offer": key }), 0).await?, Value::Bool(true));
     Ok(())
 }
@@ -633,8 +791,10 @@ async fn pump_before_the_bid_fails_at_execution() -> Result<()> {
     assert_eq!(w.info(&c.doge).await?["status"], "Active", "DOGE trades on");
 
     // A proposer's tokens stay locked for the vote period: no propose-and-run.
-    assert!(w.caller.call(&c.alice, &c.pepe, "unlock", json!({ "amount": "1" }), 0).await?.is_success(),
-        "the vote period is over, alice may unlock");
+    assert!(
+        w.caller.call(&c.alice, &c.pepe, "unlock", json!({ "amount": "1" }), 0).await?.is_success(),
+        "the vote period is over, alice may unlock"
+    );
     Ok(())
 }
 

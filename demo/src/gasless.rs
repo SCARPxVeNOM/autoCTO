@@ -120,7 +120,12 @@ async fn handle(relayer: &Relayer, body: &str) -> Result<Value> {
     if r.is_failure() || !failures.is_empty() {
         // The contract's own refusal, e.g. "already voted in this round".
         let text = format!("{failures:?}");
-        let reason = text.split("Smart contract panicked: ").nth(1).and_then(|s| s.split("\\\"").next()).unwrap_or("the call failed").to_string();
+        let reason = text
+            .split("Smart contract panicked: ")
+            .nth(1)
+            .and_then(|s| s.split("\\\"").next())
+            .unwrap_or("the call failed")
+            .to_string();
         bail!("{reason}");
     }
     println!("  relayed a call for {who}");
@@ -244,7 +249,17 @@ mod tests {
 
     #[test]
     fn calls_that_spend_or_propose_are_not_relayed() {
-        for m in ["buy", "sell", "convert", "ft_transfer", "ft_transfer_call", "storage_deposit", "propose_offer", "propose_tender", "nominate"] {
+        for m in [
+            "buy",
+            "sell",
+            "convert",
+            "ft_transfer",
+            "ft_transfer_call",
+            "storage_deposit",
+            "propose_offer",
+            "propose_tender",
+            "nominate",
+        ] {
             assert!(refusal(vec![call(m, 0, 100)]).contains("is not relayed"), "{m}");
         }
     }
@@ -265,6 +280,17 @@ mod tests {
     }
 
     #[test]
+    fn the_app_offers_gasless_exactly_the_calls_the_relayer_takes() {
+        let js = include_str!("../../frontend/src/lib/chain.js");
+        let line = js.lines().find(|l| l.starts_with("const GASLESS = [")).expect("GASLESS in chain.js");
+        let mut app: Vec<&str> = line.split('"').skip(1).step_by(2).collect();
+        let mut relayed = GASLESS_METHODS.to_vec();
+        app.sort();
+        relayed.sort();
+        assert_eq!(app, relayed, "frontend/src/lib/chain.js and GASLESS_METHODS disagree");
+    }
+
+    #[test]
     fn gas_is_capped_at_150_tgas() {
         check_call(&request(vec![call("vote", 0, 150)]).delegate_action).unwrap();
         assert_eq!(refusal(vec![call("vote", 0, 151)]), "too much gas requested");
@@ -278,6 +304,9 @@ mod tests {
         assert_eq!(decode(&format!("  {wire}\n")).unwrap(), signed, "whitespace around it is fine");
         assert!(decode("not base64!").is_err());
         assert!(decode(&wire[..wire.len() - 8]).is_err(), "truncated");
-        assert!(decode(&STANDARD.encode([&borsh::to_vec(&signed).unwrap()[..], &[0]].concat())).is_err(), "trailing bytes");
+        assert!(
+            decode(&STANDARD.encode([&borsh::to_vec(&signed).unwrap()[..], &[0]].concat())).is_err(),
+            "trailing bytes"
+        );
     }
 }

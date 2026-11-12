@@ -41,8 +41,20 @@
 @keyframes drift { to { transform: translate3d(-3%, 4%, 0) scale(1.06); } }
 .lp-hero > * { position: relative; }
 .lp-hero-left { display: grid; gap: 22px; justify-items: start; }
-.lp-hero h1 { margin: 0; font: 700 clamp(40px, 6.4vw, 84px)/.98 var(--font-display); letter-spacing: -.045em; text-wrap: balance; }
-.lp-hero h1 em { color: var(--up); font-size: 1.08em; letter-spacing: -.02em; }
+.lp-hero h1 { margin: 0; justify-self: stretch; min-width: 0; font: 700 clamp(40px, 6.4vw, 84px)/.98 var(--font-display); letter-spacing: -.045em; text-wrap: balance; }
+/* the headline is 3D lettering (Landing.jsx, scripts/lettering.py) in the box its text took at 84px:
+   622.4 by 171.2 on two lines, 1190.9 by 88.9 on one. The render spills past the box by a margin for
+   its shadow, and the pen line sits under "over." where the word was. The h1 spans its column and adds
+   no minimum width, so on phones too narrow for the two lines (under 338px) the art shrinks to fit. */
+.lp-h1 { position: relative; display: block; width: calc(622.438em / 84); max-width: 100%; aspect-ratio: 622.438 / 171.211; }
+.lp-h1 img { position: absolute; max-width: none; left: -1.7672%; top: -2.9204%; width: 102.8215%; height: 103.3812%; }
+.lp-h1-over { position: absolute; left: 76.4899%; top: 48.0769%; width: 23.5101%; height: 51.9231%; }
+.lp-h1-over .pen-mark { display: block; height: 100%; }
+@media (min-width: 646px) and (max-width: 980px) {
+  .lp-h1 { width: calc(1190.945em / 84); aspect-ratio: 1190.945 / 88.898; }
+  .lp-h1 img { left: -0.8397%; top: -6.7493%; width: 101.3761%; height: 107.9889%; }
+  .lp-h1-over { left: 87.7126%; top: 0; width: 12.2874%; height: 100%; }
+}
 .eyebrow-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .lp-hero-right { display: grid; gap: 20px; padding-bottom: 8px; }
 .lp-hero .lede { font-size: 17.5px; }

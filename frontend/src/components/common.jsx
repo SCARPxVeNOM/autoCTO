@@ -6,6 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { GLOSSARY, ago, hue, left } from "@/lib/chain";
 import { iconUrl, useIcons } from "@/lib/icons";
+import { useDark } from "@/lib/theme";
+import WORD_DARK from "@/assets/wordmark-dark.webp";
+import WORD_LIGHT from "@/assets/wordmark-light.webp";
 
 /** Re-render once a second, so countdowns move between chain refreshes. */
 export function useTick() {
@@ -20,7 +23,16 @@ const MARK = new URL("brand/autocto.webp", document.baseURI).href;
 export const Logo = ({ className }) => (
   <img className={cn("size-[34px] flex-none select-none drop-shadow-sm", className)} src={MARK} width="34" height="34" alt="" draggable="false" />
 );
-export const Wordmark = () => <span className="font-pixel text-xl font-semibold leading-none">Auto<span className="text-up">CTO</span></span>;
+// The wordmark: Pixelify Sans 600 at text-xl, rendered as 3D lettering (scripts/lettering.py) into the
+// 82.42 by 20px box the text took, on the same baseline (the box hangs 3.5px below it).
+export function Wordmark() {
+  const dark = useDark();
+  return (
+    <span className="relative inline-block h-[1em] w-[4.1211em] flex-none align-[-0.175em] text-xl">
+      <img className="absolute top-0 left-[-2.4265%] h-full w-[104.9477%] max-w-none select-none" src={dark ? WORD_DARK : WORD_LIGHT} alt="AutoCTO" draggable="false" />
+    </span>
+  );
+}
 
 // A coin's own icon (stored on chain at launch) is shown only if it is an image data URL or an https link.
 const ownIcon = (icon) => (typeof icon === "string" && /^(data:image\/[a-z+.-]+[;,]|https:\/\/)/i.test(icon) ? icon : null);

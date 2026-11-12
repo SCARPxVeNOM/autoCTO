@@ -33,16 +33,20 @@ export default async function handler(req, res) {
   const ip = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").split(",")[0].trim();
   const now = Date.now();
   if (now - (lastFrom.get(ip) || 0) < AGAIN_MS) return res.status(429).json({ error: "One guest account per visitor every 20 minutes. Use the one you have, or connect a wallet." });
+  // Claimed before any await, so requests sent in parallel from one address cannot all pass.
+  lastFrom.set(ip, now);
 
   try {
     const funder = new Account(PARENT, RPC, KEY);
     const gift = toYocto(GIFT);
     const { balance } = await funder.getState();
-    if (balance.available < gift + RESERVE) return res.status(503).json({ error: "The guest pot is empty for now. Connect a testnet wallet instead." });
+    if (balance.available < gift + RESERVE) {
+      lastFrom.delete(ip);
+      return res.status(503).json({ error: "The guest pot is empty for now. Connect a testnet wallet instead." });
+    }
     // 8 random letters and digits: enough that two visitors never pick the same name.
     const label = [...randomBytes(8)].map((b) => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join("");
     const account = `${label}.${PARENT}`;
-    lastFrom.set(ip, now);
     await funder.createSubAccount({ accountOrPrefix: account, publicKey: pk, nearToTransfer: gift });
     return res.status(200).json({ account, near: GIFT });
   } catch (e) {

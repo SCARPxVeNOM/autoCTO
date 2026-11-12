@@ -505,10 +505,15 @@ export function endGuest() {
 async function walletCall(contract, method, args, deposit) {
   const c = await getConnector();
   const wallet = await c.wallet();
-  return wallet.signAndSendTransaction({
+  const outcome = await wallet.signAndSendTransaction({
     receiverId: contract,
     actions: [{ type: "FunctionCall", params: { methodName: method, args, gas: GAS.toString(), deposit: BigInt(deposit).toString() } }],
   });
+  // Some wallets resolve even when the contract refused the call. Only the
+  // transaction's own status counts: a callback can fail and be handled.
+  const failure = outcome?.status?.Failure;
+  if (failure) throw new Error(JSON.stringify(failure));
+  return outcome;
 }
 
 // ---------- actions ----------
@@ -580,8 +585,9 @@ export async function act(what, d = {}) {
       return ["vote_sealed", { offer, commitment }, 0n, coin, {
         // Only reached when the browser refuses localStorage: the salt must not be lost.
         ok: () => { if (!saved) { state.dialog = { type: "salt", offer, support, salt }; bump(); } },
-        // A contract panic means nothing was recorded, so the ballot can go.
-        fail: (msg) => { if (!had && /panicked|already voted|no tokens locked|voting is closed/i.test(msg)) dropBallot(offer, round, who); },
+        // A contract panic or a wallet cancel means nothing was recorded, so the ballot can go.
+        // Any other error may hide a vote that landed: keep the salt for the reveal.
+        fail: (msg) => { if (!had && /panicked|already voted|no tokens locked|voting is closed|reject|cancel|denied/i.test(msg)) dropBallot(offer, round, who); },
       }];
     },
     reveal: () => {
@@ -591,7 +597,8 @@ export async function act(what, d = {}) {
     },
     veto: () => ["veto", { offer_id: Number(id) }, 0n],
     finalize: () => ["finalize", { offer }, 0n],
-    accept_counter: () => ["accept_counter", { offer_id: Number(id) }, 0n],
+    // The rate on screen: if the counter changes before this lands, the contract refuses.
+    accept_counter: () => ["accept_counter", { offer_id: Number(id), rate_ppm: d.rate ?? null }, 0n],
     convert: () => ["convert", {}, 1n],
     back_tender: () => ["back_tender", { tender_id: Number(id) }, 0n],
     veto_tender: () => ["veto_tender", { tender_id: Number(id) }, 0n],

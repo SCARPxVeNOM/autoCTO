@@ -44,6 +44,8 @@ impl Coin {
         let caller = env::predecessor_account_id();
         let attached = env::attached_deposit().as_yoctonear();
         let fee = self.params.brain_fee.0;
+        // Less than the fee would neither pay for the run nor be returned.
+        require!(attached == 0 || attached >= fee, "attach at least the brain fee, or nothing to let the treasury pay");
         let (pay, by_treasury) = if attached >= fee {
             (attached, false)
         } else {
@@ -158,9 +160,7 @@ impl Coin {
                 }
                 match self.apply_brain_action(decision_id, out.action) {
                     Ok(desc) => (DecisionStatus::Applied, desc),
-                    Err(reason) => {
-                        (DecisionStatus::Refused { reason: truncate(reason.clone(), 200) }, reason)
-                    }
+                    Err(reason) => (DecisionStatus::Refused { reason: truncate(reason.clone(), 200) }, reason),
                 }
             }
         };
@@ -194,11 +194,11 @@ fn signer_of(a: &ModelSignature) -> Option<String> {
     let hash = env::keccak256_array(&msg);
     let v = if sig[64] >= 27 { sig[64] - 27 } else { sig[64] };
     let key = env::ecrecover(&hash, &sig[..64], v, true)?;
-    Some(format!("0x{}", hex(&env::keccak256_array(&key)[12..])))
+    Some(format!("0x{}", hex(&env::keccak256_array(key)[12..])))
 }
 
 fn unhex(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         return None;
     }
     (0..s.len()).step_by(2).map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok()).collect()
@@ -238,8 +238,8 @@ impl Coin {
                 self.try_counter(offer, rate_ppm.0, pitch, by)?.detach();
                 Ok(desc)
             }
-            BrainAction::AcceptCounter { offer_id } => {
-                self.try_accept_counter(offer_id)?.detach();
+            BrainAction::AcceptCounter { offer_id, rate_ppm } => {
+                self.try_accept_counter(offer_id, rate_ppm.map(|r| r.0))?.detach();
                 Ok(format!("accepted the counter on bid #{offer_id}"))
             }
             BrainAction::Tender { token, rate_ppm, pitch } => {
@@ -260,10 +260,7 @@ impl Coin {
                     return Err(format!("unknown offer {offer}"));
                 }
                 let pitch = truncate(pitch, MAX_PITCH_LEN);
-                let text = format!(
-                    "brain says vote {} on {offer}: \"{pitch}\"",
-                    if support { "YES" } else { "NO" }
-                );
+                let text = format!("brain says vote {} on {offer}: \"{pitch}\"", if support { "YES" } else { "NO" });
                 self.emit(
                     "stance",
                     json!({ "decision": decision_id, "offer": offer, "support": support, "pitch": pitch }),

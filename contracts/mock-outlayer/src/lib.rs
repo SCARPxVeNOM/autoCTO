@@ -10,8 +10,7 @@ use near_sdk::json_types::U128;
 use near_sdk::serde_json::{self, Value, json};
 use near_sdk::store::IterableMap;
 use near_sdk::{
-    AccountId, BorshStorageKey, CryptoHash, Gas, GasWeight, NearToken, PanicOnDefault, Promise,
-    env, near, require,
+    AccountId, BorshStorageKey, CryptoHash, Gas, GasWeight, NearToken, PanicOnDefault, Promise, env, near, require,
 };
 
 const YIELD_REGISTER: u64 = 0;
@@ -73,17 +72,11 @@ impl MockOutLayer {
         let request_id = self.next_id;
         self.next_id += 1;
         let args = serde_json::to_vec(&json!({ "request_id": request_id })).unwrap();
-        let promise =
-            env::promise_yield_create("on_resolved", &args, GAS_ON_RESOLVED, GasWeight(1), YIELD_REGISTER);
-        let yield_id: CryptoHash = env::read_register(YIELD_REGISTER)
-            .expect("no yield id")
-            .try_into()
-            .expect("yield id is 32 bytes");
+        let promise = env::promise_yield_create("on_resolved", &args, GAS_ON_RESOLVED, GasWeight(1), YIELD_REGISTER);
+        let yield_id: CryptoHash =
+            env::read_register(YIELD_REGISTER).expect("no yield id").try_into().expect("yield id is 32 bytes");
         let sender_id = env::predecessor_account_id();
-        let input_sha256 = input_data
-            .as_ref()
-            .map(|s| hex(&env::sha256(s.as_bytes())))
-            .unwrap_or_default();
+        let input_sha256 = input_data.as_ref().map(|s| hex(&env::sha256(s.as_bytes()))).unwrap_or_default();
         self.pending.insert(
             request_id,
             Pending {

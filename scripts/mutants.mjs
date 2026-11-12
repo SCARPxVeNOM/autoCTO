@@ -32,7 +32,7 @@ const MUTANTS = [
   ["backing a tender does not hold the lock", "tender.rs", "self.extend_vote_lock(&who, t.deadline);", ""],
   ["tender veto line on today's supply", "tender.rs", "let base = t.buyer_supply.0.min(self.circulating() + self.owed());", "let base = self.circulating() + self.owed();"],
   ["no dilution check at settlement", "tender.rs", "} else if mint > bps_of(base, self.params.tender_max_dilution_bps) {", "} else if false {"],
-  ["deposits taken after the deadline", "tender.rs", "require!(t.status == TenderStatus::Open && self.now() < t.deadline, \"the tender is closed\");", "require!(t.status == TenderStatus::Open, \"the tender is closed\");"],
+  ["deposits taken after the deadline", "tender.rs", "require!(t.status == TenderStatus::Open && self.now() < t.deadline, \"the tender is closed\");\n        let accepted", "require!(t.status == TenderStatus::Open, \"the tender is closed\");\n        let accepted"],
   ["dust deposits accepted", "tender.rs", "cur > 0 || accepted >= t.threshold.0 / 100,", "true,"],
   ["a refund the token refused is lost", "tender.rs", "self.tender_deposits.insert(key, cur + amount.0);", ""],
   ["a stuck tender cancelled a second early", "tender.rs", "require!(self.now() > t.created_at + 600 * NS_PER_SEC,", "require!(self.now() >= t.created_at + 600 * NS_PER_SEC,"],
@@ -41,6 +41,10 @@ const MUTANTS = [
   ["the vote closes during the reveals", "takeover.rs", "now >= o.vote_ends + self.params.reveal_period_sec * NS_PER_SEC,", "true,"],
   ["a sealed vote holds the lock only to the vote's end", "takeover.rs", "self.extend_vote_lock(&who, reveal_ends);", "self.extend_vote_lock(&who, reveal_ends - self.params.reveal_period_sec * NS_PER_SEC);"],
   ["unrevealed votes count toward the quorum", "takeover.rs", "let turnout = o.yes.0 + o.no.0;", "let turnout = o.yes.0 + o.no.0 + o.sealed.0;"],
+  ["a tender opens without being registered", "tender.rs", "if matches!(env::promise_result_checked(0, 0), Err(PromiseError::Failed)) {", "if false {"],
+  ["the target applies a counter the buyer never saw", "takeover.rs", "require!(counter.rate_ppm == rate_ppm, \"the counter changed since the buyer accepted it\");", ""],
+  ["the buyer accepts a counter that changed", "takeover.rs", "if seen.is_some_and(|r| r != rate.0) {", "if false {"],
+  ["a deposit under the brain fee is kept", "brain.rs", "require!(attached == 0 || attached >= fee,", "require!(true,"],
 ];
 
 let missed = 0;

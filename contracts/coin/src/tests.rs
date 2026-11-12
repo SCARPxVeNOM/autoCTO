@@ -105,12 +105,8 @@ fn launch(coin: &str) -> Coin {
     near_sdk::mock::with_mocked_blockchain(|b| drop(b.take_storage()));
     call(coin, LAUNCHPAD, 0, 0);
     let label = coin.split('.').next().unwrap();
-    let brain = BrainConfig {
-        outlayer: id("outlayer.testnet"),
-        source: "{}".into(),
-        secrets_ref: None,
-        max_instructions: 1,
-    };
+    let brain =
+        BrainConfig { outlayer: id("outlayer.testnet"), source: "{}".into(), secrets_ref: None, max_instructions: 1 };
     Coin::new(label.into(), label.to_uppercase(), None, String::new(), id("dev.testnet"), params(), brain)
 }
 
@@ -149,7 +145,12 @@ fn refusal<R>(f: impl FnOnce() -> R) -> Option<String> {
     QUIET.with(|q| q.set(true));
     let r = catch_unwind(AssertUnwindSafe(f)).err();
     QUIET.with(|q| q.set(false));
-    r.map(|e| e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default())
+    r.map(|e| {
+        e.downcast_ref::<String>()
+            .cloned()
+            .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_default()
+    })
 }
 
 /// True when `f` is refused, for any reason.
@@ -229,7 +230,13 @@ fn fair_of(c: &Coin) -> u128 {
 /// PEPE's bid number `offer_id` lands on DOGE at `sec`; returns its key.
 fn bid_at_rate(c: &mut Coin, sec: u64, offer_id: u64, rate: u128) -> String {
     call(DOGE, PEPE, sec, 0);
-    c.receive_offer(offer_id, U128(rate), "Join the frog.".into(), Proposer::Brain { decision_id: offer_id }, pepe_market());
+    c.receive_offer(
+        offer_id,
+        U128(rate),
+        "Join the frog.".into(),
+        Proposer::Brain { decision_id: offer_id },
+        pepe_market(),
+    );
     offer_key(&id(PEPE), offer_id)
 }
 
@@ -364,7 +371,7 @@ fn an_accepted_counter_restarts_the_vote_on_the_old_snapshot() {
     let counter = rate * 12 / 11;
     drop(c.try_counter(key.clone(), counter, "Pay more.".into(), Proposer::Holder { account_id: id(ALICE) }).unwrap());
     call(DOGE, PEPE, 70, 0);
-    let ack = c.apply_counter(0);
+    let ack = c.apply_counter(0, U128(counter));
     assert_eq!((ack.round, ack.rate_ppm.0, ack.vote_ends), (1, counter, at(130)));
     let o = c.get_incoming(key.clone()).unwrap();
     assert_eq!((o.yes.0, o.no.0, o.created_at), (0, 0, at(40)), "votes reset, snapshot kept");
@@ -373,6 +380,57 @@ fn an_accepted_counter_restarts_the_vote_on_the_old_snapshot() {
     assert_eq!(c.vote(key.clone(), true).0, a);
     call(DOGE, CAROL, 72, 0);
     assert!(refused(|| c.vote(key.clone(), false)));
+}
+
+#[test]
+fn a_counter_that_changed_before_the_acceptance_landed_is_refused() {
+    let mut c = doge();
+    let (key, rate) = bid(&mut c, 40);
+    let by = Proposer::Holder { account_id: id(ALICE) };
+    // DOGE counters at +15%; PEPE accepts that; DOGE raises to +20% before the acceptance arrives.
+    let (first, second) = (rate * 115 / 110, rate * 12 / 11);
+    call(DOGE, ALICE, 50, 0);
+    drop(c.try_counter(key.clone(), first, "Pay more.".into(), by.clone()).unwrap());
+    call(DOGE, ALICE, 51, 0);
+    drop(c.try_counter(key.clone(), second, "No, more.".into(), by).unwrap());
+    call(DOGE, PEPE, 52, 0);
+    assert_refused("the counter changed since the buyer accepted it", || c.apply_counter(0, U128(first)));
+    let o = c.get_incoming(key.clone()).unwrap();
+    assert_eq!((o.round, o.rate_ppm.0, o.counter.unwrap().rate_ppm.0), (0, rate, second), "nothing changed");
+    assert_eq!(c.apply_counter(0, U128(second)).rate_ppm.0, second);
+}
+
+#[test]
+fn accepting_a_counter_names_the_rate_that_was_seen() {
+    let (mut c, _, rate) = pepe_bids(|_| 0);
+    let counter = |c: &mut Coin, sec: u64, rate: u128| {
+        call(PEPE, DOGE, sec, 0);
+        c.receive_counter(0, U128(rate), "Pay more.".into(), Proposer::Brain { decision_id: 0 });
+    };
+    let (first, second) = (rate * 115 / 110, rate * 12 / 11);
+    counter(&mut c, 50, first);
+    call(PEPE, ALICE, 51, 0);
+    drop(c.accept_counter(0, Some(U128(first))));
+    assert_eq!(calls_to(DOGE, "apply_counter")[0].0["rate_ppm"], first.to_string(), "DOGE applies only this rate");
+    // DOGE raises its counter: an acceptance of the old terms is refused here already.
+    counter(&mut c, 52, second);
+    call(PEPE, ALICE, 53, 0);
+    assert_refused("the counter changed since you saw it", || c.accept_counter(0, Some(U128(first))));
+    drop(c.accept_counter(0, None));
+    assert_eq!(calls_to(DOGE, "apply_counter")[0].0["rate_ppm"], second.to_string());
+}
+
+#[test]
+fn a_brain_fee_is_paid_in_full_or_by_the_treasury() {
+    let mut c = doge();
+    let fee = params().brain_fee.0;
+    call(DOGE, ALICE, 10, fee - 1);
+    assert_refused("attach at least the brain fee, or nothing to let the treasury pay", || c.think());
+    call(DOGE, ALICE, 10, fee);
+    drop(c.think());
+    let d = c.get_decision(0).unwrap();
+    assert_eq!((d.paid.0, d.paid_by_treasury), (fee, false));
+    assert_eq!(calls_to("outlayer.testnet", "request_execution")[0].1, fee, "all of it goes to the run");
 }
 
 #[test]
@@ -399,7 +457,9 @@ fn the_discount_floor_holds_to_the_basis_point() {
 fn only_direct_sub_accounts_of_the_launchpad_are_siblings() {
     let c = doge();
     assert!(c.is_sibling(&id(PEPE)));
-    for other in [DOGE, LAUNCHPAD, "x.pepe.v4.autocto.testnet", "pepev4.autocto.testnet", "pepe.v5.autocto.testnet", ALICE] {
+    for other in
+        [DOGE, LAUNCHPAD, "x.pepe.v4.autocto.testnet", "pepev4.autocto.testnet", "pepe.v5.autocto.testnet", ALICE]
+    {
         assert!(!c.is_sibling(&id(other)), "{other}");
     }
 }
@@ -648,7 +708,13 @@ fn pepe_bids(bob_locks: impl FnOnce(u128) -> u128) -> (Coin, u128, u128) {
     call(PEPE, ALICE, 40, 0);
     drop(c.propose_offer(id(DOGE), U128(rate), "Join the frog.".into()));
     call(PEPE, PEPE, 40, 0);
-    let ack = OfferAck { created_at: at(40), vote_ends: at(100), fair_rate_ppm: U128(fair), premium_bps: 1000, target_market: m };
+    let ack = OfferAck {
+        created_at: at(40),
+        vote_ends: at(100),
+        fair_rate_ppm: U128(fair),
+        premium_bps: 1000,
+        target_market: m,
+    };
     assert!(c.on_offer_sent(0, Ok(ack)));
     (c, line, rate)
 }
@@ -714,7 +780,11 @@ fn a_lock_made_after_the_bid_cannot_veto() {
 fn execution_rechecks_the_rate_against_prices_now() {
     let (mut c, _, _) = pepe_bids(|_| 0);
     // DOGE was dumped during the vote: the agreed rate is now 50% over fair.
-    let dumped = MarketSnapshot { amm_near: U128(30_500_000 * NEAR / 1_000_000), amm_tokens: U128(983_606_558 * TOKEN), ..doge_market() };
+    let dumped = MarketSnapshot {
+        amm_near: U128(30_500_000 * NEAR / 1_000_000),
+        amm_tokens: U128(983_606_558 * TOKEN),
+        ..doge_market()
+    };
     assert!(!execute(&mut c, 101, dumped.circulating.0, dumped));
     assert!(outgoing_failure(&c).contains("prices moved"));
 }
@@ -776,7 +846,13 @@ fn a_chained_takeover_leaves_no_holder_stranded() {
     call(DOGE, ALICE, 40, 0);
     drop(c.propose_offer(id(SHIB), U128(rate), "Join the dog.".into()));
     call(DOGE, DOGE, 40, 0);
-    let ack = OfferAck { created_at: at(40), vote_ends: at(100), fair_rate_ppm: U128(rate), premium_bps: 0, target_market: shib.clone() };
+    let ack = OfferAck {
+        created_at: at(40),
+        vote_ends: at(100),
+        fair_rate_ppm: U128(rate),
+        premium_bps: 0,
+        target_market: shib.clone(),
+    };
     c.on_offer_sent(0, Ok(ack));
     call(DOGE, SHIB, 101, 0);
     assert!(c.execute_takeover(0, shib.circulating, shib.clone()));
@@ -807,14 +883,28 @@ fn a_chained_takeover_leaves_no_holder_stranded() {
 
 // ---------- tender offers ----------
 
-/// PEPE with alice's 10 NEAR locked; alice proposes a tender for OLD at
-/// `rate` and OLD reports `supply`. Returns whether it opened.
-fn tender(c: &mut Coin, tender_id: u64, rate: u128, supply: u128) -> bool {
+/// Alice proposes a tender for OLD at `rate` and OLD gives `answers`: the
+/// registration, then the supply. Returns whether it opened.
+fn tender_answered(c: &mut Coin, tender_id: u64, rate: u128, answers: Vec<PromiseResult>) -> bool {
     call(PEPE, ALICE, 40, 0);
     drop(c.propose_tender(id(OLD), U128(rate), "Swap your OLD.".into()));
-    let answer = serde_json::to_vec(&U128(supply)).unwrap();
-    mock(context(PEPE, PEPE, 40, 0), vec![PromiseResult::Successful(answer)]);
+    mock(context(PEPE, PEPE, 40, 0), answers);
     c.on_tender_opened(tender_id)
+}
+
+/// OLD's answer to `storage_deposit` when it registers the coin.
+fn registered() -> PromiseResult {
+    PromiseResult::Successful(br#"{"total":"1250000000000000000000","available":"0"}"#.to_vec())
+}
+
+fn supply_answer(supply: u128) -> PromiseResult {
+    PromiseResult::Successful(serde_json::to_vec(&U128(supply)).unwrap())
+}
+
+/// Alice proposes a tender for OLD at `rate`; OLD registers PEPE and
+/// reports `supply`. Returns whether it opened.
+fn tender(c: &mut Coin, tender_id: u64, rate: u128, supply: u128) -> bool {
+    tender_answered(c, tender_id, rate, vec![registered(), supply_answer(supply)])
 }
 
 fn pepe_for_tenders() -> Coin {
@@ -1039,7 +1129,10 @@ fn a_tender_short_of_its_threshold_refunds_every_depositor() {
         call(PEPE, who, 101, 0);
         drop(c.claim_tender(0));
         let refund = calls_to(OLD, "ft_transfer");
-        assert_eq!((refund[0].0["receiver_id"].as_str(), refund[0].0["amount"].as_str()), (Some(who), Some(amount.to_string().as_str())));
+        assert_eq!(
+            (refund[0].0["receiver_id"].as_str(), refund[0].0["amount"].as_str()),
+            (Some(who), Some(amount.to_string().as_str()))
+        );
         assert_eq!(refund[0].1, 1, "one yocto, as NEP-141 asks");
     }
     assert_eq!(c.token.total_supply, SUPPLY, "nothing was minted");
@@ -1084,7 +1177,9 @@ fn a_first_deposit_under_one_percent_of_the_threshold_is_refused() {
     let mut c = open_tender(|_| 0);
     let dust = c.get_tender(0).unwrap().threshold.0 / 100;
     call(PEPE, OLD, 50, 0);
-    assert_refused("first deposit must be at least 1% of the threshold", || c.ft_on_transfer(id(DAVE), U128(dust - 1), "0".into()));
+    assert_refused("first deposit must be at least 1% of the threshold", || {
+        c.ft_on_transfer(id(DAVE), U128(dust - 1), "0".into())
+    });
     assert_eq!(deposit(&mut c, DAVE, 51, dust), 0);
     assert_eq!(deposit(&mut c, DAVE, 52, 1), 0, "a top-up can be any size");
     assert_eq!(c.tender_deposit_of(0, id(DAVE)).0, dust + 1);
@@ -1138,13 +1233,23 @@ fn a_token_that_reports_no_supply_fails_the_tender() {
     let mut c = pepe_for_tenders();
     let rate = top_tender_rate(&c, OLD_SUPPLY);
     for (tender_id, answer) in [(0, PromiseResult::Failed), (1, PromiseResult::Successful(b"\"lots\"".to_vec()))] {
-        call(PEPE, ALICE, 40, 0);
-        drop(c.propose_tender(id(OLD), U128(rate), "Swap your OLD.".into()));
-        mock(context(PEPE, PEPE, 40, 0), vec![answer]);
-        assert!(!c.on_tender_opened(tender_id));
-        assert_eq!(c.get_tender(tender_id).unwrap().status, TenderStatus::Failed { reason: "the token did not report a supply".into() });
+        assert!(!tender_answered(&mut c, tender_id, rate, vec![registered(), answer]));
+        assert_eq!(
+            c.get_tender(tender_id).unwrap().status,
+            TenderStatus::Failed { reason: "the token did not report a supply".into() }
+        );
     }
     assert!(tender(&mut c, 2, rate, OLD_SUPPLY), "a failed tender frees the token for the next one");
+}
+
+#[test]
+fn a_tender_opens_only_if_the_token_registers_the_coin() {
+    let mut c = pepe_for_tenders();
+    let rate = top_tender_rate(&c, OLD_SUPPLY);
+    // Deposits to an unregistered coin would all bounce: the tender must not open.
+    assert!(!tender_answered(&mut c, 0, rate, vec![PromiseResult::Failed, supply_answer(OLD_SUPPLY)]));
+    assert_eq!(tender_failure(&c), "the token would not register this coin");
+    assert!(tender(&mut c, 1, rate, OLD_SUPPLY), "the token is free for the next tender");
 }
 
 #[test]
@@ -1166,7 +1271,9 @@ fn tenders_are_for_outside_tokens_one_at_a_time() {
     let mut c = open_tender(|_| 0);
     call(PEPE, ALICE, 41, 0);
     assert_refused("one open tender per token", || c.propose_tender(id(OLD), U128(1), "Again.".into()));
-    assert_refused("is a launchpad coin: make a takeover bid instead", || c.propose_tender(id(DOGE), U128(1), "x".into()));
+    assert_refused("is a launchpad coin: make a takeover bid instead", || {
+        c.propose_tender(id(DOGE), U128(1), "x".into())
+    });
     assert_refused("is a launchpad coin", || c.propose_tender(id(PEPE), U128(1), "x".into()));
     call(PEPE, BOB, 41, 0);
     assert_refused("lock more tokens", || c.propose_tender(id("new.testnet"), U128(1), "x".into()));
@@ -1354,9 +1461,12 @@ fn an_accepted_counter_voids_the_sealed_votes_of_the_old_round() {
     vote_sealed(&mut c, &key, ALICE, 41, true);
     let rate = c.get_incoming(key.clone()).unwrap().rate_ppm.0;
     call(DOGE, ALICE, 55, 0);
-    drop(c.try_counter(key.clone(), rate * 12 / 11, "Pay more.".into(), Proposer::Holder { account_id: id(ALICE) }).unwrap());
+    drop(
+        c.try_counter(key.clone(), rate * 12 / 11, "Pay more.".into(), Proposer::Holder { account_id: id(ALICE) })
+            .unwrap(),
+    );
     call(DOGE, PEPE, 70, 0);
-    assert_eq!(c.apply_counter(0).round, 1);
+    assert_eq!(c.apply_counter(0, U128(rate * 12 / 11)).round, 1);
     assert_eq!(c.get_incoming(key.clone()).unwrap().sealed.0, 0, "round 0 ballots no longer count");
     // Round 1 runs to 130 and reveals to 160. bob seals in it; alice does not.
     call(DOGE, BOB, 71, 0);
@@ -1377,7 +1487,11 @@ fn a_round_trip_pays_the_trading_fee_both_ways() {
     let storage = c.token.account_storage_usage as u128 * near_sdk::env::storage_byte_cost().as_yoctonear();
     let net = 10 * NEAR - storage;
     let got = c.buy(None).0;
-    assert_eq!(got, crate::math::amm_out(VIRTUAL, SUPPLY, net - bps_of(net, 100)), "1% of the buy stays out of the curve");
+    assert_eq!(
+        got,
+        crate::math::amm_out(VIRTUAL, SUPPLY, net - bps_of(net, 100)),
+        "1% of the buy stays out of the curve"
+    );
     let gross = crate::math::amm_out(c.amm_tokens, c.amm_near, got);
     assert_eq!(c.quote_sell(U128(got)).0, gross - bps_of(gross, 100));
     call(DOGE, ALICE, 2, 1);
@@ -1545,7 +1659,10 @@ fn random_votes_match_a_count_made_by_hand() {
         assert_eq!(closed(c.finalize(key)), expected, "seed {seed}: outcome");
         if expected { passes += 1 } else { fails += 1 }
     }
-    assert!(passes > 20 && fails > 20 && late_refused > 20, "{passes} passed, {fails} failed, {late_refused} late votes refused");
+    assert!(
+        passes > 20 && fails > 20 && late_refused > 20,
+        "{passes} passed, {fails} failed, {late_refused} late votes refused"
+    );
 }
 
 /// Holders of an absorbed coin convert in random pieces. Minted tokens
@@ -1576,4 +1693,3 @@ fn random_conversions_never_mint_past_the_cap() {
         assert!(refused(|| c.mint_converted(id(BOB), U128(1))), "seed {seed}");
     }
 }
-

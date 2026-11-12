@@ -7,3 +7,5 @@ web/config.local.json
 # API keys for local use; never commit
 keys.txt
 pinatakey.txt
+# the submission draft stays local
+docs/SUBMISSION.md

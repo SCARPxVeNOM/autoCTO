@@ -96,16 +96,16 @@ If a bid for DOGE was already open when you locked, step 4 shows the snapshot ru
 With Rust ([prerequisites](#run-it-locally)), from the repo root:
 
 ```bash
-cargo test -p autocto-coin -p autocto-brain -p autocto-demo   # 93 unit tests, about 2 s once built
+cargo test -p autocto-coin -p autocto-brain -p autocto-demo   # 100 unit tests, about 2 s once built
 cargo test -p autocto-tests                                   # 15 end-to-end tests in a local NEAR sandbox + 1 invariant fuzz test (~4 min)
-node scripts/mutants.mjs                                      # ends with "30 of 30 mutants caught"
+node scripts/mutants.mjs                                      # ends with "34 of 34 mutants caught"
 ```
 
-`cargo test` runs all 110: the first two lines plus one launchpad test.
+`cargo test` runs all 117: the first two lines plus one launchpad test.
 
 - **Unit tests** ([`contracts/coin/src/tests.rs`](contracts/coin/src/tests.rs)) drive one coin on near-sdk's mocked chain and play its sibling's calls by switching the caller and the clock, so each rule is tested at its exact line: exactly quorum and two thirds pass, one token less fails; a veto at the line blocks, one token under does not; a lock in the same block as the bid has no vote; a merge sends every yocto of curve NEAR and treasury. Tenders and sealed votes get the same treatment: a tender's veto line and dilution cap are measured on the supply when it opened, a refund the token refuses stays claimable, and a sealed vote counts only if it is revealed in its window. Seeded random runs check the books after 4,000 trades, 200 votes against a count made by hand, and 50 conversion runs. The relayer's filter has its own tests in [`demo/src/gasless.rs`](demo/src/gasless.rs).
 - **End-to-end tests** ([`tests/tests`](tests/tests)) run the real wasm in a NEAR sandbox, with a local stand-in for OutLayer: takeovers, counters, vetoes, tenders, gasless and sealed voting, signed model answers, a prompt-injected pitch, and an invariant fuzz run that re-checks supply, balances, solvency and caps after every random action.
-- **Mutation testing.** [`scripts/mutants.mjs`](scripts/mutants.mjs) breaks 30 rules on purpose, one at a time, runs the unit tests and restores the file. Each break makes a test fail.
+- **Mutation testing.** [`scripts/mutants.mjs`](scripts/mutants.mjs) breaks 34 rules on purpose, one at a time, runs the unit tests and restores the file. Each break makes a test fail.
 
 ### The Verify page
 
@@ -219,15 +219,16 @@ The AI holds no key and can only propose; the contract re-checks every number. E
 | Quorum 10% and approval 67%, on the supply at the bid | A deal pushed through by a few | `exactly_quorum_and_exactly_two_thirds_pass`, `one_token_short_of_quorum_fails`, `one_token_short_of_two_thirds_fails` |
 | Rate within ±30% of fair, dilution cap, 10% veto by the buyer's holders | Insiders making their coin overpay; lowballs | `the_premium_cap_holds_to_the_basis_point`, `the_discount_floor_holds_to_the_basis_point`, `a_veto_at_the_line_blocks_the_takeover`, `buyer_holders_can_veto` |
 | Rate and dilution re-checked at execution; supply bought after the bid can't move the veto line or the mint cap | Pumping the target before the bid | `pump_before_the_bid_fails_at_execution`, `execution_rechecks_the_rate_against_prices_now`, `buying_after_the_bid_cannot_raise_the_veto_line` |
+| A counter-offer is accepted only at the rate the buyer saw | Terms switched while an acceptance is on its way | `a_counter_that_changed_before_the_acceptance_landed_is_refused`, `accepting_a_counter_names_the_rate_that_was_seen` |
 | Newborn protection, cooldown after a failed bid, 3 bids a day, one open bid per pair | Sniping a coin at birth; bid spam | `caps_and_safety_rules`, `quorum_failure_sets_cooldown`, `a_failed_execution_reopens_the_target_and_starts_the_cooldown` |
 | Proposers need tokens locked in an earlier block, and stay locked through the vote | Buy, propose and sell in one transaction | `pump_before_the_bid_fails_at_execution` (`assert_proposer`) |
 | Only direct sub-accounts of the same launchpad, with its code, can bid or be bid for | Fake coins posing as siblings | `only_direct_sub_accounts_of_the_launchpad_are_siblings`, `caps_and_safety_rules` |
 | Every AI answer is re-checked; a bad one is stored as Refused and moves nothing | A lying or broken brain | `a_lying_brain_is_refused_and_coins_have_no_keys` |
 | The coin verifies NEAR AI's signature on chain | An AI answer altered on the way in | `the_coin_checks_the_models_signature` |
 | Rival pitches reach the deciding model only as fixed fields | Prompt injection | `injected_pitch_never_reaches_the_decider`, `reader_flags_injection` |
-| Brain fee, daily treasury cap, think cooldown | Draining the treasury with thoughts | `brains_negotiate_offer_counter_accept` |
+| Brain fee, daily treasury cap, think cooldown; a caller pays the whole fee or nothing | Draining the treasury with thoughts | `brains_negotiate_offer_counter_accept`, `a_brain_fee_is_paid_in_full_or_by_the_treasury` |
 | A merge moves all curve NEAR and treasury; conversions burn free and locked tokens and are capped, counting what is still owed after chained merges | Value lost, minted from nothing, or holders stranded | `a_merge_closes_the_curve_and_sends_its_near_and_treasury_to_the_buyer`, `a_chained_takeover_leaves_no_holder_stranded`, `chain_of_takeovers_leaves_no_holder_stranded`, `random_conversions_never_mint_past_the_cap` |
-| Tenders: nominated tokens only, no owner key, holders' backing, per-tender dilution cap, all-or-nothing | Scam or ruggable tokens; diluting holders; kept deposits | `brain_tenders_for_nominated_tokens_and_refuses_ruggable_ones`, `tender_for_an_outside_token_swaps_everyone_or_refunds_everyone`, `a_tender_returns_deposits_over_its_cap_and_needs_its_holders_backing`, `buying_after_the_tender_cannot_raise_its_veto_line`, `the_dilution_cap_is_checked_again_at_settlement`, `a_refund_the_token_refuses_stays_claimable` |
+| Tenders: nominated tokens only, no owner key, opened only once the token has registered the coin, holders' backing, per-tender dilution cap, all-or-nothing | Scam or ruggable tokens; diluting holders; kept deposits | `brain_tenders_for_nominated_tokens_and_refuses_ruggable_ones`, `tender_for_an_outside_token_swaps_everyone_or_refunds_everyone`, `a_tender_opens_only_if_the_token_registers_the_coin`, `a_tender_returns_deposits_over_its_cap_and_needs_its_holders_backing`, `buying_after_the_tender_cannot_raise_its_veto_line`, `the_dilution_cap_is_checked_again_at_settlement`, `a_refund_the_token_refuses_stays_claimable` |
 | Optional sealed votes: one per holder per round, revealed in a fixed window, and the vote cannot close until the window ends | Bandwagoning while the vote runs | `sealed_votes_stay_hidden_until_the_reveal`, `a_reveal_must_match_the_commitment`, `an_unrevealed_vote_counts_for_nothing`, `an_accepted_counter_voids_the_sealed_votes_of_the_old_round` |
 | The relayer forwards one zero-deposit call from a fixed list, to a coin of its launchpad, with at most 150 Tgas | The relayer's gas paying for anything but votes, locks and claims | `calls_that_spend_or_propose_are_not_relayed`, `a_call_with_a_deposit_is_not_relayed`, `a_holder_with_zero_near_votes_through_a_relayer` |
 | No owner, no setters, zero access keys | An admin rug | `a_lying_brain_is_refused_and_coins_have_no_keys`, the Verify page |
@@ -247,6 +248,8 @@ There has been no professional audit. The contracts were checked against NEAR's 
 | Brain | OutLayer project `scarpxvenom.testnet/autocto-brain` on `outlayer.testnet`, pinned by sha256 `efc702f6…d3b5a5` (`res/autocto-brain.wasm` at `f2f2586`). Model mode: `z-ai/glm-5.3-flash` on NEAR AI Cloud |
 | Coins | [`pepe.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v4.scarpxvenom.testnet), [`doge.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v4.scarpxvenom.testnet) and [`wojak.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/wojak.v4.scarpxvenom.testnet) (absorbed by PEPE), each with 0 access keys |
 
+**Fixed since the deployment.** A code review after `f2f2586` found three contract bugs. The fixes are in the source and in `res/`, each with unit tests and a mutant, but the v4 coins have no keys, so they keep running `f2f2586`: a tender now opens only once the outside token has registered the coin (before, it could open and then refuse every deposit); a buyer accepts a counter-offer only at the rate it saw (before, a counter changed while the acceptance was on its way was taken); and `think()` refuses a deposit under the brain fee (before, it was kept and the treasury paid). The Verify page checks the chain against `f2f2586`, the code that runs.
+
 Three earlier launchpads (`v3`, `v2`, `autocto`) are locked and still on chain, with three more takeovers and a tender; their transcripts are in [`docs/TESTNET.md`](docs/TESTNET.md).
 
 ## Repository layout
@@ -260,8 +263,8 @@ Three earlier launchpads (`v3`, `v2`, `autocto`) are locked and still on chain, 
 | `tests/` | end-to-end sandbox tests and the invariant fuzz test |
 | `sim/` | the simulation and parameter sweep |
 | `frontend/` → `web/` | the app's source (React, Vite) and its committed build; `web/api/guest.js` is the optional guest-account function |
-| `res/`, `params/`, `proofs/` | the built wasm the deployments run, the rule sets, and OutLayer evidence bundles |
-| `scripts/` | `build.sh`, `mutants.mjs`, and `record-arena.mjs` (records the landing arena's replay) |
+| `res/`, `params/`, `proofs/` | the wasm built from this commit (testnet runs the copies at `f2f2586`), the rule sets, and OutLayer evidence bundles |
+| `scripts/` | `build.sh`, `mutants.mjs`, `record-arena.mjs` (records the landing arena's replay), and `lettering.py` (renders the 3D headline and wordmark in Blender from the layout in `lettering.json`) |
 
 ## Limitations
 
@@ -269,7 +272,7 @@ Three earlier launchpads (`v3`, `v2`, `autocto`) are locked and still on chain, 
 - **The fair rate is spot-price based.** A trader can move a curve before a bid. The caps and the re-check at execution bound the damage; a time-weighted price would be better.
 - **Tenders have no price check.** There is no on-chain price for an outside token, so the coin's holders judge the rate by backing or vetoing it.
 - **Replay is partial.** The input hash pins what the contract gave the brain, but the brain also reads rival coins live over RPC, so re-running a scouting decision can differ.
-- **Known gaps.** A sealed voter who splits tokens across two accounts can commit both ways and reveal one side late. Finished bids and tenders are never pruned, so after several hundred records a coin's `think()` could run out of gas. Storage for votes and decisions is paid by the coin. A long vote can fail at execution if prices drift past the premium cap.
+- **Known gaps.** A sealed voter who splits tokens across two accounts can commit both ways and reveal one side late. Finished bids and tenders are never pruned, so after several hundred records a coin's `think()` could run out of gas. Storage for votes and decisions is paid by the coin. A long vote can fail at execution if prices drift past the premium cap. A paid `think()` that OutLayer refuses outright leaves its fee with the coin: the contract can't tell whether OutLayer already refunded the payer, so a refund from the coin could pay twice.
 - **Not built yet.** Graduation from the bonding curve to a DEX, swaps on Rhea, enclave-counted votes and sealed bids, and cross-chain takeovers.
 
 ## Hackathon tracks
