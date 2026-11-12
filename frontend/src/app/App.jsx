@@ -1,6 +1,6 @@
 // The app's shell: sidebar, top bar, one view at a time (picked by the address hash) and the dialogs.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Brain, CircleHelp, Copy, LayoutDashboard, Moon, Rocket, Scale, ShieldCheck, Sun, SunMoon, Swords, Wallet } from "lucide-react";
+import { Brain, CircleHelp, Copy, LayoutDashboard, LogOut, Moon, Rocket, Scale, ShieldCheck, Sun, SunMoon, Swords, UserRound, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,8 +13,8 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { Logo, Pill, Term, Wordmark } from "@/components/common";
 import {
-  GLOSSARY, NETWORK, allOffers, cfg, closeDialog, connectWallet, hasWallet, isMerged, liveOffer,
-  selectCoin, setActor, setGasless, short, start, state, statusName, useChain,
+  GLOSSARY, NETWORK, allOffers, cfg, closeDialog, connectWallet, endGuest, hasWallet, isMerged, liveOffer,
+  selectCoin, setActor, setGasless, short, start, startGuest, state, statusName, useChain,
 } from "@/lib/chain";
 import { UiContext } from "./ui";
 import Market from "./Market";
@@ -75,14 +75,26 @@ function Dialogs({ glossary, setGlossary }) {
             <Button variant="outline" className="justify-self-start rounded-full" onClick={() => copy(d.salt)}><Copy /> Copy salt</Button>
           </DialogContent>
         )}
+        {d?.type === "signin" && (
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader><DialogTitle>Pick an account to play with</DialogTitle>
+              <DialogDescription>Everything here runs on NEAR testnet, with test NEAR that is worth nothing.</DialogDescription></DialogHeader>
+            <div className="flex flex-wrap gap-2.5">
+              <Button className="rounded-full" onClick={() => { closeDialog(); startGuest(); }}><UserRound /> Try as guest</Button>
+              <Button variant="outline" className="rounded-full" onClick={() => { closeDialog(); connectWallet(); }}><Wallet /> Connect a wallet</Button>
+            </div>
+            <p className="text-[13px] text-muted-foreground">A guest is a real testnet account with {state.guestOffer?.near} test NEAR. Its key is made and kept in this browser, and every action is signed here. Clear the browser's data and the guest is gone.</p>
+          </DialogContent>
+        )}
       </Dialog>
     </>
   );
 }
 
-// Who the page acts as: a demo holder, a connected wallet, or just an account to look at.
+// Who the page acts as: a demo holder, a connected wallet, a guest, or just an account to look at.
 function Who() {
   const dev = !!cfg.dev_key, wallet = hasWallet();
+  const asGuest = !dev && wallet && !state.wallet && !!state.guest;
   const [typed, setTyped] = useState(state.actor);
   useEffect(() => { setTyped(state.actor); }, [state.actor]);
   if (!state.ready && !cfg.launchpad) return null;
@@ -97,15 +109,17 @@ function Who() {
           </Select>
         </label>
       )}
-      {!dev && (!wallet || state.wallet) && (
-        <label className="flex items-center gap-2">
-          <span className="text-[12.5px] text-muted-foreground max-sm:hidden">account</span>
+      {!dev && (!wallet || state.wallet || asGuest) && (
+        <label className="flex items-center gap-2" title={asGuest ? "Your guest account: its key is kept in this browser" : undefined}>
+          <span className="text-[12.5px] text-muted-foreground max-sm:hidden">{asGuest ? "guest" : "account"}</span>
           <Input id="viewer" className="h-8 w-[168px] rounded-full font-mono text-[13px] max-sm:w-[128px]" placeholder={`you.${NETWORK === "local" ? "testnet" : NETWORK}`} autoComplete="off" spellCheck={false}
-            readOnly={!!state.wallet} value={typed} onChange={(e) => setTyped(e.target.value.trim())}
+            readOnly={!!state.wallet || asGuest} value={typed} onChange={(e) => setTyped(e.target.value.trim())}
             onBlur={() => typed !== state.actor && setActor(typed)} onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} />
         </label>
       )}
-      {!dev && wallet && <Button id="connect" size="sm" variant={state.wallet ? "outline" : "default"} className="rounded-full" onClick={connectWallet}><Wallet /> {state.wallet ? "Disconnect" : "Connect wallet"}</Button>}
+      {asGuest && <Button variant="ghost" size="icon" className="size-8 rounded-full" title="Stop using the guest account" aria-label="Stop using the guest account" onClick={endGuest}><LogOut /></Button>}
+      {!dev && wallet && !state.wallet && !state.guest && state.guestOffer && <Button id="guest" size="sm" variant="outline" className="rounded-full" onClick={startGuest}><UserRound /> <span className="max-sm:hidden">Try as </span>guest</Button>}
+      {!dev && wallet && <Button id="connect" size="sm" variant={state.wallet || asGuest ? "outline" : "default"} className="rounded-full" onClick={connectWallet}><Wallet /> {state.wallet ? "Disconnect" : <span className={cn(asGuest && "max-sm:hidden")}>Connect wallet</span>}</Button>}
       {dev && cfg.relayer && (
         <label className="flex items-center gap-1.5 text-[13px] text-muted-foreground max-sm:hidden">
           <Checkbox checked={state.gasless} onCheckedChange={(v) => setGasless(v === true)} /> <Term k="gasless" />
@@ -162,7 +176,8 @@ export default function App() {
       setMode(where);
       pointAt("ticket");
       setTimeout(() => amtRef.current?.focus({ preventScroll: true }), 80);
-    } else if (where === "think") { toMarket(); pointAt("think"); }
+    } else if (where === "guest") startGuest();
+    else if (where === "think") { toMarket(); pointAt("think"); }
     else if (where === "deals") location.hash = "#deals";
   }, [pointAt]);
   const ui = useMemo(() => ({ mode, setMode, amtRef, pointAt, go }), [mode, pointAt, go]);

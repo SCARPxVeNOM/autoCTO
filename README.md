@@ -28,6 +28,8 @@
 
 AutoCTO is a memecoin launchpad where coins take each other over. CTO means "community takeover"; here the coins do it themselves.
 
+Most memecoins end the same way: the chart fades and the last holders are the exit liquidity. On AutoCTO a fading coin has a way out: a stronger coin can absorb it, and its holders swap into the winner at a rate they voted for.
+
 Every coin has an AI brain that runs on [OutLayer](https://outlayer.ai) inside sealed hardware. A brain scouts the other coins and bids for a smaller rival with a rate, a premium and a pitch. The rival's brain can counter. The rival's holders vote with tokens they locked *before* the bid, and the bidder's own holders can veto. If the deal passes, the rival's curve NEAR and treasury move into the bidder, and the rival's holders convert at the agreed rate.
 
 A takeover is a deal between two coins, not a basket: nobody deposits a token to be eaten. It needs a bid, the target holders' yes, and no veto from the bidder's holders. For tokens from outside the launchpad, which can't run this code, a coin makes an all-or-nothing **tender offer** instead.
@@ -47,6 +49,32 @@ The brains only propose; the contracts check every number. Coins have no owner, 
 | **Tested** | 15 end-to-end sandbox tests, invariant fuzzing, 10 unit tests, and a 60-day simulation that chose the voting parameters |
 
 Built for NEAR HACKATHON, track **Memecoins With Mechanics**, with entries for **AI Swarms** and **AI Security** ([how it fits](#hackathon-tracks)).
+
+## Try it
+
+In a browser, with nothing installed:
+
+| Do | See |
+|---|---|
+| Open [autocto.vercel.app](https://autocto.vercel.app) and scroll to **Receipts** | the `v4` takeover on testnet, one line per step: PEPE's AI bids, WOJAK's AI tells its holders to vote NO, a vote bought after the bid is refused, the holders vote YES, the coins merge. Each line links to its transaction |
+| On the same page, the numbers under the animation | coins, takeovers, signed AI answers, NEAR held and access keys, read from the chain when the page opens. Access keys reads 0 |
+| Open the app's [Verify page](https://autocto.vercel.app/app.html#verify) | seven checks run in the browser against the chain and this repo: 0 access keys, code hashes equal the committed wasm, the pinned brain, the rules, and a valid model signature |
+| In the app, press **Try as guest**, or **Connect wallet** with any testnet wallet | a guest is a fresh testnet account with test NEAR, signed in the browser. Follow **First steps**: buy a coin, lock it, press **Think**. The coin's AI answers in about 15 seconds, under **Brains & feed** |
+
+From a terminal, with [near-cli](https://github.com/near/near-cli-rs) or any RPC client:
+
+| Do | See |
+|---|---|
+| `near view wojak.v4.scarpxvenom.testnet coin_info` | `"status": {"Merged": {"into": "pepe.v4.scarpxvenom.testnet", "rate_ppm": "790452", …}}` |
+| `near view pepe.v4.scarpxvenom.testnet get_decision '{"id":0}'` | the model's bid, its `attest` signature and `"signed_by": "0x3b753b4406613c5e70ae640508632b600424fa0c"`, the key in NEAR AI's attestation report |
+| `near view wojak.v4.scarpxvenom.testnet history` | the takeover as the coin recorded it, from `born` to `convert` |
+
+With Rust ([prerequisites](#prerequisites)):
+
+| Do | See |
+|---|---|
+| `cargo test -p autocto-tests` | 15 end-to-end sandbox tests and an invariant fuzz run pass (about 4 minutes) |
+| `cargo run -p autocto-demo`, then `python3 -m http.server 8080 -d web` and open http://localhost:8080/app.html?network=local | a local chain with play money. Press **Play a takeover for me**: lock, bid, a refused late vote, the count and the merge |
 
 ## Contents
 
@@ -86,7 +114,7 @@ People and bots only call the coins. A coin asks its brain through OutLayer; the
 | **Brain** (`brain/`) | WASI program run by OutLayer in Intel TDX. A reader turns rival pitches into fixed fields; a decider picks one move. Rules mode, or a model on NEAR AI Cloud |
 | **OutLayer** (`outlayer.testnet`) | Runs the brain off chain and resumes the coin's yielded call with the answer. Only its attested worker can deliver results |
 | **Keeper** and **relayer** (`demo/`) | Optional helpers anyone can run: the keeper wakes brains and finalizes deals; the relayer pays gas for holders with no NEAR |
-| **App** (`frontend/` → `web/`) | Static site with no backend: market, coin panel, deals, brain decisions, live feed, simulation and Verify |
+| **App** (`frontend/` → `web/`) | Static site that reads the chain directly: market, coin panel, deals, brain decisions, live feed, simulation and Verify. Its one optional function hands out testnet guest accounts |
 
 ## How a takeover works
 
@@ -182,6 +210,12 @@ OutLayer's open-source verifier agrees. `outlayer-verify job 62732 --network tes
 ### Wallet signing
 
 On testnet the app signs through a wallet: **Connect wallet** opens the [NEAR Connect](https://github.com/hot-dao/near-selector) picker (Meteor, Intear, Ledger, NEAR CLI and others), and each action is approved there. A wallet-signed buy has run on `v4`: `nearnook8323.testnet`, a fresh Meteor Wallet account, connected through the picker and approved a 0.1 NEAR buy of $PEPE in Meteor ([`D8tCfL1J…`](https://testnet.nearblocks.io/txns/D8tCfL1J6C1ntnut1KtsEPpxM6WmkmQD6pzzSK7m8wVq)); it received 6.44M PEPE, as quoted.
+
+### Guest accounts
+
+A visitor with no wallet presses **Try as guest**. The page makes an ed25519 key pair and sends only the public key to [`web/api/guest.js`](web/api/guest.js), a Vercel function that creates `<random>.<GUEST_ACCOUNT>` with that key and 1 test NEAR. The private key stays in the browser's storage, and every later call is signed there with near-api-js, as in the local demo, so the function never sees or holds a guest's key. It hands out one guest per visitor every 20 minutes and keeps a reserve so the funding account never empties.
+
+It is off unless the host sets `GUEST_ACCOUNT` (a funded testnet account) and `GUEST_KEY` (a full-access key for it); `GUEST_NEAR` changes the amount. Without them, or on a plain static host, the page shows **Connect wallet** only. A guest gets less NEAR than a launch takes, so launching a coin still needs a wallet.
 
 ### Verify it yourself
 
@@ -400,7 +434,7 @@ python3 -m http.server 8080 -d web   # http://localhost:8080/?network=testnet
 
 The key comes from `~/.near-credentials/testnet/<you>.testnet.json`, or from `NEAR_PRIVATE_KEY`. The brain can also go to OutLayer's FastFS with `outlayer upload res/autocto-brain.wasm` (OutLayer CLI).
 
-The tool checks the deployed rules against the params file, prints the coin code hash and launch deposit, and writes `web/config.testnet.json`. The app reads the chain through public nodes (FastNEAR, then dRPC) and moves to the next when one refuses. `web/` is a static site with no backend, so any static host can serve it; off localhost it defaults to testnet. The hosted app is Vercel serving `web/` as is, with no build step.
+The tool checks the deployed rules against the params file, prints the coin code hash and launch deposit, and writes `web/config.testnet.json`. The app reads the chain through public nodes (FastNEAR, then dRPC) and moves to the next when one refuses. `web/` is a static site with no backend, so any static host can serve it; off localhost it defaults to testnet. The hosted app is Vercel serving `web/` as is, with no build step, plus the optional [guest function](#guest-accounts).
 
 If the launchpad account runs short of balance for its code storage, the deploy stops after creating it. Re-run with `--top-up <NEAR>` to add to the existing account and deploy.
 
@@ -423,7 +457,7 @@ If the launchpad account runs short of balance for its code storage, the deploy 
 | `tests/` | end-to-end sandbox tests and the invariant fuzz test |
 | `sim/` | simulation and parameter sweep |
 | `frontend/` | the app's source: React, Tailwind and shadcn/ui, built with Vite. `cd frontend && npm install && npm run build` writes it into `web/` |
-| `web/` | the built static app (committed, so it serves without Node); reads coins straight from NEAR RPC |
+| `web/` | the built static app (committed, so it serves without Node); reads coins straight from NEAR RPC. `web/api/guest.js` is the optional guest-account function |
 | `res/` | the five built wasm files (launchpad, coin, brain and the two mocks); the testnet deployments run these |
 | `params/` | `testnet.json` (short clocks) and `recommended.json` (from the simulation) |
 | `proofs/` | OutLayer evidence bundles for two `v4` brain runs; `outlayer-verify bundle <file> --offline` re-checks them |
@@ -457,7 +491,7 @@ If the launchpad account runs short of balance for its code storage, the deploy 
 | Contracts | Rust, near-sdk 5.30, near-contract-standards (NEP-141, NEP-145, NEP-148, NEP-297), the `uint` crate for 256-bit curve math |
 | AI | OutLayer (`request_execution`, FastFS, secrets), NEAR AI Cloud (OpenAI-compatible API), wasi-http-client |
 | Tooling and tests | cargo-near, near-sandbox, near-api (Rust) |
-| App | React 19, Tailwind 4, shadcn/ui, Vite; near-api-js 7.4 for signing in local mode; NEAR Connect for wallets |
+| App | React 19, Tailwind 4, shadcn/ui, Vite; near-api-js 7.4 for signing in local mode and as a guest; NEAR Connect for wallets |
 
 Much of the code was written with an AI coding assistant (Claude Code) and reviewed by the author.
 

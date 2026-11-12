@@ -29,7 +29,9 @@ export const state = {
   // price samples taken by this page while it is open: there is no price-history view
   samples: {}, opened: Date.now(),
   sel: null, actor: "", wallet: null, gasless: false, acting: false,
-  dialog: null, // { type: "cli" | "salt", ... } for the page to show
+  // a guest account this browser holds the key to, and whether the host hands them out ({ near } when it does)
+  guest: null, guestOffer: null,
+  dialog: null, // { type: "cli" | "salt" | "signin", ... } for the page to show
   auto: null, // the demo's "play a takeover" run: { running, steps: [{ text, done }], error, until }
 };
 
@@ -271,9 +273,9 @@ async function loadConfig() {
     const saved = store.get(`autocto:actor:${cfg.launchpad}`);
     state.actor = saved && cfg.accounts.includes(saved) ? saved : cfg.accounts[0];
   } else {
-    // No dev key: an account can be typed to see its balances; a wallet signs.
+    // No dev key: an account can be typed to see its balances; a wallet or a guest key signs.
     state.actor = store.get(`autocto:viewer:${NETWORK}`) || "";
-    if (hasWallet()) restoreWallet();
+    if (hasWallet()) { loadGuest(); restoreWallet(); offerGuest(); }
   }
   state.sel = store.get(`autocto:coin:${cfg.launchpad}`);
 }
@@ -427,7 +429,7 @@ const randomHex = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map((b) 
 let connector = null;
 function setWallet(acct) {
   state.wallet = acct || null;
-  if (acct) setActor(acct); else bump();
+  if (acct) setActor(acct); else if (guest) setActor(guest.account); else bump();
 }
 async function getConnector() {
   if (connector) return connector;
@@ -454,6 +456,52 @@ export async function connectWallet() {
     if (!/reject|cancel|closed/i.test(String(e?.message || e))) toast.error(`Could not open the wallet: ${e?.message || e}`);
   }
 }
+// ---------- guest accounts (testnet) ----------
+// For visitors with no wallet: the page makes a key pair, and the host's api/guest creates
+// <random>.<its account> for the public half, with a little test NEAR. The key stays in this browser
+// and signs here, like the local demo's. Lose the browser's data and the guest is gone.
+let guest = null;
+const guestKey = () => `autocto:guest:${NETWORK}`;
+function loadGuest() {
+  try {
+    const g = JSON.parse(store.get(guestKey()));
+    if (typeof g?.account === "string" && typeof g?.key === "string") { guest = g; state.guest = g.account; state.actor = g.account; }
+  } catch (_) {}
+}
+// The host says whether it hands out guests. A plain static host has no such endpoint, and nothing shows.
+function offerGuest() {
+  fetch("api/guest", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null))
+    .then((j) => { if (j?.enabled) { state.guestOffer = { near: j.near }; bump(); } }).catch(() => {});
+}
+export async function startGuest() {
+  if (state.acting || guest) return false;
+  state.acting = true; bump();
+  const tid = toast.loading("Making you a guest account on testnet…");
+  try {
+    nearApi ??= await import(/* @vite-ignore */ NEAR_API);
+    const pair = nearApi.KeyPair.fromRandom("ed25519");
+    const r = await fetch("api/guest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ public_key: pair.getPublicKey().toString() }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.account) throw new Error(j.error || `the host answered ${r.status}`);
+    guest = { account: j.account, key: pair.toString() };
+    const kept = store.set(guestKey(), JSON.stringify(guest));
+    state.guest = guest.account;
+    toast.success(`You're ${short(guest.account)}, with ${j.near} test NEAR.${kept ? "" : " This browser won't keep the key, so the account lasts until you close the tab."}`, { id: tid });
+    if (!state.wallet) setActor(guest.account);
+    return true;
+  } catch (e) {
+    toast.error(`No guest account: ${e.message || e}`, { id: tid });
+    return false;
+  } finally {
+    state.acting = false; bump();
+  }
+}
+/** Forget the guest. Its account stays on chain, but nobody holds its key any more. */
+export function endGuest() {
+  guest = null; state.guest = null; store.del(guestKey());
+  if (!state.wallet) setActor("");
+}
+
 async function walletCall(contract, method, args, deposit) {
   const c = await getConnector();
   const wallet = await c.wallet();
@@ -555,8 +603,13 @@ export async function act(what, d = {}) {
   let plan;
   try { plan = await plans[what](); } catch (e) { toast.error(String(e.message || e)); return false; }
   const [method, args, deposit, contract = coin, hooks = {}] = plan;
-  if (!cfg.dev_key) {
-    if (hasWallet() && !state.wallet) { toast("Connect a wallet first, so the page knows which account is yours."); connectWallet(); return false; }
+  // The page signs by itself for the demo's holders and for a guest; anything else goes to a wallet or the CLI.
+  const key = cfg.dev_key || (!state.wallet && guest?.account === state.actor ? guest.key : null);
+  if (!key) {
+    if (hasWallet() && !state.wallet) {
+      if (state.guestOffer) { state.dialog = { type: "signin" }; bump(); return false; }
+      toast("Connect a wallet first, so the page knows which account is yours."); connectWallet(); return false;
+    }
     if (!hasWallet()) {
       const net = NETWORK === "local" ? "testnet" : NETWORK;
       state.dialog = {
@@ -568,15 +621,15 @@ export async function act(what, d = {}) {
     }
   }
   state.acting = true; bump();
-  const tid = toast.loading(cfg.dev_key ? `${doing}…` : `${doing}: approve it in your wallet…`);
+  const tid = toast.loading(key ? `${doing}…` : `${doing}: approve it in your wallet…`);
   let gasless = false;
   try {
-    if (!cfg.dev_key) {
+    if (!key) {
       await walletCall(contract, method, args, deposit);
     } else {
       nearApi ??= await import(/* @vite-ignore */ NEAR_API);
-      const account = new nearApi.Account(state.actor, cfg.rpc, cfg.dev_key);
-      if (cfg.relayer && state.gasless && GASLESS.includes(method)) {
+      const account = new nearApi.Account(state.actor, cfg.rpc, key);
+      if (cfg.dev_key && cfg.relayer && state.gasless && GASLESS.includes(method)) {
         // NEP-366: the actor signs, the relayer pays the gas. The call still runs as the actor.
         const { signedDelegate } = await account.createSignedMetaTransaction({
           receiverId: contract, actions: [nearApi.actions.functionCall(method, args, 100_000_000_000_000n, deposit)],
@@ -598,7 +651,7 @@ export async function act(what, d = {}) {
   } catch (e) {
     const msg = String(e.message || e);
     hooks.fail?.(msg);
-    toast.error(/reject|cancel|denied/i.test(msg) && !cfg.dev_key ? "Cancelled in the wallet. Nothing was sent." : `That didn't go through: ${plainError(msg)}`, { id: tid });
+    toast.error(/reject|cancel|denied/i.test(msg) && !key ? "Cancelled in the wallet. Nothing was sent." : `That didn't go through: ${plainError(msg)}`, { id: tid });
     return false;
   } finally {
     state.acting = false; bump();
@@ -626,7 +679,9 @@ export function guideSteps() {
   const steps = [
     cfg.dev_key
       ? { done: !!who, title: "Pick a demo holder", text: `You are playing as ${short(who) || "nobody"}, with play money. Switch any time at the top.`, go: "who", btn: "Switch holder" }
-      : { done: !!who, title: wallet ? "Connect a wallet" : "Enter your account", text: wallet ? "A free NEAR testnet wallet. No real money is involved." : "Type your account at the top to see your balances.", go: "who", btn: wallet ? "Connect" : "Enter account" },
+      : wallet && state.guestOffer
+        ? { done: !!who, title: "Get a test account", text: `Try as a guest and the page makes you a testnet account with ${state.guestOffer.near} test NEAR. Or connect a testnet wallet. No real money either way.`, go: "guest", btn: "Try as guest" }
+        : { done: !!who, title: wallet ? "Connect a wallet" : "Enter your account", text: wallet ? "A free NEAR testnet wallet. No real money is involved." : "Type your account at the top to see your balances.", go: "who", btn: wallet ? "Connect" : "Enter account" },
     { done: holds, title: "Buy your first coin", text: "Pick any coin, type how much NEAR to spend and press Buy. You can sell back any time.", go: "buy", btn: "Buy a coin" },
     { done: locked, title: "Lock some to get a vote", text: "Locking keeps the tokens yours and makes them count as votes. Do it before a bid shows up.", go: "lock", btn: "Lock tokens" },
     { done: did(["think"]), title: "Wake a brain", text: `Press Think and the coin's AI looks at its rivals. It may make a bid. Costs ${fee}.`, go: "think", btn: "Show me" },

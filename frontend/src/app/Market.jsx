@@ -374,7 +374,7 @@ function Position({ a }) {
     <div className="grid gap-2 border-t border-dashed border-line pt-3.5">
       <h4 className="text-[15px] font-semibold">Your position</h4>
       {!who ? (
-        <p className="text-[13.5px] text-muted-foreground">{cfg.dev_key ? "No account selected." : hasWallet() ? "Connect a wallet to see your balances." : "Type your account at the top."}</p>
+        <p className="text-[13.5px] text-muted-foreground">{cfg.dev_key ? "No account selected." : hasWallet() ? (state.guestOffer ? "Connect a wallet, or try as a guest, to see your balances." : "Connect a wallet to see your balances.") : "Type your account at the top."}</p>
       ) : (
         <dl className="grid gap-1.5 text-[13.5px]">
           <Row k={`$${s} you can sell`}>{fmtTokens(state.me.bal[a] || 0n)}</Row>

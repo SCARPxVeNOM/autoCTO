@@ -106,10 +106,11 @@ export default function Launch() {
     }
     if (await act("launch", { form: f })) { setF(EMPTY); setSeen({}); setOwnLabel(false); }
   };
+  const deposit = state.launchMin != null ? fmtNear(state.launchMin + YOCTO) : "–";
   const who = cfg.dev_key ? `Launching as ${short(state.actor)}, with play money.`
     : state.wallet ? `Launching from ${state.wallet}.`
+    : state.guest ? `Launching from your guest account. A launch takes ${deposit}, more than a guest is given, so this needs a testnet wallet.`
     : hasWallet() ? "You'll be asked to connect a wallet." : "You'll get a command to sign with your own account.";
-  const deposit = state.launchMin != null ? fmtNear(state.launchMin + YOCTO) : "–";
 
   return (
     <>

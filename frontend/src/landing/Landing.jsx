@@ -2,8 +2,8 @@
 // and shows a live line from the launchpad when its chain answers.
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRight, Brain, Check, KeyRound, MessageSquareWarning, Moon, ReceiptText, Scale, ShieldCheck, Sun, SunMoon,
-  TrendingDown, TrendingUp, Vote, X,
+  ArrowLeftRight, ArrowRight, ArrowUpRight, BadgeCheck, Ban, Brain, Check, Gavel, KeyRound, MessageSquareWarning, Moon,
+  ReceiptText, Scale, ShieldCheck, Sun, SunMoon, TrendingDown, TrendingUp, Users, Vote, X,
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,29 @@ const BUILT_ON = [
   ["NEAR Protocol", "near.svg"], ["NEAR AI", "nearai.svg"], ["OutLayer", "outlayer.png"],
   ["TDX", "intel.svg", true], ["Rust", "rust.svg"], ["IPFS", "ipfs.svg"],
 ];
-const SECTIONS = [["demo", "Watch a takeover"], ["how", "How it works"], ["safe", "Why it's safe"], ["faq", "Questions"]];
+const SECTIONS = [["demo", "Watch a takeover"], ["how", "How it works"], ["receipts", "Receipts"], ["safe", "Why it's safe"], ["faq", "Questions"]];
+// The takeover that ran on the v4 launchpad on NEAR testnet, in order, with the transactions behind each line.
+// A brain's line quotes the model's answer as stored on chain; `refused` marks a call the contract turned down.
+const TX = "https://testnet.nearblocks.io/txns/";
+const RECEIPTS = [
+  { who: "A holder", Icon: Users, text: "Buys $WOJAK and locks 47.05M of it. No bid exists yet.",
+    tx: ["EV13U9RuKFRsQBMWT9QNs54K6XbUmBBSDjn4YisP2n9C"] },
+  { who: "$PEPE's brain", coin: "PEPE", text: "Bids for $WOJAK: 0.7905 $PEPE for each $WOJAK, 3% over the fair rate.",
+    quote: "WOJAK holders: join PEPE. Fair premium, real treasury backing, smug frog energy.",
+    tx: ["FowewZMwTFnKVX9CTEVi4nRn6uNiUZSbkpmuacj3JYBB"] },
+  { who: "A late buyer", Icon: Ban, refused: "no tokens locked before this offer was announced",
+    text: "Buys $WOJAK after the bid, locks it and votes NO. The contract refuses the vote.",
+    tx: ["xtt1Egee5jjnnhfDDwXVKwc2kDh7qDgaGKYyrnLx7Jf", "9B11xYJijHrjMeQeJ5FY5b6EQK4DKPyhscmszChYHiSq", "E3SALnXge7oneJdHCuCJM3LEvydFfMkrxDkM3tW8p1Cr"] },
+  { who: "$WOJAK's brain", coin: "WOJAK", text: "Tells its holders to vote NO.",
+    quote: "PEPE is 3x our size with a worse fair rate. Merging up dilutes WOJAK holders. We stay independent and keep trying.",
+    tx: ["1KSKstLPuPsnCPxGeEEgi7dkQtpAwiQGYHu1QKSXVtL"] },
+  { who: "The holder", Icon: Vote, text: "Votes YES with the 47.05M locked before the bid. The holders decide, not the brain.",
+    tx: ["6etVVRWkrRsfcV512Q58rGhM9NoRVem5bLEyDJuVeRhW"], note: "the AI lost the vote" },
+  { who: "Anyone", Icon: Gavel, text: "Counts the vote once its 10 minutes are up: 100% yes. $WOJAK's NEAR and treasury move into $PEPE.",
+    tx: ["2yV8LwHDdzHwAyqMLdexgrdYGYCJPBD4FTiELcw55aHn"] },
+  { who: "Both holders", Icon: ArrowLeftRight, text: "Swap their $WOJAK for $PEPE at 0.790452. The late buyer couldn't vote, but isn't shut out of the deal.",
+    tx: ["BhMdwXUXmgHFgz1tkjK5Kr19Wqdsff2nECmfPNKNHarh", "9RPXkDicRZ1Nn6v5SVsRgctoDw1GEMJaXBg8voCy9Z6f"] },
+];
 
 const Enter = ({ lg, children = "Enter the app" }) => (
   <Button asChild size={lg ? "lg" : "default"} className={cn("rounded-full", lg && "h-12 px-6 text-base")}><a href={APP}>{children}{lg && <ArrowRight />}</a></Button>
@@ -123,36 +145,104 @@ function Takeover() {
   );
 }
 
-// Same config files as the app. If the chain does not answer, the plain line stays.
-function useLiveLine() {
-  const [line, setLine] = useState("Memecoins on NEAR");
+// Same config files as the app. Reads the launchpad and its coins once: a line for the hero and the numbers
+// under the demo. If the chain does not answer, the plain line stays and the numbers are left out.
+function useLive() {
+  const [live, setLive] = useState({ line: "Memecoins on NEAR", stats: null });
   useEffect(() => {
     (async () => {
       const cfg = await fetch(`config.${NETWORK}.json`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
       if (!cfg?.rpc || !cfg?.launchpad) return;
-      const view = async (account, method, args = {}) => {
+      const ask = async (params) => {
         const r = await fetch(cfg.rpc, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jsonrpc: "2.0", id: "landing", method: "query", params: { request_type: "call_function", finality: "optimistic", account_id: account, method_name: method, args_base64: btoa(JSON.stringify(args)) } }),
+          body: JSON.stringify({ jsonrpc: "2.0", id: "landing", method: "query", params: { finality: "optimistic", ...params } }),
         });
         const j = await r.json();
         if (j.error) throw new Error("rpc");
-        return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
+        return j.result;
       };
+      const view = (account, method, args = {}) => ask({ request_type: "call_function", account_id: account, method_name: method, args_base64: btoa(JSON.stringify(args)) })
+        .then((res) => JSON.parse(new TextDecoder().decode(new Uint8Array(res.result))));
+      const keys = (account) => ask({ request_type: "view_access_key_list", account_id: account }).then((res) => res.keys.length);
       const coins = (await view(cfg.launchpad, "list_coins", { limit: 100 })).filter((c) => c.state === "Live");
       if (!coins.length) return;
-      const infos = await Promise.all(coins.map((c) => view(c.account_id, "coin_info").catch(() => null)));
-      const merged = infos.filter((i) => i && typeof i.status === "object" && "Merged" in i.status).length;
-      setLine(`Live on ${cfg.dev_key ? "local demo" : NETWORK}: ${coins.length} ${coins.length === 1 ? "coin" : "coins"}${merged ? `, ${merged} already absorbed` : ""}`);
+      const ids = coins.map((c) => c.account_id);
+      const [infos, merged] = await Promise.all(ids.map((a) => view(a, "coin_info"))).then((infos) => [infos, infos.filter((i) => typeof i.status === "object" && "Merged" in i.status).length]);
+      const where = cfg.dev_key ? "local demo" : NETWORK;
+      setLive((l) => ({ ...l, line: `Live on ${where}: ${coins.length} ${coins.length === 1 ? "coin" : "coins"}${merged ? `, ${merged} already absorbed` : ""}` }));
+      // A takeover leaves its record on the winner; a model answer counts once the coin has checked its signature.
+      const [params, decisions, keyCount] = await Promise.all([
+        view(cfg.launchpad, "get_params"),
+        Promise.all(ids.map((a) => view(a, "list_decisions", { limit: 100 }))),
+        Promise.all([cfg.launchpad, ...ids].map(keys)).then((n) => n.reduce((s, k) => s + k, 0)),
+      ]);
+      const held = infos.reduce((s, i) => s + BigInt(i.treasury) + (BigInt(i.amm_near) > BigInt(params.virtual_near) ? BigInt(i.amm_near) - BigInt(params.virtual_near) : 0n), 0n);
+      setLive((l) => ({ ...l, stats: {
+        where, coins: coins.length, accounts: ids.length + 1, keys: keyCount,
+        takeovers: infos.reduce((s, i) => s + i.absorbed.length, 0),
+        signed: decisions.flat().filter((d) => d.signed_by).length,
+        near: Number(held / 10n ** 21n) / 1000,
+      } }));
     })().catch(() => {});
   }, []);
-  return line;
+  return live;
+}
+
+// Whether the host hands out guest accounts (web/api/guest.js), so trying the app needs no wallet.
+function useGuests() {
+  const [on, setOn] = useState(false);
+  useEffect(() => { fetch("api/guest", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => setOn(!!j?.enabled)).catch(() => {}); }, []);
+  return on;
+}
+
+// What the chain says right now, under the demo: the same numbers anyone can read with `near view`.
+function LiveNumbers({ s }) {
+  const cells = [
+    [s.coins, s.coins === 1 ? "coin launched" : "coins launched"],
+    [s.takeovers, s.takeovers === 1 ? "takeover done" : "takeovers done"],
+    [s.signed, "AI answers, each signed and checked on chain"],
+    [<>{s.near.toLocaleString("en", { maximumFractionDigits: 2 })}<small>Ⓝ</small></>, "held by the coins, owned by nobody"],
+    [s.keys, `access keys on the launchpad and its ${s.accounts - 1} coins`],
+  ];
+  return (
+    <section className="lp-live" aria-label={`Live numbers from ${s.where}`}>
+      <p className="live-cap"><i />Read from {s.where === "testnet" ? "NEAR testnet" : `the ${s.where}`} when you opened this page</p>
+      <dl className="live-grid">
+        {cells.map(([n, label]) => <div key={label} className={cn(label.startsWith("access") && "keys")}><dt>{label}</dt><dd>{n}</dd></div>)}
+      </dl>
+    </section>
+  );
+}
+
+// The real takeover, line by line, each with the transactions to open.
+function Receipts() {
+  return (
+    <ol className="receipts reveal">
+      {RECEIPTS.map(({ who, Icon, coin, text, quote, refused, note, tx }) => (
+        <li key={who + text} className={cn("rc", refused && "refused", quote && "brain")}>
+          <div className="rc-who">{coin ? <Avatar symbol={coin} size={30} /> : <span className="rc-ic"><Icon /></span>}<b>{who}</b></div>
+          <div className="rc-what">
+            <p>{text}</p>
+            {quote && <blockquote>“{quote}”<cite><BadgeCheck /> signed by the model on NEAR AI, checked by the coin</cite></blockquote>}
+            {refused && <code className="rc-no"><Ban /> {refused}</code>}
+            {note && <Note arrow="left" className="pen-rc">{note}</Note>}
+          </div>
+          <div className="rc-tx">
+            {tx.map((h, k) => <a key={h} className={cn(refused && k === tx.length - 1 && "no")} href={TX + h} target="_blank" rel="noopener">{h.slice(0, 8)}…<ArrowUpRight /></a>)}
+            {refused && <span>the vote failed, as meant</span>}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 export default function Landing() {
   const [theme, cycleTheme] = useTheme();
   const dark = useDark();
-  const line = useLiveLine();
+  const { line, stats } = useLive();
+  const guests = useGuests();
   const [at, setAt] = useState("");
   const ThemeIcon = THEME_ICON[theme];
   // The header's "Enter the app" shows only once the hero's own button has scrolled away, so there is one at a time.
@@ -209,7 +299,7 @@ export default function Landing() {
           </div>
           <div className="lp-hero-right">
             <p className="lede">Mergers and acquisitions for memecoins. Each coin's AI makes an offer, the rival's AI haggles, holders vote, and the two coins merge. No team holds the keys, so nobody can rug.</p>
-            <div className="actions" ref={heroGo}><Enter lg /><Note arrow="left" className="pen-go">free to try, no real money</Note></div>
+            <div className="actions" ref={heroGo}><Enter lg /><Note arrow="left" className="pen-go">{guests ? "no wallet, no real money" : "free to try, no real money"}</Note></div>
           </div>
         </section>
 
@@ -217,6 +307,8 @@ export default function Landing() {
           <Takeover />
           <div className="pen-row"><Note arrow="up" className="pen-steps">click a step to pause on it</Note></div>
         </section>
+
+        {stats && <LiveNumbers s={stats} />}
 
         <div className="strip" aria-label="Built on">
           <span>BUILT ON</span>
@@ -266,6 +358,16 @@ export default function Landing() {
           </div>
         </section>
 
+        <section id="receipts" className="lp-sec">
+          <div className="lp-head reveal"><span className="kicker">IT ALREADY HAPPENED</span><h2>The AI said no. The holders said <em>yes.</em></h2>
+            <p>A real takeover on NEAR testnet, argued by a model on NEAR AI. Every line below is a transaction you can open.</p></div>
+          <Receipts />
+          <div className="rc-foot reveal">
+            <p>Both holder accounts are the team's own, so this proves the rules, not that strangers showed up.</p>
+            <a href={`${APP}#verify`}>Check the code, the keys and the signatures from your browser<ArrowRight /></a>
+          </div>
+        </section>
+
         <section id="safe" className="lp-sec">
           <div className="lp-head reveal"><span className="kicker">WHY IT'S SAFE</span><h2>The AI talks. The contract <em>decides.</em></h2>
             <p>A brain can only propose. Every number it suggests is checked by code that nobody can change.</p></div>
@@ -290,7 +392,7 @@ export default function Landing() {
             {FAQ.map(([q, a], k) => (
               <AccordionItem key={q} value={`q${k}`} className="border-dashed border-line px-10 max-[980px]:px-5">
                 <AccordionTrigger className="py-5 font-display text-lg font-semibold hover:no-underline">{q}</AccordionTrigger>
-                <AccordionContent className="max-w-[70ch] pb-[22px] text-[15.5px] text-muted-foreground">{a}</AccordionContent>
+                <AccordionContent className="max-w-[70ch] pb-[22px] text-[15.5px] text-muted-foreground">{a}{k === 0 && guests && " You don't need a wallet either: press Try as guest in the app and it makes you a testnet account with test NEAR."}</AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>
