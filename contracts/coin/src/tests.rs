@@ -134,8 +134,8 @@ fn balance(c: &Coin, who: &str) -> u128 {
     c.ft_balance_of(id(who)).0
 }
 
-/// True when `f` is refused (panics), without printing the panic.
-fn refused<R>(f: impl FnOnce() -> R) -> bool {
+/// Why `f` was refused (panicked), or None if it went through. Prints nothing.
+fn refusal<R>(f: impl FnOnce() -> R) -> Option<String> {
     thread_local!(static QUIET: Cell<bool> = const { Cell::new(false) });
     static HOOK: Once = Once::new();
     HOOK.call_once(|| {
@@ -147,9 +147,23 @@ fn refused<R>(f: impl FnOnce() -> R) -> bool {
         }));
     });
     QUIET.with(|q| q.set(true));
-    let r = catch_unwind(AssertUnwindSafe(f)).is_err();
+    let r = catch_unwind(AssertUnwindSafe(f)).err();
     QUIET.with(|q| q.set(false));
-    r
+    r.map(|e| e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default())
+}
+
+/// True when `f` is refused, for any reason.
+fn refused<R>(f: impl FnOnce() -> R) -> bool {
+    refusal(f).is_some()
+}
+
+/// Fails unless `f` is refused with a message that contains `why`.
+#[track_caller]
+fn assert_refused<R>(why: &str, f: impl FnOnce() -> R) {
+    match refusal(f) {
+        Some(m) => assert!(m.contains(why), "refused with {m:?}, expected {why:?}"),
+        None => panic!("went through, expected a refusal: {why:?}"),
+    }
 }
 
 /// Function calls the last call scheduled on `to`: (args, attached yoctoNEAR).
@@ -870,6 +884,488 @@ fn a_backed_tender_mints_exactly_its_deposits_at_the_rate() {
     assert_eq!(c.token.total_supply, before + mint);
     assert_eq!(c.owed(), 0);
     assert!(refused(|| c.claim_tender(0)), "one claim");
+}
+
+const OLD_SUPPLY: u128 = 1_000_000_000 * TOKEN;
+
+/// `pepe_for_tenders` where bob also locks `bob_locks(veto line)` at second 3,
+/// then a tender for OLD opens at the top rate at second 40 (deadline 100).
+fn open_tender(bob_locks: impl FnOnce(u128) -> u128) -> Coin {
+    let mut c = pepe_for_tenders();
+    let b = bob_locks(bps_of(c.circulating(), 1000));
+    if b > 0 {
+        lock(&mut c, PEPE, BOB, 3, b);
+    }
+    let rate = top_tender_rate(&c, OLD_SUPPLY);
+    assert!(tender(&mut c, 0, rate, OLD_SUPPLY));
+    c
+}
+
+/// OLD sends `amount` of `who`'s tokens to tender 0 at `sec`; returns what came back.
+fn deposit(c: &mut Coin, who: &str, sec: u64, amount: u128) -> u128 {
+    call(PEPE, OLD, sec, 0);
+    let PromiseOrValue::Value(back) = c.ft_on_transfer(id(who), U128(amount), "0".into()) else { panic!() };
+    back.0
+}
+
+fn back(c: &mut Coin, who: &str, sec: u64) -> u128 {
+    call(PEPE, who, sec, 0);
+    c.back_tender(0).0
+}
+
+fn veto_tender(c: &mut Coin, who: &str, sec: u64) -> u128 {
+    call(PEPE, who, sec, 0);
+    c.veto_tender(0).0
+}
+
+/// Carol settles tender 0 at `sec`.
+fn settle(c: &mut Coin, sec: u64) -> bool {
+    call(PEPE, CAROL, sec, 0);
+    c.settle_tender(0)
+}
+
+fn tender_failure(c: &Coin) -> String {
+    match c.get_tender(0).unwrap().status {
+        TenderStatus::Failed { reason } => reason,
+        s => panic!("tender is {s:?}"),
+    }
+}
+
+#[test]
+fn a_lock_made_after_the_tender_cannot_back_or_veto_it() {
+    let mut c = open_tender(|_| 0);
+    lock_all(&mut c, PEPE, BOB, 41);
+    call(PEPE, BOB, 45, 0);
+    assert_refused("no tokens locked before this tender was announced", || c.back_tender(0));
+    assert_refused("no tokens locked before this tender was announced", || c.veto_tender(0));
+}
+
+#[test]
+fn a_lock_in_the_same_block_as_the_tender_cannot_back_it() {
+    let mut c = pepe_for_tenders();
+    lock_all(&mut c, PEPE, BOB, 40);
+    let rate = top_tender_rate(&c, OLD_SUPPLY);
+    assert!(tender(&mut c, 0, rate, OLD_SUPPLY));
+    call(PEPE, BOB, 45, 0);
+    assert_refused("no tokens locked before this tender was announced", || c.back_tender(0));
+}
+
+#[test]
+fn a_holder_backs_or_vetoes_a_tender_once() {
+    let mut c = open_tender(|line| line);
+    let a = c.locked_of(&id(ALICE));
+    assert_eq!(back(&mut c, ALICE, 45), a);
+    call(PEPE, ALICE, 46, 0);
+    assert_refused("already backed or vetoed", || c.back_tender(0));
+    assert_refused("already backed or vetoed", || c.veto_tender(0));
+    assert_eq!(c.get_tender(0).unwrap().backing.0, a, "counted once");
+}
+
+#[test]
+fn tender_ballots_hold_the_lock_until_the_deadline() {
+    // bob, not alice: proposing the tender already holds alice's lock to the deadline.
+    let mut c = open_tender(|line| line);
+    back(&mut c, BOB, 45);
+    call(PEPE, BOB, 99, 0);
+    assert_refused("these tokens back a vote that has not ended", || c.unlock(U128(1)));
+    call(PEPE, BOB, 100, 0);
+    let b = c.locked_of(&id(BOB));
+    c.unlock(U128(b));
+    assert_eq!(c.locked_of(&id(BOB)), 0);
+}
+
+#[test]
+fn ballots_and_deposits_close_at_the_deadline() {
+    let mut c = open_tender(|line| line);
+    call(PEPE, ALICE, 100, 0);
+    assert_refused("the tender is closed", || c.back_tender(0));
+    call(PEPE, BOB, 100, 0);
+    assert_refused("the tender is closed", || c.veto_tender(0));
+    call(PEPE, OLD, 100, 0);
+    assert_refused("the tender is closed", || c.ft_on_transfer(id(DAVE), U128(OLD_SUPPLY / 2), "0".into()));
+    assert_eq!(c.get_tender(0).unwrap().deposited.0, 0);
+}
+
+/// A tender alice backs, dave fills to the threshold and bob vetoes with
+/// `bob_locks(line)`. Returns whether it settled.
+fn vetoed_tender(bob_locks: impl FnOnce(u128) -> u128) -> (Coin, bool) {
+    let mut c = open_tender(bob_locks);
+    back(&mut c, ALICE, 45);
+    veto_tender(&mut c, BOB, 46);
+    deposit(&mut c, DAVE, 50, bps_of(OLD_SUPPLY, 4000));
+    let settled = settle(&mut c, 100);
+    (c, settled)
+}
+
+#[test]
+fn a_tender_veto_at_the_line_fails_the_tender() {
+    let (c, settled) = vetoed_tender(|line| line);
+    assert!(!settled);
+    assert_eq!(tender_failure(&c), "vetoed by our holders");
+    assert_eq!(c.owed(), 0);
+}
+
+#[test]
+fn a_tender_veto_one_token_under_the_line_does_not_block() {
+    let (c, settled) = vetoed_tender(|line| line - 1);
+    assert!(settled);
+    assert_eq!(c.get_tender(0).unwrap().status, TenderStatus::Succeeded);
+}
+
+#[test]
+fn buying_after_the_tender_cannot_raise_its_veto_line() {
+    let mut c = open_tender(|line| line);
+    // Deal fans buy in after the tender, so the line on today's supply moves out of bob's reach.
+    let line = bps_of(c.circulating(), 1000);
+    buy(&mut c, PEPE, CAROL, 41, 100 * NEAR);
+    assert!(bps_of(c.circulating(), 1000) > 2 * line);
+    back(&mut c, ALICE, 45);
+    veto_tender(&mut c, BOB, 46);
+    deposit(&mut c, DAVE, 50, bps_of(OLD_SUPPLY, 4000));
+    assert!(!settle(&mut c, 100));
+    assert_eq!(tender_failure(&c), "vetoed by our holders", "the line is measured on the supply at the tender");
+}
+
+#[test]
+fn a_tender_short_of_its_threshold_refunds_every_depositor() {
+    let mut c = open_tender(|_| 0);
+    back(&mut c, ALICE, 45);
+    let threshold = c.get_tender(0).unwrap().threshold.0;
+    deposit(&mut c, DAVE, 50, threshold / 2);
+    deposit(&mut c, CAROL, 51, threshold / 2 - 1);
+    assert!(!settle(&mut c, 100));
+    assert_eq!(tender_failure(&c), "threshold not reached");
+    for (who, amount) in [(DAVE, threshold / 2), (CAROL, threshold / 2 - 1)] {
+        call(PEPE, who, 101, 0);
+        drop(c.claim_tender(0));
+        let refund = calls_to(OLD, "ft_transfer");
+        assert_eq!((refund[0].0["receiver_id"].as_str(), refund[0].0["amount"].as_str()), (Some(who), Some(amount.to_string().as_str())));
+        assert_eq!(refund[0].1, 1, "one yocto, as NEP-141 asks");
+    }
+    assert_eq!(c.token.total_supply, SUPPLY, "nothing was minted");
+}
+
+#[test]
+fn the_dilution_cap_is_checked_again_at_settlement() {
+    let mut c = open_tender(|_| 0);
+    back(&mut c, ALICE, 45);
+    let max = c.get_tender(0).unwrap().max_deposit.0;
+    deposit(&mut c, DAVE, 50, max);
+    // bob sells out during the tender: the same mint is now over 20% of a smaller supply.
+    call(PEPE, BOB, 60, 1);
+    c.sell(U128(balance(&c, BOB)), None);
+    assert!(!settle(&mut c, 100));
+    assert_eq!(tender_failure(&c), "dilution cap exceeded at settlement");
+}
+
+#[test]
+#[should_panic(expected = "the deadline has not passed")]
+fn a_tender_cannot_settle_before_its_deadline() {
+    let mut c = open_tender(|_| 0);
+    back(&mut c, ALICE, 45);
+    deposit(&mut c, DAVE, 50, bps_of(OLD_SUPPLY, 4000));
+    settle(&mut c, 99);
+}
+
+#[test]
+fn deposits_must_come_from_the_tendered_token_and_name_an_open_tender() {
+    let mut c = open_tender(|_| 0);
+    let amount = bps_of(OLD_SUPPLY, 4000);
+    call(PEPE, "fake.testnet", 50, 0);
+    assert_refused("this tender is for another token", || c.ft_on_transfer(id(DAVE), U128(amount), "0".into()));
+    call(PEPE, OLD, 50, 0);
+    assert_refused("msg must be a tender id", || c.ft_on_transfer(id(DAVE), U128(amount), "deposit".into()));
+    assert_refused("unknown tender", || c.ft_on_transfer(id(DAVE), U128(amount), "7".into()));
+    assert_eq!(c.get_tender(0).unwrap().deposited.0, 0);
+}
+
+#[test]
+fn a_first_deposit_under_one_percent_of_the_threshold_is_refused() {
+    let mut c = open_tender(|_| 0);
+    let dust = c.get_tender(0).unwrap().threshold.0 / 100;
+    call(PEPE, OLD, 50, 0);
+    assert_refused("first deposit must be at least 1% of the threshold", || c.ft_on_transfer(id(DAVE), U128(dust - 1), "0".into()));
+    assert_eq!(deposit(&mut c, DAVE, 51, dust), 0);
+    assert_eq!(deposit(&mut c, DAVE, 52, 1), 0, "a top-up can be any size");
+    assert_eq!(c.tender_deposit_of(0, id(DAVE)).0, dust + 1);
+}
+
+#[test]
+fn a_full_tender_takes_no_more() {
+    let mut c = open_tender(|_| 0);
+    let max = c.get_tender(0).unwrap().max_deposit.0;
+    assert_eq!(deposit(&mut c, DAVE, 50, max), 0);
+    call(PEPE, OLD, 51, 0);
+    assert_refused("the tender is full", || c.ft_on_transfer(id(CAROL), U128(OLD_SUPPLY / 10), "0".into()));
+    assert_eq!(c.get_tender(0).unwrap().deposited.0, max);
+}
+
+#[test]
+fn a_refund_the_token_refuses_stays_claimable() {
+    let mut c = open_tender(|_| 0);
+    let amount = bps_of(OLD_SUPPLY, 4000);
+    deposit(&mut c, DAVE, 50, amount);
+    assert!(!settle(&mut c, 100), "nobody backed it");
+    call(PEPE, DAVE, 101, 0);
+    drop(c.claim_tender(0));
+    assert_eq!(c.tender_deposit_of(0, id(DAVE)).0, 0, "taken out while the transfer runs");
+    call(PEPE, PEPE, 102, 0);
+    assert_eq!(c.on_tender_refund(0, id(DAVE), U128(amount), Err(PromiseError::Failed)).0, 0);
+    assert_eq!(c.tender_deposit_of(0, id(DAVE)).0, amount, "back on the books");
+    call(PEPE, DAVE, 103, 0);
+    drop(c.claim_tender(0));
+    assert_eq!(calls_to(OLD, "ft_transfer")[0].0["amount"], amount.to_string());
+    call(PEPE, PEPE, 104, 0);
+    assert_eq!(c.on_tender_refund(0, id(DAVE), U128(amount), Ok(())).0, amount);
+    call(PEPE, DAVE, 105, 0);
+    assert_refused("nothing to claim", || c.claim_tender(0));
+}
+
+#[test]
+fn only_depositors_claim_and_only_after_settlement() {
+    let mut c = open_tender(|_| 0);
+    back(&mut c, ALICE, 45);
+    deposit(&mut c, DAVE, 50, bps_of(OLD_SUPPLY, 4000));
+    call(PEPE, DAVE, 60, 0);
+    assert_refused("the tender is not settled yet", || c.claim_tender(0));
+    assert!(settle(&mut c, 100));
+    call(PEPE, CAROL, 101, 0);
+    assert_refused("nothing to claim", || c.claim_tender(0));
+}
+
+#[test]
+fn a_token_that_reports_no_supply_fails_the_tender() {
+    let mut c = pepe_for_tenders();
+    let rate = top_tender_rate(&c, OLD_SUPPLY);
+    for (tender_id, answer) in [(0, PromiseResult::Failed), (1, PromiseResult::Successful(b"\"lots\"".to_vec()))] {
+        call(PEPE, ALICE, 40, 0);
+        drop(c.propose_tender(id(OLD), U128(rate), "Swap your OLD.".into()));
+        mock(context(PEPE, PEPE, 40, 0), vec![answer]);
+        assert!(!c.on_tender_opened(tender_id));
+        assert_eq!(c.get_tender(tender_id).unwrap().status, TenderStatus::Failed { reason: "the token did not report a supply".into() });
+    }
+    assert!(tender(&mut c, 2, rate, OLD_SUPPLY), "a failed tender frees the token for the next one");
+}
+
+#[test]
+fn a_stuck_tender_can_be_cancelled_after_ten_minutes() {
+    let mut c = pepe_for_tenders();
+    call(PEPE, ALICE, 40, 0);
+    drop(c.propose_tender(id(OLD), U128(top_tender_rate(&c, OLD_SUPPLY)), "Swap your OLD.".into()));
+    assert_eq!(c.get_tender(0).unwrap().status, TenderStatus::Opening);
+    call(PEPE, CAROL, 40 + 600, 0);
+    assert_refused("give it ten minutes", || c.cancel_stuck_tender(0));
+    call(PEPE, CAROL, 40 + 601, 0);
+    c.cancel_stuck_tender(0);
+    assert_eq!(tender_failure(&c), "the token never answered");
+    assert_refused("tender is not stuck", || c.cancel_stuck_tender(0));
+}
+
+#[test]
+fn tenders_are_for_outside_tokens_one_at_a_time() {
+    let mut c = open_tender(|_| 0);
+    call(PEPE, ALICE, 41, 0);
+    assert_refused("one open tender per token", || c.propose_tender(id(OLD), U128(1), "Again.".into()));
+    assert_refused("is a launchpad coin: make a takeover bid instead", || c.propose_tender(id(DOGE), U128(1), "x".into()));
+    assert_refused("is a launchpad coin", || c.propose_tender(id(PEPE), U128(1), "x".into()));
+    call(PEPE, BOB, 41, 0);
+    assert_refused("lock more tokens", || c.propose_tender(id("new.testnet"), U128(1), "x".into()));
+}
+
+#[test]
+fn the_watchlist_takes_up_to_eight_outside_tokens() {
+    let mut c = pepe_for_tenders();
+    call(PEPE, ALICE, 10, 0);
+    assert_refused("siblings get takeover bids", || c.nominate(id(DOGE)));
+    for i in 0..MAX_WATCHLIST {
+        c.nominate(id(&format!("t{i}.testnet")));
+    }
+    assert_refused("the watchlist is full", || c.nominate(id("t9.testnet")));
+    assert_refused("already on the watchlist", || c.nominate(id("t0.testnet")));
+    c.denominate(id("t0.testnet"));
+    assert_refused("not on the watchlist", || c.denominate(id("t0.testnet")));
+    c.nominate(id("t9.testnet"));
+    assert_eq!(c.watchlist.len(), MAX_WATCHLIST);
+    call(PEPE, BOB, 11, 0);
+    assert_refused("lock more tokens", || c.nominate(id("t10.testnet")));
+}
+
+// ---------- sealed votes ----------
+
+/// The commitment for `who`'s vote: sha256 hex of "offer|round|account|support|salt".
+fn seal(offer: &str, round: u32, who: &str, support: bool, salt: &str) -> String {
+    crate::hex(&near_sdk::env::sha256(format!("{offer}|{round}|{who}|{support}|{salt}").as_bytes()))
+}
+
+/// DOGE with private voting (60 s sealed, then 30 s to reveal), where alice and
+/// bob lock everything at second 10 and PEPE bids at 40. Votes end at 100,
+/// reveals at 130.
+fn sealed_bid() -> (Coin, String) {
+    let mut c = doge();
+    c.params.reveal_period_sec = 30;
+    lock_all(&mut c, DOGE, ALICE, 10);
+    lock_all(&mut c, DOGE, BOB, 10);
+    let (key, _) = bid(&mut c, 40);
+    (c, key)
+}
+
+/// The secret `who` seals with in these tests.
+fn salt(who: &str) -> String {
+    format!("{who}-salt")
+}
+
+/// `who` commits a round-0 vote at `sec`.
+fn vote_sealed(c: &mut Coin, key: &str, who: &str, sec: u64, support: bool) -> u128 {
+    call(DOGE, who, sec, 0);
+    c.vote_sealed(key.into(), seal(key, 0, who, support, &salt(who))).0
+}
+
+fn reveal(c: &mut Coin, key: &str, who: &str, sec: u64, support: bool) -> u128 {
+    call(DOGE, who, sec, 0);
+    c.reveal_vote(key.into(), support, salt(who)).0
+}
+
+#[test]
+fn a_sealed_vote_shows_its_weight_but_not_its_side_until_revealed() {
+    let (mut c, key) = sealed_bid();
+    let (a, b) = (c.locked_of(&id(ALICE)), c.locked_of(&id(BOB)));
+    assert_eq!(vote_sealed(&mut c, &key, ALICE, 41, true), a);
+    assert_eq!(vote_sealed(&mut c, &key, BOB, 42, false), b);
+    let o = c.get_incoming(key.clone()).unwrap();
+    assert_eq!((o.yes.0, o.no.0, o.sealed.0), (0, 0, a + b));
+    assert_eq!(reveal(&mut c, &key, ALICE, 100, true), a);
+    assert_eq!(reveal(&mut c, &key, BOB, 101, false), b);
+    let o = c.get_incoming(key).unwrap();
+    assert_eq!((o.yes.0, o.no.0, o.sealed.0), (a, b, 0));
+}
+
+#[test]
+fn a_reveal_must_match_the_commitment() {
+    let (mut c, key) = sealed_bid();
+    vote_sealed(&mut c, &key, ALICE, 41, true);
+    call(DOGE, ALICE, 100, 0);
+    assert_refused("vote and salt do not match the commitment", || c.reveal_vote(key.clone(), false, salt(ALICE)));
+    assert_refused("vote and salt do not match the commitment", || c.reveal_vote(key.clone(), true, salt(BOB)));
+    call(DOGE, BOB, 100, 0);
+    assert_refused("no sealed vote to reveal", || c.reveal_vote(key.clone(), true, salt(ALICE)));
+    reveal(&mut c, &key, ALICE, 101, true);
+    call(DOGE, ALICE, 102, 0);
+    assert_refused("no sealed vote to reveal", || c.reveal_vote(key.clone(), true, salt(ALICE)));
+}
+
+#[test]
+fn reveals_open_when_the_vote_ends_and_close_with_the_window() {
+    let (mut c, key) = sealed_bid();
+    vote_sealed(&mut c, &key, ALICE, 41, true);
+    vote_sealed(&mut c, &key, BOB, 42, false);
+    call(DOGE, ALICE, 99, 0);
+    assert_refused("the vote is still running: reveal after it ends", || c.reveal_vote(key.clone(), true, salt(ALICE)));
+    reveal(&mut c, &key, ALICE, 129, true);
+    call(DOGE, BOB, 130, 0);
+    assert_refused("the reveal window is closed", || c.reveal_vote(key.clone(), false, salt(BOB)));
+}
+
+#[test]
+fn the_vote_cannot_close_while_votes_are_being_revealed() {
+    let (mut c, key) = sealed_bid();
+    vote_sealed(&mut c, &key, ALICE, 41, true);
+    reveal(&mut c, &key, ALICE, 100, true);
+    call(DOGE, CAROL, 129, 0);
+    assert_refused("sealed votes are still being revealed", || c.finalize(key.clone()));
+    call(DOGE, CAROL, 130, 0);
+    assert!(closed(c.finalize(key)));
+}
+
+#[test]
+fn an_unrevealed_vote_counts_for_nothing() {
+    let (mut c, key) = sealed_bid();
+    let a = vote_sealed(&mut c, &key, ALICE, 41, true);
+    assert!(a > bps_of(c.circulating(), 1000), "alice alone would make the quorum");
+    // alice never reveals: her YES counts neither for the deal nor toward the quorum.
+    call(DOGE, CAROL, 130, 0);
+    assert!(!closed(c.finalize(key.clone())));
+    assert_eq!(failure(&c, &key), "quorum not reached");
+}
+
+#[test]
+fn an_open_vote_is_refused_where_votes_are_sealed() {
+    let (mut c, key) = sealed_bid();
+    call(DOGE, ALICE, 41, 0);
+    assert_refused("votes are sealed here: use vote_sealed, then reveal_vote", || c.vote(key.clone(), true));
+}
+
+#[test]
+fn a_sealed_vote_is_refused_where_votes_are_open() {
+    let mut c = doge();
+    lock_all(&mut c, DOGE, ALICE, 10);
+    let (key, _) = bid(&mut c, 40);
+    call(DOGE, ALICE, 41, 0);
+    let commitment = seal(&key, 0, ALICE, true, "s");
+    assert_refused("votes are open here: use vote", || c.vote_sealed(key.clone(), commitment));
+}
+
+#[test]
+fn a_commitment_must_be_a_sha256_in_hex() {
+    let (mut c, key) = sealed_bid();
+    let good = seal(&key, 0, ALICE, true, &salt(ALICE));
+    call(DOGE, ALICE, 41, 0);
+    assert_refused("commitment must be a sha256 in hex", || c.vote_sealed(key.clone(), good[1..].to_string()));
+    assert_refused("commitment must be a sha256 in hex", || c.vote_sealed(key.clone(), format!("g{}", &good[1..])));
+    // Upper-case hex is the same hash: it is stored lower-case and reveals.
+    c.vote_sealed(key.clone(), good.to_uppercase());
+    assert_eq!(reveal(&mut c, &key, ALICE, 100, true), c.locked_of(&id(ALICE)));
+}
+
+#[test]
+fn a_sealed_vote_keeps_the_tokens_locked_through_the_reveal_window() {
+    let (mut c, key) = sealed_bid();
+    let a = c.locked_of(&id(ALICE));
+    vote_sealed(&mut c, &key, ALICE, 41, true);
+    call(DOGE, ALICE, 129, 0);
+    assert_refused("these tokens back a vote that has not ended", || c.unlock(U128(a)));
+    call(DOGE, ALICE, 130, 0);
+    c.unlock(U128(a));
+    assert_eq!(balance(&c, ALICE), a);
+}
+
+#[test]
+fn a_lock_made_after_the_bid_cannot_cast_a_sealed_vote() {
+    let (mut c, key) = sealed_bid();
+    buy(&mut c, DOGE, CAROL, 41, NEAR);
+    lock_all(&mut c, DOGE, CAROL, 42);
+    call(DOGE, CAROL, 43, 0);
+    let commitment = seal(&key, 0, CAROL, false, "s");
+    assert_refused("no tokens locked before this offer was announced", || c.vote_sealed(key.clone(), commitment));
+}
+
+#[test]
+fn a_holder_casts_one_sealed_vote_per_round() {
+    let (mut c, key) = sealed_bid();
+    let a = vote_sealed(&mut c, &key, ALICE, 41, true);
+    call(DOGE, ALICE, 42, 0);
+    let other = seal(&key, 0, ALICE, false, "other-salt");
+    assert_refused("already voted in this round", || c.vote_sealed(key.clone(), other));
+    assert_eq!(c.get_incoming(key).unwrap().sealed.0, a);
+}
+
+#[test]
+fn an_accepted_counter_voids_the_sealed_votes_of_the_old_round() {
+    let (mut c, key) = sealed_bid();
+    vote_sealed(&mut c, &key, ALICE, 41, true);
+    let rate = c.get_incoming(key.clone()).unwrap().rate_ppm.0;
+    call(DOGE, ALICE, 55, 0);
+    drop(c.try_counter(key.clone(), rate * 12 / 11, "Pay more.".into(), Proposer::Holder { account_id: id(ALICE) }).unwrap());
+    call(DOGE, PEPE, 70, 0);
+    assert_eq!(c.apply_counter(0).round, 1);
+    assert_eq!(c.get_incoming(key.clone()).unwrap().sealed.0, 0, "round 0 ballots no longer count");
+    // Round 1 runs to 130 and reveals to 160. bob seals in it; alice does not.
+    call(DOGE, BOB, 71, 0);
+    let b = c.vote_sealed(key.clone(), seal(&key, 1, BOB, false, &salt(BOB))).0;
+    call(DOGE, ALICE, 130, 0);
+    assert_refused("no sealed vote to reveal", || c.reveal_vote(key.clone(), true, salt(ALICE)));
+    assert_eq!(reveal(&mut c, &key, BOB, 131, false), b);
+    let o = c.get_incoming(key).unwrap();
+    assert_eq!((o.yes.0, o.no.0, o.sealed.0), (0, b, 0), "alice's round-0 YES never counts");
 }
 
 // ---------- the curve ----------

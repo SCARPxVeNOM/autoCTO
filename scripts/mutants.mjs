@@ -28,6 +28,19 @@ const MUTANTS = [
   ["no cap on conversions", "takeover.rs", "a.converted.0 + amount.0 <= a.max_target_amount.0,", "true,"],
   ["the cap leaves out unconverted holders", "takeover.rs", "let claims = U128(self.circulating() + self.owed());", "let claims = U128(self.circulating());"],
   ["a tender needs no backing", "tender.rs", "} else if t.backing.0 == 0 || t.backing.0 < bps_of(base, self.params.quorum_bps) {", "} else if false {"],
+  ["a tender ballot counts tokens locked after it", "tender.rs", "let weight = self.weight_at(&who, t.created_at);", "let weight = self.locked_of(&who);"],
+  ["backing a tender does not hold the lock", "tender.rs", "self.extend_vote_lock(&who, t.deadline);", ""],
+  ["tender veto line on today's supply", "tender.rs", "let base = t.buyer_supply.0.min(self.circulating() + self.owed());", "let base = self.circulating() + self.owed();"],
+  ["no dilution check at settlement", "tender.rs", "} else if mint > bps_of(base, self.params.tender_max_dilution_bps) {", "} else if false {"],
+  ["deposits taken after the deadline", "tender.rs", "require!(t.status == TenderStatus::Open && self.now() < t.deadline, \"the tender is closed\");", "require!(t.status == TenderStatus::Open, \"the tender is closed\");"],
+  ["dust deposits accepted", "tender.rs", "cur > 0 || accepted >= t.threshold.0 / 100,", "true,"],
+  ["a refund the token refused is lost", "tender.rs", "self.tender_deposits.insert(key, cur + amount.0);", ""],
+  ["a stuck tender cancelled a second early", "tender.rs", "require!(self.now() > t.created_at + 600 * NS_PER_SEC,", "require!(self.now() >= t.created_at + 600 * NS_PER_SEC,"],
+  ["a reveal skips the commitment", "takeover.rs", "require!(opened == ballot.commitment, \"vote and salt do not match the commitment\");", ""],
+  ["the reveal window never closes", "takeover.rs", "require!(now < reveal_ends, \"the reveal window is closed\");", ""],
+  ["the vote closes during the reveals", "takeover.rs", "now >= o.vote_ends + self.params.reveal_period_sec * NS_PER_SEC,", "true,"],
+  ["a sealed vote holds the lock only to the vote's end", "takeover.rs", "self.extend_vote_lock(&who, reveal_ends);", "self.extend_vote_lock(&who, reveal_ends - self.params.reveal_period_sec * NS_PER_SEC);"],
+  ["unrevealed votes count toward the quorum", "takeover.rs", "let turnout = o.yes.0 + o.no.0;", "let turnout = o.yes.0 + o.no.0 + o.sealed.0;"],
 ];
 
 let missed = 0;

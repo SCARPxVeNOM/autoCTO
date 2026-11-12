@@ -11,7 +11,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use near_api::types::Action;
-use near_api::types::transaction::delegate_action::SignedDelegateAction;
+use near_api::types::transaction::delegate_action::{DelegateAction, SignedDelegateAction};
 use near_api::types::transaction::result::ExecutionFinalResult;
 use near_api::{AccountId, Contract, NearGas, Transaction};
 use serde_json::{Value, json};
@@ -74,18 +74,7 @@ impl Relayer {
         if is_coin != Value::Bool(true) {
             bail!("{} is not a coin of {}", d.receiver_id, self.launchpad);
         }
-        let [action] = d.actions.as_slice() else { bail!("exactly one action per request") };
-        let Action::FunctionCall(call) = &**action else { bail!("only function calls are relayed") };
-        if !GASLESS_METHODS.contains(&call.method_name.as_str()) {
-            bail!("`{}` is not relayed; allowed: {}", call.method_name, GASLESS_METHODS.join(", "));
-        }
-        if call.deposit.as_yoctonear() > 0 {
-            bail!("calls with a deposit are not relayed");
-        }
-        if call.gas.as_tgas() > MAX_GAS_TGAS {
-            bail!("too much gas requested");
-        }
-        Ok(())
+        check_call(d)
     }
 
     /// Check the request, wrap it and pay for it.
@@ -100,6 +89,23 @@ impl Relayer {
             .map_err(|e| anyhow!("relay: {e}"))?;
         r.into_full().ok_or_else(|| anyhow!("relay: transaction still pending"))
     }
+}
+
+/// The part of the check that needs no chain: one zero-deposit call to a
+/// method on the list, with bounded gas.
+pub fn check_call(d: &DelegateAction) -> Result<()> {
+    let [action] = d.actions.as_slice() else { bail!("exactly one action per request") };
+    let Action::FunctionCall(call) = &**action else { bail!("only function calls are relayed") };
+    if !GASLESS_METHODS.contains(&call.method_name.as_str()) {
+        bail!("`{}` is not relayed; allowed: {}", call.method_name, GASLESS_METHODS.join(", "));
+    }
+    if call.deposit.as_yoctonear() > 0 {
+        bail!("calls with a deposit are not relayed");
+    }
+    if call.gas.as_tgas() > MAX_GAS_TGAS {
+        bail!("too much gas requested");
+    }
+    Ok(())
 }
 
 // ---------- the relayer as a small HTTP service ----------
@@ -185,5 +191,93 @@ pub async fn serve_http(relayer: Arc<Relayer>, port: u16) -> Result<()> {
                 eprintln!("  connection error: {e}");
             }
         });
+    }
+}
+
+/// The relayer's rules on requests built here, with no chain. Whether the
+/// receiver is a coin of the launchpad, and the relayed calls themselves, are
+/// checked against a real chain in `tests/` (a_holder_with_zero_near_votes_through_a_relayer).
+#[cfg(test)]
+mod tests {
+    use near_api::types::crypto::KeyType;
+    use near_api::types::transaction::actions::{FunctionCallAction, TransferAction};
+    use near_api::types::transaction::delegate_action::NonDelegateAction;
+    use near_api::types::{PublicKey, Signature};
+    use near_api::{NearGas, NearToken};
+
+    use super::*;
+
+    fn call(method: &str, deposit: u128, tgas: u64) -> Action {
+        Action::FunctionCall(Box::new(FunctionCallAction {
+            method_name: method.into(),
+            args: br#"{"offer":"pepe.v4.autocto.testnet#0","support":true}"#.to_vec(),
+            gas: NearGas::from_tgas(tgas),
+            deposit: NearToken::from_yoctonear(deposit),
+        }))
+    }
+
+    /// zed's request to DOGE carrying `actions`.
+    fn request(actions: Vec<Action>) -> SignedDelegateAction {
+        SignedDelegateAction {
+            delegate_action: DelegateAction {
+                sender_id: "zed.testnet".parse().unwrap(),
+                receiver_id: "doge.v4.autocto.testnet".parse().unwrap(),
+                actions: actions.into_iter().map(|a| NonDelegateAction::try_from(a).unwrap()).collect(),
+                nonce: 7,
+                max_block_height: 1_000,
+                public_key: PublicKey::empty(KeyType::ED25519),
+            },
+            signature: Signature::from_parts(KeyType::ED25519, &[7; 64]).unwrap(),
+        }
+    }
+
+    fn refusal(actions: Vec<Action>) -> String {
+        check_call(&request(actions).delegate_action).unwrap_err().to_string()
+    }
+
+    #[test]
+    fn every_listed_method_is_relayed() {
+        for m in GASLESS_METHODS {
+            check_call(&request(vec![call(m, 0, 100)]).delegate_action).unwrap();
+        }
+    }
+
+    #[test]
+    fn calls_that_spend_or_propose_are_not_relayed() {
+        for m in ["buy", "sell", "convert", "ft_transfer", "ft_transfer_call", "storage_deposit", "propose_offer", "propose_tender", "nominate"] {
+            assert!(refusal(vec![call(m, 0, 100)]).contains("is not relayed"), "{m}");
+        }
+    }
+
+    #[test]
+    fn a_call_with_a_deposit_is_not_relayed() {
+        for deposit in [1, 10u128.pow(24)] {
+            assert_eq!(refusal(vec![call("vote", deposit, 100)]), "calls with a deposit are not relayed");
+        }
+    }
+
+    #[test]
+    fn a_request_carries_exactly_one_function_call() {
+        assert_eq!(refusal(vec![]), "exactly one action per request");
+        assert_eq!(refusal(vec![call("lock", 0, 50), call("vote", 0, 50)]), "exactly one action per request");
+        let transfer = Action::Transfer(TransferAction { deposit: NearToken::from_near(1) });
+        assert_eq!(refusal(vec![transfer]), "only function calls are relayed");
+    }
+
+    #[test]
+    fn gas_is_capped_at_150_tgas() {
+        check_call(&request(vec![call("vote", 0, 150)]).delegate_action).unwrap();
+        assert_eq!(refusal(vec![call("vote", 0, 151)]), "too much gas requested");
+    }
+
+    #[test]
+    fn a_request_crosses_the_wire_unchanged_and_garbage_is_refused() {
+        let signed = request(vec![call("reveal_vote", 0, 100)]);
+        let wire = encode(&signed).unwrap();
+        assert_eq!(decode(&wire).unwrap(), signed);
+        assert_eq!(decode(&format!("  {wire}\n")).unwrap(), signed, "whitespace around it is fine");
+        assert!(decode("not base64!").is_err());
+        assert!(decode(&wire[..wire.len() - 8]).is_err(), "truncated");
+        assert!(decode(&STANDARD.encode([&borsh::to_vec(&signed).unwrap()[..], &[0]].concat())).is_err(), "trailing bytes");
     }
 }

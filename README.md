@@ -96,16 +96,16 @@ If a bid for DOGE was already open when you locked, step 4 shows the snapshot ru
 With Rust ([prerequisites](#run-it-locally)), from the repo root:
 
 ```bash
-cargo test -p autocto-coin -p autocto-brain    # 55 unit tests, about 2 s once built
-cargo test -p autocto-tests                    # 15 end-to-end tests in a local NEAR sandbox + 1 invariant fuzz test (~4 min)
-node scripts/mutants.mjs                       # ends with "17 of 17 mutants caught"
+cargo test -p autocto-coin -p autocto-brain -p autocto-demo   # 93 unit tests, about 2 s once built
+cargo test -p autocto-tests                                   # 15 end-to-end tests in a local NEAR sandbox + 1 invariant fuzz test (~4 min)
+node scripts/mutants.mjs                                      # ends with "30 of 30 mutants caught"
 ```
 
-`cargo test` runs all 72: the first two lines plus one launchpad test.
+`cargo test` runs all 110: the first two lines plus one launchpad test.
 
-- **Unit tests** ([`contracts/coin/src/tests.rs`](contracts/coin/src/tests.rs)) drive one coin on near-sdk's mocked chain and play its sibling's calls by switching the caller and the clock, so each rule is tested at its exact line: exactly quorum and two thirds pass, one token less fails; a veto at the line blocks, one token under does not; a lock in the same block as the bid has no vote; a merge sends every yocto of curve NEAR and treasury. Seeded random runs check the books after 4,000 trades, 200 votes against a count made by hand, and 50 conversion runs.
+- **Unit tests** ([`contracts/coin/src/tests.rs`](contracts/coin/src/tests.rs)) drive one coin on near-sdk's mocked chain and play its sibling's calls by switching the caller and the clock, so each rule is tested at its exact line: exactly quorum and two thirds pass, one token less fails; a veto at the line blocks, one token under does not; a lock in the same block as the bid has no vote; a merge sends every yocto of curve NEAR and treasury. Tenders and sealed votes get the same treatment: a tender's veto line and dilution cap are measured on the supply when it opened, a refund the token refuses stays claimable, and a sealed vote counts only if it is revealed in its window. Seeded random runs check the books after 4,000 trades, 200 votes against a count made by hand, and 50 conversion runs. The relayer's filter has its own tests in [`demo/src/gasless.rs`](demo/src/gasless.rs).
 - **End-to-end tests** ([`tests/tests`](tests/tests)) run the real wasm in a NEAR sandbox, with a local stand-in for OutLayer: takeovers, counters, vetoes, tenders, gasless and sealed voting, signed model answers, a prompt-injected pitch, and an invariant fuzz run that re-checks supply, balances, solvency and caps after every random action.
-- **Mutation testing.** [`scripts/mutants.mjs`](scripts/mutants.mjs) breaks 17 rules on purpose, one at a time, runs the unit tests and restores the file. Each break makes a test fail.
+- **Mutation testing.** [`scripts/mutants.mjs`](scripts/mutants.mjs) breaks 30 rules on purpose, one at a time, runs the unit tests and restores the file. Each break makes a test fail.
 
 ### The Verify page
 
@@ -227,8 +227,9 @@ The AI holds no key and can only propose; the contract re-checks every number. E
 | Rival pitches reach the deciding model only as fixed fields | Prompt injection | `injected_pitch_never_reaches_the_decider`, `reader_flags_injection` |
 | Brain fee, daily treasury cap, think cooldown | Draining the treasury with thoughts | `brains_negotiate_offer_counter_accept` |
 | A merge moves all curve NEAR and treasury; conversions burn free and locked tokens and are capped, counting what is still owed after chained merges | Value lost, minted from nothing, or holders stranded | `a_merge_closes_the_curve_and_sends_its_near_and_treasury_to_the_buyer`, `a_chained_takeover_leaves_no_holder_stranded`, `chain_of_takeovers_leaves_no_holder_stranded`, `random_conversions_never_mint_past_the_cap` |
-| Tenders: nominated tokens only, no owner key, holders' backing, per-tender dilution cap, all-or-nothing | Scam or ruggable tokens; diluting holders; kept deposits | `brain_tenders_for_nominated_tokens_and_refuses_ruggable_ones`, `tender_for_an_outside_token_swaps_everyone_or_refunds_everyone`, `a_tender_returns_deposits_over_its_cap_and_needs_its_holders_backing` |
-| Optional sealed votes | Bandwagoning while the vote runs | `sealed_votes_stay_hidden_until_the_reveal` |
+| Tenders: nominated tokens only, no owner key, holders' backing, per-tender dilution cap, all-or-nothing | Scam or ruggable tokens; diluting holders; kept deposits | `brain_tenders_for_nominated_tokens_and_refuses_ruggable_ones`, `tender_for_an_outside_token_swaps_everyone_or_refunds_everyone`, `a_tender_returns_deposits_over_its_cap_and_needs_its_holders_backing`, `buying_after_the_tender_cannot_raise_its_veto_line`, `the_dilution_cap_is_checked_again_at_settlement`, `a_refund_the_token_refuses_stays_claimable` |
+| Optional sealed votes: one per holder per round, revealed in a fixed window, and the vote cannot close until the window ends | Bandwagoning while the vote runs | `sealed_votes_stay_hidden_until_the_reveal`, `a_reveal_must_match_the_commitment`, `an_unrevealed_vote_counts_for_nothing`, `an_accepted_counter_voids_the_sealed_votes_of_the_old_round` |
+| The relayer forwards one zero-deposit call from a fixed list, to a coin of its launchpad, with at most 150 Tgas | The relayer's gas paying for anything but votes, locks and claims | `calls_that_spend_or_propose_are_not_relayed`, `a_call_with_a_deposit_is_not_relayed`, `a_holder_with_zero_near_votes_through_a_relayer` |
 | No owner, no setters, zero access keys | An admin rug | `a_lying_brain_is_refused_and_coins_have_no_keys`, the Verify page |
 | Supply, balances, solvency and caps hold after any sequence of actions | Anything the rules above missed | `random_actions_never_break_the_rules`, `random_trading_keeps_every_token_and_every_yocto_accounted_for` |
 
