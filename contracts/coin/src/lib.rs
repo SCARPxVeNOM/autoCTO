@@ -14,6 +14,8 @@ mod market;
 mod math;
 mod takeover;
 mod tender;
+#[cfg(test)]
+mod tests;
 pub mod types;
 
 use near_contract_standards::fungible_token::events::{FtBurn, FtMint};
