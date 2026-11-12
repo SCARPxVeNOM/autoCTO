@@ -1,5 +1,5 @@
-// AutoCTO landing: plays one takeover on a loop, reveals sections on scroll,
-// and shows a live line from the launchpad when its chain answers.
+// AutoCTO landing: replays the launchpad's latest takeover in a 3D arena (or plays a drawn one where that
+// can't run), reveals sections on scroll, and shows a live line from the launchpad when its chain answers.
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeftRight, ArrowRight, ArrowUpRight, BadgeCheck, Ban, Brain, Check, Gavel, KeyRound, MessageSquareWarning, Moon,
@@ -11,7 +11,9 @@ import { cn, NETWORK } from "@/lib/utils";
 import { useDark, useTheme } from "@/lib/theme";
 import { Avatar, Logo, Wordmark } from "@/components/common";
 import Footer from "./Footer";
+import Arena, { ArenaWait, canArena } from "./Arena";
 import { Note, Underline } from "./Pen";
+import { readReplay, reader, rpcQuery } from "./replay";
 import "./landing.css";
 
 // Whatever network the visitor came with goes along into the app.
@@ -87,7 +89,8 @@ function Film({ name, dark, labels = [] }) {
   );
 }
 
-// The takeover window. It plays only while it is on screen; picking a phase by hand stops the loop on it.
+// The drawn takeover, for browsers without WebGL or launchpads with no takeover yet. It plays only while
+// it is on screen; picking a phase by hand stops the loop on it.
 function Takeover() {
   const [phase, setPhase] = useState(calm ? PHASES.length - 1 : 0);
   const [playing, setPlaying] = useState(!calm);
@@ -145,46 +148,50 @@ function Takeover() {
   );
 }
 
-// Same config files as the app. Reads the launchpad and its coins once: a line for the hero and the numbers
-// under the demo. If the chain does not answer, the plain line stays and the numbers are left out.
+// Same config files as the app. Reads the launchpad and its coins once: a line for the hero, the latest
+// takeover for the arena, and the numbers under it. If the chain does not answer, the plain line stays,
+// the numbers are left out and the arena plays its recorded copy, if there is one for this launchpad.
 function useLive() {
-  const [live, setLive] = useState({ line: "Memecoins on NEAR", stats: null });
+  // arena: undefined while reading, null when there is nothing to play.
+  const [live, setLive] = useState({ line: "Memecoins on NEAR", stats: null, arena: undefined });
   useEffect(() => {
+    let cfg = null, played = false;
+    const where = () => (cfg?.dev_key ? "local demo" : NETWORK === "testnet" ? "NEAR testnet" : NETWORK);
+    const play = async (replay) => {
+      played = true;
+      let recorded = false;
+      if (!replay?.beats.length && cfg) {
+        replay = await fetch(`data/arena-${NETWORK}.json`).then((r) => (r.ok ? r.json() : null)).then((j) => (j?.launchpad === cfg.launchpad ? j : null)).catch(() => null);
+        recorded = true;
+      }
+      setLive((l) => ({ ...l, arena: replay ? { replay, recorded, where: where(), launchpad: cfg.launchpad } : null }));
+    };
     (async () => {
-      const cfg = await fetch(`config.${NETWORK}.json`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-      if (!cfg?.rpc || !cfg?.launchpad) return;
-      const ask = async (params) => {
-        const r = await fetch(cfg.rpc, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jsonrpc: "2.0", id: "landing", method: "query", params: { finality: "optimistic", ...params } }),
-        });
-        const j = await r.json();
-        if (j.error) throw new Error("rpc");
-        return j.result;
-      };
-      const view = (account, method, args = {}) => ask({ request_type: "call_function", account_id: account, method_name: method, args_base64: btoa(JSON.stringify(args)) })
-        .then((res) => JSON.parse(new TextDecoder().decode(new Uint8Array(res.result))));
+      cfg = await fetch(`config.${NETWORK}.json`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (!cfg?.rpc || !cfg?.launchpad) { cfg = null; return play(null); }
+      const ask = rpcQuery(cfg.rpc), view = reader(cfg.rpc);
       const keys = (account) => ask({ request_type: "view_access_key_list", account_id: account }).then((res) => res.keys.length);
       const coins = (await view(cfg.launchpad, "list_coins", { limit: 100 })).filter((c) => c.state === "Live");
-      if (!coins.length) return;
+      if (!coins.length) return play(null);
       const ids = coins.map((c) => c.account_id);
       const [infos, merged] = await Promise.all(ids.map((a) => view(a, "coin_info"))).then((infos) => [infos, infos.filter((i) => typeof i.status === "object" && "Merged" in i.status).length]);
-      const where = cfg.dev_key ? "local demo" : NETWORK;
-      setLive((l) => ({ ...l, line: `Live on ${where}: ${coins.length} ${coins.length === 1 ? "coin" : "coins"}${merged ? `, ${merged} already absorbed` : ""}` }));
+      setLive((l) => ({ ...l, line: `Live on ${cfg.dev_key ? "local demo" : NETWORK}: ${coins.length} ${coins.length === 1 ? "coin" : "coins"}${merged ? `, ${merged} already absorbed` : ""}` }));
       // A takeover leaves its record on the winner; a model answer counts once the coin has checked its signature.
+      const getParams = view(cfg.launchpad, "get_params");
+      getParams.then((p) => readReplay(view, coins, infos, p)).then(play, () => play(null));
       const [params, decisions, keyCount] = await Promise.all([
-        view(cfg.launchpad, "get_params"),
+        getParams,
         Promise.all(ids.map((a) => view(a, "list_decisions", { limit: 100 }))),
         Promise.all([cfg.launchpad, ...ids].map(keys)).then((n) => n.reduce((s, k) => s + k, 0)),
       ]);
       const held = infos.reduce((s, i) => s + BigInt(i.treasury) + (BigInt(i.amm_near) > BigInt(params.virtual_near) ? BigInt(i.amm_near) - BigInt(params.virtual_near) : 0n), 0n);
       setLive((l) => ({ ...l, stats: {
-        where, coins: coins.length, accounts: ids.length + 1, keys: keyCount,
+        where: cfg.dev_key ? "local demo" : NETWORK, coins: coins.length, accounts: ids.length + 1, keys: keyCount,
         takeovers: infos.reduce((s, i) => s + i.absorbed.length, 0),
         signed: decisions.flat().filter((d) => d.signed_by).length,
         near: Number(held / 10n ** 21n) / 1000,
       } }));
-    })().catch(() => {});
+    })().catch(() => { if (!played) play(null); });
   }, []);
   return live;
 }
@@ -241,8 +248,11 @@ function Receipts() {
 export default function Landing() {
   const [theme, cycleTheme] = useTheme();
   const dark = useDark();
-  const { line, stats } = useLive();
+  const { line, stats, arena } = useLive();
   const guests = useGuests();
+  // The 3D arena when this browser can draw it and there's a takeover to play; the drawn demo otherwise.
+  const [arenaFailed, setArenaFailed] = useState(false);
+  const show3d = canArena && arena !== null && !arenaFailed;
   const [at, setAt] = useState("");
   const ThemeIcon = THEME_ICON[theme];
   // The header's "Enter the app" shows only once the hero's own button has scrolled away, so there is one at a time.
@@ -303,10 +313,17 @@ export default function Landing() {
           </div>
         </section>
 
-        <section id="demo" className="lp-demo" aria-label="An animated takeover">
-          <Takeover />
-          <div className="pen-row"><Note arrow="up" className="pen-steps">click a step to pause on it</Note></div>
-        </section>
+        {show3d ? (
+          <section id="demo" className="lp-arena" aria-label="A real takeover, replayed">
+            {arena ? <Arena {...arena} app={APP} onFail={() => setArenaFailed(true)} /> : <ArenaWait />}
+            <div className="pen-row"><Note arrow="up" className="pen-steps">drag it around, click a coin</Note></div>
+          </section>
+        ) : (
+          <section id="demo" className="lp-demo" aria-label="An animated takeover">
+            <Takeover />
+            <div className="pen-row"><Note arrow="up" className="pen-steps">click a step to pause on it</Note></div>
+          </section>
+        )}
 
         {stats && <LiveNumbers s={stats} />}
 

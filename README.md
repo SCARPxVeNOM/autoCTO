@@ -56,8 +56,9 @@ In a browser, with nothing installed:
 
 | Do | See |
 |---|---|
-| Open [autocto.vercel.app](https://autocto.vercel.app) and scroll to **Receipts** | the `v4` takeover on testnet, one line per step: PEPE's AI bids, WOJAK's AI tells its holders to vote NO, a vote bought after the bid is refused, the holders vote YES, the coins merge. Each line links to its transaction |
-| On the same page, the numbers under the animation | coins, takeovers, signed AI answers, NEAR held and access keys, read from the chain when the page opens. Access keys reads 0 |
+| Open [autocto.vercel.app](https://autocto.vercel.app) | a 3D arena replays the latest takeover on the launchpad from the coins' on-chain history: coins sized by market cap, the bid as an arc, each brain's own words, the vote, and the target swallowed into the winner. Drag to turn it, click a step to pause on it, click a coin to open it in the app |
+| Scroll to **Receipts** | the `v4` takeover on testnet, one line per step: PEPE's AI bids, WOJAK's AI tells its holders to vote NO, a vote bought after the bid is refused, the holders vote YES, the coins merge. Each line links to its transaction |
+| On the same page, the numbers under the arena | coins, takeovers, signed AI answers, NEAR held and access keys, read from the chain when the page opens. Access keys reads 0 |
 | Open the app's [Verify page](https://autocto.vercel.app/app.html#verify) | seven checks run in the browser against the chain and this repo: 0 access keys, code hashes equal the committed wasm, the pinned brain, the rules, and a valid model signature |
 | In the app, press **Try as guest**, or **Connect wallet** with any testnet wallet | a guest is a fresh testnet account with test NEAR, signed in the browser. Follow **First steps**: buy a coin, lock it, press **Think**. The coin's AI answers in about 15 seconds, under **Brains & feed** |
 
@@ -262,7 +263,7 @@ cargo run -p autocto-demo                      # a narrated takeover and tender 
 python3 -m http.server 8080 -d web             # in a second terminal
 ```
 
-The story ends with "The chain keeps running". Then open http://localhost:8080/?network=local: the landing page shows an animated takeover, and **Enter the app** opens the trading page, with a market table, a coin panel with the bonding-curve chart, a buy/sell/lock ticket with live quotes, deals (bids and tenders), brain decisions, a live feed, the simulation and the Verify page.
+The story ends with "The chain keeps running". Then open http://localhost:8080/?network=local: the landing page replays the demo's takeover in 3D, and **Enter the app** opens the trading page, with a market table, a coin panel with the bonding-curve chart, a buy/sell/lock ticket with live quotes, deals (bids and tenders), brain decisions, a live feed, the simulation and the Verify page.
 
 | Try | What you'll see |
 |---|---|
@@ -458,6 +459,7 @@ If the launchpad account runs short of balance for its code storage, the deploy 
 | `sim/` | simulation and parameter sweep |
 | `frontend/` | the app's source: React, Tailwind and shadcn/ui, built with Vite. `cd frontend && npm install && npm run build` writes it into `web/` |
 | `web/` | the built static app (committed, so it serves without Node); reads coins straight from NEAR RPC. `web/api/guest.js` is the optional guest-account function |
+| `scripts/` | `build.sh` builds the wasm files; `record-arena.mjs` records the landing arena's takeover into `web/data/arena-testnet.json`, which the page plays only when the RPC node doesn't answer |
 | `res/` | the five built wasm files (launchpad, coin, brain and the two mocks); the testnet deployments run these |
 | `params/` | `testnet.json` (short clocks) and `recommended.json` (from the simulation) |
 | `proofs/` | OutLayer evidence bundles for two `v4` brain runs; `outlayer-verify bundle <file> --offline` re-checks them |
@@ -491,7 +493,7 @@ If the launchpad account runs short of balance for its code storage, the deploy 
 | Contracts | Rust, near-sdk 5.30, near-contract-standards (NEP-141, NEP-145, NEP-148, NEP-297), the `uint` crate for 256-bit curve math |
 | AI | OutLayer (`request_execution`, FastFS, secrets), NEAR AI Cloud (OpenAI-compatible API), wasi-http-client |
 | Tooling and tests | cargo-near, near-sandbox, near-api (Rust) |
-| App | React 19, Tailwind 4, shadcn/ui, Vite; near-api-js 7.4 for signing in local mode and as a guest; NEAR Connect for wallets |
+| App | React 19, Tailwind 4, shadcn/ui, Vite; three.js for the landing's 3D arena; near-api-js 7.4 for signing in local mode and as a guest; NEAR Connect for wallets |
 
 Much of the code was written with an AI coding assistant (Claude Code) and reviewed by the author.
 
