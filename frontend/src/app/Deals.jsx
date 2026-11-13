@@ -1,5 +1,5 @@
 // Deals view: takeover bids and tender offers, each said in plain words first.
-import { Brain, Eye, Hand, Shield, Swords, Vote } from "lucide-react";
+import { Brain, Check, Eye, Hand, Shield, Swords, Vote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -59,8 +59,14 @@ function Offer({ o }) {
   const before = (coin) => (state.me.locks[coin] || []).filter((l) => BigInt(l.since) < BigInt(o.created_at)).reduce((x, l) => x + BigInt(l.amount), 0n);
   const vt = before(o.target), vb = before(o.buyer);
   const vote = (support) => act("vote", { coin: o.target, offer: key, round: o.round, support });
+  // The contract takes one ballot per account and round but has no view for it: find it in
+  // the coins' feeds, from this round's start (a counter-offer starts a new round).
+  const roundStart = BigInt(o.vote_ends) - BigInt(p.vote_period_sec) * NS;
+  const mine = (coin, event, text) => !!who && (state.history[coin] || []).some((e) => e.event === event && BigInt(e.at) >= roundStart && e.text.startsWith(`${who} ${text} `));
+  const voted = mine(o.target, "vote", `voted YES on ${key}`) ? "YES" : mine(o.target, "vote", `voted NO on ${key}`) ? "NO" : null;
+  const vetoed = mine(o.buyer, "veto", `vetoed our bid for ${o.target}`);
   // Only the buttons this account can use; with no account picked yet, both sides are shown.
-  const canVote = !who || vt > 0n, canVeto = !who || vb > 0n;
+  const canVote = (!who || vt > 0n) && !voted, canVeto = (!who || vb > 0n) && !vetoed;
   return (
     <DealCard live={open}>
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
@@ -70,8 +76,10 @@ function Offer({ o }) {
         {open && inReveal && <span className="ml-auto font-mono text-[13px] font-medium">reveal <Left ns={revealEnds} /></span>}
       </div>
       <p className="text-[15px]">1 ${T} → <b className="font-mono font-medium">{fmtRate(o.rate_ppm)}</b> ${B}, <span className={prem >= 0 ? "text-up" : "text-down"}>{Math.abs(prem).toFixed(1)}% {prem >= 0 ? "above" : "below"}</span> today's price. <span className="text-muted-foreground">{sayNow}</span></p>
-      {open && !ended && who && (vt > 0n
-        ? <Move can icon={Vote}>You can vote with {fmtTokens(vt)} ${T}.</Move>
+      {open && !ended && who && (voted
+        ? <Move icon={Check}>You voted <b>{voted}</b> with {fmtTokens(vt)} ${T}. They stay locked until the vote ends.</Move>
+        : vetoed ? <Move icon={Check}>You vetoed this bid with {fmtTokens(vb)} ${B}. They stay locked until the vote ends.</Move>
+        : vt > 0n ? <Move can icon={Vote}>You can vote with {fmtTokens(vt)} ${T}.</Move>
         : vb > 0n ? <Move can icon={Shield}>You can veto with {fmtTokens(vb)} ${B}.</Move>
         : <Move icon={Eye}>Watching only: nothing locked before this bid.</Move>)}
       <div>
