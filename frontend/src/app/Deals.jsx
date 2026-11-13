@@ -28,6 +28,13 @@ const Move = ({ can, icon: Icon, children }) => (
     <Icon className="mt-0.5 size-4 flex-none" /><span>{children}</span>
   </div>
 );
+// The bidder's own holders against the bid, as a share of its supply when the bid was made.
+const VetoBar = ({ B, veto, pct, mark }) => (
+  <div>
+    <BarLabel left={<><b className="font-medium text-down">${B} holders <Term k="veto">veto</Term> {fmtTokens(veto)}</b> · {pct.toFixed(pct > 0 && pct < 1 ? 2 : 1)}% of ${B}</>} right={`blocks at ${mark}%`} />
+    <Meter parts={[[pct, "bg-down"]]} mark={mark} />
+  </div>
+);
 const DealCard = ({ live, children }) => (
   <Card className={cn("min-w-0 content-start gap-3 rounded-[20px] p-[18px] shadow-none", live && "border-primary/45 ring-[3px] ring-primary/10")}>{children}</Card>
 );
@@ -49,8 +56,16 @@ function Offer({ o }) {
   const tone = { Open: "up", Executing: "brand", Sending: "brand", Executed: "muted", Failed: "down" }[st] || "muted";
   const stance = stanceFor(o);
   const B = sym(o.buyer), T = sym(o.target), prem = o.premium_bps / 100;
+  // The target checks a bid when it arrives and turns it away outright if it breaks a rule:
+  // then it never priced it (fair rate 0) and no vote was held.
+  const refused = st === "Failed" && BigInt(o.fair_rate_ppm || 0) === 0n;
+  const reason = st === "Failed" && (refused ? `refused by $${T}` : o.status.Failed.reason === "vetoed by our holders" ? `vetoed by $${B} holders` : o.status.Failed.reason);
+  const veto = BigInt(o.veto || 0), vetoMark = p.veto_bps / 100;
+  const blockedByVeto = veto > 0n && veto * 10_000n >= bcirc * BigInt(p.veto_bps);
   const sayNow = st === "Executed" ? `Done: $${T} holders can convert.`
-    : st === "Failed" ? `It did not go through: ${o.status.Failed.reason}.`
+    : refused ? `$${T} turned it away on arrival, so no vote was held. A coin refuses a bid that breaks its rules: a rate too far from the fair one, more new $${B} than $${B}'s cap allows, a newborn target, a failed bid between the two in the last ${Math.round(p.rebid_cooldown_sec / 60)} min, or another open bid between them.`
+    : st === "Failed" ? `It did not go through: ${reason}.`
+    : open && blockedByVeto ? `$${B} holders have vetoed it, so it can't go through even if the vote passes.`
     : !open ? "The merge is being carried out."
     : !ended ? `Passes with ${p.approval_bps / 100}% yes.`
     : inReveal ? "Sealed votes are being revealed."
@@ -71,22 +86,23 @@ function Offer({ o }) {
     <DealCard live={open}>
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
         <span className="inline-flex flex-wrap items-baseline gap-2 font-display text-[19px] font-semibold"><b>${B}</b><i className="font-sans text-[13px] font-normal not-italic text-muted-foreground">bids for</i><b>${T}</b></span>
-        <Pill tone={tone} className="whitespace-normal">{st === "Failed" ? `failed: ${o.status.Failed.reason}` : st.toLowerCase()}</Pill>
+        <Pill tone={tone} className="whitespace-normal">{st === "Failed" ? `failed: ${reason}` : st.toLowerCase()}</Pill>
         {open && !ended && <span className="ml-auto font-mono text-[13px] font-medium"><Left ns={o.vote_ends} /></span>}
         {open && inReveal && <span className="ml-auto font-mono text-[13px] font-medium">reveal <Left ns={revealEnds} /></span>}
       </div>
-      <p className="text-[15px]">1 ${T} → <b className="font-mono font-medium">{fmtRate(o.rate_ppm)}</b> ${B}, <span className={prem >= 0 ? "text-up" : "text-down"}>{Math.abs(prem).toFixed(1)}% {prem >= 0 ? "above" : "below"}</span> today's price. <span className="text-muted-foreground">{sayNow}</span></p>
+      <p className="text-[15px]">1 ${T} → <b className="font-mono font-medium">{fmtRate(o.rate_ppm)}</b> ${B}{refused ? "." : <>, <span className={prem >= 0 ? "text-up" : "text-down"}>{Math.abs(prem).toFixed(1)}% {prem >= 0 ? "above" : "below"}</span> today's price.</>} <span className="text-muted-foreground">{sayNow}</span></p>
       {open && !ended && who && (voted
         ? <Move icon={Check}>You voted <b>{voted}</b> with {fmtTokens(vt)} ${T}. They stay locked until the vote ends.</Move>
         : vetoed ? <Move icon={Check}>You vetoed this bid with {fmtTokens(vb)} ${B}. They stay locked until the vote ends.</Move>
         : vt > 0n ? <Move can icon={Vote}>You can vote with {fmtTokens(vt)} ${T}.</Move>
         : vb > 0n ? <Move can icon={Shield}>You can veto with {fmtTokens(vb)} ${B}.</Move>
         : <Move icon={Eye}>Watching only: nothing locked before this bid.</Move>)}
-      <div>
+      {!refused && <div>
         <BarLabel left={<><b className="font-medium text-up">yes {fmtTokens(yes)}</b> · <b className="font-medium text-down">no {fmtTokens(no)}</b>{(sealedMode || sealed > 0n) && <> · sealed {fmtTokens(sealed)} (direction hidden)</>}</>}
           right={<><Term k="quorum">needs</Term> {quorum}% to vote</>} />
         <Meter parts={[[pct(yes), "bg-up"], [pct(no), "bg-down"], [pct(sealed), "bg-muted-foreground/50"]]} mark={quorum} />
-      </div>
+      </div>}
+      {veto > 0n && <VetoBar B={B} veto={veto} pct={pct(veto, bcirc)} mark={vetoMark} />}
       <div className="flex flex-wrap items-center gap-2 empty:hidden">
         {open && !ended && canVote && (ballot
           ? <span className="text-[12.5px] text-muted-foreground">You sealed <b>{ballot.support ? "YES" : "NO"}</b>. Come back to reveal it when the vote ends.</span>
@@ -104,18 +120,15 @@ function Offer({ o }) {
       <More label="Pitches and terms">
         <div className="flex flex-wrap gap-x-[18px] gap-y-2">
           <TermCell label={<Term k="rate" />}><Num>{fmtRate(o.rate_ppm)}</Num> ${B} per ${T}</TermCell>
-          <TermCell label={<Term k="fair rate" />}><Num>{fmtRate(o.fair_rate_ppm)}</Num></TermCell>
-          <TermCell label={<Term k="premium" />}><Num className={o.premium_bps >= 0 ? "text-up" : "text-down"}>{fmtBps(o.premium_bps)}</Num></TermCell>
+          <TermCell label={<Term k="fair rate" />}><Num>{refused ? "–" : fmtRate(o.fair_rate_ppm)}</Num></TermCell>
+          <TermCell label={<Term k="premium" />}>{refused ? <Num>–</Num> : <Num className={o.premium_bps >= 0 ? "text-up" : "text-down"}>{fmtBps(o.premium_bps)}</Num>}</TermCell>
           <TermCell label="round"><Num>{o.round}</Num></TermCell>
           <TermCell label="proposed by"><Proposer pr={o.proposer} /></TermCell>
         </div>
         <Pitch who={`pitch from $${B}'s brain · an ad, not a fact`}>“{humanize(o.pitch)}”</Pitch>
         {o.counter && <Pitch who={`counter from $${T}: ${fmtRate(o.counter.rate_ppm)}`}>“{humanize(o.counter.pitch)}”</Pitch>}
         {stance && <Pitch brain who={`what $${T}'s brain tells its holders`}>{humanize(stance)}</Pitch>}
-        <div>
-          <BarLabel left={<>${B} holders <Term k="veto">against</Term> {fmtTokens(o.veto || 0)}</>} right={`blocked at ${p.veto_bps / 100}%`} />
-          <Meter parts={[[pct(o.veto || 0, bcirc), "bg-down"]]} mark={p.veto_bps / 100} />
-        </div>
+        {veto === 0n && !refused && <VetoBar B={B} veto={veto} pct={0} mark={vetoMark} />}
       </More>
     </DealCard>
   );

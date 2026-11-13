@@ -466,6 +466,13 @@ function BrainBox({ a }) {
 // When the brain doesn't answer, a holder can make the same bid by hand: same caps,
 // and it needs proposer_bps of the supply locked in an earlier block.
 const PREMIUMS = [["0", "fair rate"], ["300", "+3%"], ["500", "+5%"], ["1000", "+10%"]];
+// When $t last turned down a bid from $b, after which it refuses b's bids for rebid_cooldown_sec.
+// From t's feed; failing that, the end of the vote (the earliest the bid can have failed).
+function lastRefusal(t, b) {
+  const at = (state.history[t] || []).filter((e) => e.event === "offer_failed" && e.text.startsWith(`bid ${b}#`)).map((e) => BigInt(e.at));
+  if (!at.length) for (const o of state.offers[t] || []) if (o.target === t && o.buyer === b && statusName(o.status) === "Failed") at.push(BigInt(o.vote_ends));
+  return at.reduce((m, x) => (x > m ? x : m), 0n);
+}
 function HandBid({ a, open, setOpen, link }) {
   const [target, setTarget] = useState("");
   const [prem, setPrem] = useState("300");
@@ -474,14 +481,36 @@ function HandBid({ a, open, setOpen, link }) {
   const targets = state.coins.map((c) => c.account_id).filter((t) => t !== a && state.info[t] && statusName(state.info[t].status) === "Active");
   if (!targets.length) return null;
   if (!open) return link && <button type="button" className="justify-self-start text-[12.5px] text-primary underline underline-offset-2" onClick={() => setOpen(true)}>Brain not answering? Bid by hand</button>;
-  const t = targets.includes(target) ? target : targets[0], ti = state.info[t];
+  const t = targets.includes(target) ? target : targets[0], ti = state.info[t], T = sym(t);
   const den = BigInt(ti.amm_tokens) * BigInt(i.amm_near);
   const fair = den > 0n ? (BigInt(ti.amm_near) * BigInt(i.amm_tokens) * 1_000_000n) / den : 0n;
-  const rate = (fair * (10_000n + BigInt(prem))) / 10_000n;
+  const rateAt = (bps) => (fair * (10_000n + BigInt(bps))) / 10_000n;
+  // The target runs the same checks when the bid arrives and refuses it outright if one fails.
+  // Dilution: the deal may mint at most max_dilution_bps of the buyer's supply. Half a percent
+  // of headroom, since the target counts its supply again when the bid lands.
+  const supply = (x) => BigInt(x.circulating) + BigInt(x.owed || 0);
+  const capRate = supply(ti) > 0n ? (supply(i) * BigInt(p.max_dilution_bps) * 1_000_000n * 995n) / (10_000n * supply(ti) * 1000n) : 0n;
+  const capBps = fair > 0n ? Number((capRate * 10_000n) / fair) - 10_000 : -Infinity;
+  const fits = (bps) => Number(bps) <= p.max_premium_bps && Number(bps) >= -p.max_discount_bps && rateAt(bps) <= capRate;
+  const opts = [...PREMIUMS];
+  // Where the cap falls between the usual choices, offer the most it allows.
+  if (capBps >= -p.max_discount_bps && capBps < Number(PREMIUMS.at(-1)[0]) && !PREMIUMS.some(([v]) => Number(v) === capBps)) {
+    opts.push([String(capBps), `${capBps >= 0 ? "+" : ""}${(capBps / 100).toFixed(1)}% (the most allowed)`]);
+    opts.sort((x, y) => Number(x[0]) - Number(y[0]));
+  }
+  const choice = fits(prem) ? prem : [...opts].reverse().find(([v]) => fits(v) && Number(v) <= Number(prem))?.[0] ?? opts.find(([v]) => fits(v))?.[0] ?? null;
+  const rate = choice == null ? 0n : rateAt(choice);
   const need = (BigInt(i.circulating) * BigInt(p.proposer_bps)) / 10_000n;
   const have = lockedOf(a), lacking = !!state.me.acct && have < need;
-  const pending = allOffers().some((o) => o.buyer === a && o.target === t && liveOffer(o));
-  const said = pitch.trim() || `$${s} bids for $${sym(t)} at ${PREMIUMS.find(([v]) => v === prem)[1]}.`;
+  const pending = allOffers().some((o) => ((o.buyer === a && o.target === t) || (o.buyer === t && o.target === a)) && liveOffer(o));
+  const newborn = BigInt(ti.protected_until) > now() ? BigInt(ti.protected_until) : 0n;
+  const coolUntil = (() => {
+    const at = lastRefusal(t, a);
+    const until = at && at + BigInt(p.rebid_cooldown_sec) * NS;
+    return until > now() ? until : 0n;
+  })();
+  const blocked = pending || newborn > 0n || coolUntil > 0n || choice == null || fair === 0n;
+  const said = pitch.trim() || `$${s} bids for $${T} at ${opts.find(([v]) => v === choice)?.[1] ?? "the fair rate"}.`;
   const send = async () => { if (await act("propose", { coin: a, target: t, rate: rate.toString(), pitch: said })) setOpen(false); };
   return (
     <div id="handbid" className="grid gap-2.5 rounded-2xl border border-dashed border-line p-3.5 text-[12.5px] text-muted-foreground">
@@ -489,23 +518,28 @@ function HandBid({ a, open, setOpen, link }) {
         <b className="font-display text-sm font-semibold text-foreground">Bid by hand</b>
         <Button variant="ghost" size="sm" className="h-7" onClick={() => setOpen(false)}>Close</Button>
       </div>
-      <p>The same bid ${s}'s brain could make, under the same caps. ${sym(t)}'s holders vote on it.</p>
+      <p>The same bid ${s}'s brain could make, under the same caps. ${T}'s holders vote on it.</p>
       <div className="flex flex-wrap gap-2">
         <Select value={t} onValueChange={setTarget}>
           <SelectTrigger size="sm" className="h-8 rounded-full"><SelectValue /></SelectTrigger>
           <SelectContent>{targets.map((x) => <SelectItem key={x} value={x}>Bid for ${sym(x)}</SelectItem>)}</SelectContent>
         </Select>
-        <Select value={prem} onValueChange={setPrem}>
+        {choice != null && <Select value={choice} onValueChange={setPrem}>
           <SelectTrigger size="sm" className="h-8 rounded-full"><SelectValue /></SelectTrigger>
-          <SelectContent>{PREMIUMS.map(([v, label]) => <SelectItem key={v} value={v}>{label}</SelectItem>)}</SelectContent>
-        </Select>
+          <SelectContent>{opts.map(([v, label]) => <SelectItem key={v} value={v} disabled={!fits(v)}>{label}{fits(v) ? "" : " · over the cap"}</SelectItem>)}</SelectContent>
+        </Select>}
       </div>
-      <div>Rate <b className="font-mono font-medium text-foreground">{fmtRate(rate)}</b> ${s} per ${sym(t)} · fair {fmtRate(fair)}</div>
+      {choice != null && <div>Rate <b className="font-mono font-medium text-foreground">{fmtRate(rate)}</b> ${s} per ${T} · fair {fmtRate(fair)}</div>}
+      {choice == null && fair > 0n
+        ? <p className="text-down">${T} is too big for ${s} right now. Even at the lowest rate allowed ({-p.max_discount_bps / 100}%), the deal would mint more ${s} than its cap of {p.max_dilution_bps / 100}% of ${s}'s supply, so ${T} would refuse it.</p>
+        : opts.some(([v]) => !fits(v)) && <p>A bid above {capBps >= 0 ? "+" : ""}{(capBps / 100).toFixed(1)}% would mint more ${s} than its cap allows ({p.max_dilution_bps / 100}% of ${s}'s supply), so ${T} would refuse it.</p>}
       <input value={pitch} onChange={(e) => setPitch(e.target.value)} maxLength={500} placeholder={said} autoComplete="off"
         className="rounded-full border border-line bg-muted/60 px-3.5 py-1.5 text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring" />
-      <p className={cn(lacking && "text-down")}>Needs {fmtTokens(need)} ${s} locked by you first ({p.proposer_bps / 100}% of supply); you have {fmtTokens(have)}. They stay locked until the vote ends.</p>
-      {pending && <p className="text-down">${s} already has an open bid for ${sym(t)}. It is under Deals.</p>}
-      <Button size="sm" className="justify-self-start rounded-full" disabled={state.acting || lacking || pending || fair === 0n} onClick={send}>Bid for ${sym(t)}</Button>
+      <p className={cn(lacking && "text-down")}>Needs {fmtTokens(need)} ${s} locked by you first ({p.proposer_bps / 100}% of supply); you have {fmtTokens(have)}. Bidding holds them for {Math.round(p.vote_period_sec / 60)} min, even if ${T} refuses the bid.</p>
+      {pending && <p className="text-down">There is already an open bid between ${s} and ${T}. It is under Deals; one at a time.</p>}
+      {newborn > 0n && <p className="text-down">${T} is newborn: no bids until its protection ends (<Left ns={newborn} />).</p>}
+      {coolUntil > 0n && <p className="text-down">${T} turned down a bid from ${s} recently, so it refuses ${s}'s bids for a while (<Left ns={coolUntil} />).</p>}
+      <Button size="sm" className="justify-self-start rounded-full" disabled={state.acting || lacking || blocked} onClick={send}>Bid for ${T}</Button>
     </div>
   );
 }
@@ -523,7 +557,7 @@ function Position({ a }) {
           <Row k={`$${s} you can sell`}>{fmtTokens(state.me.bal[a] || 0n)}</Row>
           <Row k={<>${s} <Term k="lock">locked for votes</Term></>}>{fmtTokens(lockedOf(a))}</Row>
           <Row k="NEAR">{state.me.near == null ? "–" : fmtNear(state.me.near)}</Row>
-          {until > now() && <Row k="backing a vote"><Left ns={until} /></Row>}
+          {until > now() && <Row k={<>locked ${s} <Term k="held">held</Term></>}><Left ns={until} /></Row>}
         </dl>
       )}
       {who && (lots.length ? (

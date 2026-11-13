@@ -55,6 +55,7 @@ export const store = {
 export const GLOSSARY = {
   "bonding curve": "The coin's built-in market. You always buy from it and sell back to it, so there is always a price. Every buy pushes the price up, every sell pushes it down.",
   lock: "Setting tokens aside so they count as votes. They stay yours and you can unlock them later. Only tokens locked before a bid was announced count for that bid.",
+  held: "Once you vote, veto or bid by hand, your locked tokens can't be unlocked until that vote ends, so nobody can vote and then sell. A bid by hand holds them for the whole vote period, even if the target refuses it.",
   brain: "The coin's AI. It runs on OutLayer inside sealed hardware, reads the market and proposes moves. It can only propose: the contract checks every number.",
   takeover: "One coin absorbs another. The smaller coin's NEAR and treasury move into the bigger one, and its holders swap their tokens at the agreed rate.",
   bid: "A coin's offer to absorb a rival: so many of its tokens for each of the rival's.",
@@ -122,6 +123,8 @@ export const hue = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + 
 // Contract texts carry raw integers and account ids: make them readable.
 export function humanize(text) {
   let t = String(text ?? "");
+  // The contract can't see the target's reason from the buyer's side; the page says what it means.
+  t = t.replace("the target refused the bid (see its logs)", "the target turned it away on arrival, so no vote was held");
   t = t.replace(/\b\d{20,}\b/g, (m) => fmtTokens(m));
   t = t.replace(/\b(\d{5,}) tokens\b/g, (_, n) => `${compact(Number(n))} tokens`);
   t = t.replace(/([+-]?\d+) bps/g, (_, n) => `${n.startsWith("+") ? "+" : ""}${(Number(n) / 100).toFixed(1)}%`);
@@ -132,6 +135,11 @@ export function humanize(text) {
 function plainError(msg) {
   const m = /Smart contract panicked: ([^"\\]+)/.exec(msg) || /"ExecutionError":"([^"]+)"/.exec(msg);
   return (m ? m[1] : String(msg)).trim().slice(0, 180);
+}
+// The panic of a receipt that failed inside a transaction that itself went through.
+function refusalIn(out) {
+  const r = out?.receipts_outcome?.find((x) => x.outcome?.status?.Failure);
+  return r ? plainError(JSON.stringify(r.outcome.status.Failure)) : null;
 }
 
 // Decimal text <-> integer units, exact.
@@ -230,11 +238,33 @@ export async function rpc(method, params) {
   await slot();
   try { return await ask(method, params); } finally { done(); }
 }
+const rpcNodes = () => [cfg.rpc, ...(qs.get("rpc") ? [] : SPARE_RPC[NETWORK] || []).filter((u) => !same(u, cfg.rpc))];
+const NODE_TROUBLE = /INTERNAL_ERROR|TIMEOUT_ERROR|NO_SYNCED_BLOCKS|NODE_IS_SYNCING|NOT_SYNCED_YET|UNAVAILABLE_SHARD/;
+// near-api-js's words for a node that failed to answer, as opposed to the chain refusing the call.
+const NO_ANSWER = /Internal server error|Timeout error|Bad Gateway|unavailable|Transaction timed out|Node is syncing|not synced|No new blocks|Exceeded \d+ attempts|Failed to fetch|FetchError|NetworkError|Load failed/i;
+const noAnswer = (e) => typeof e?.cause === "number" || NO_ANSWER.test(String(e?.message || e));
+/**
+ * For signing: one near-api-js provider that moves to the next node when a node fails to
+ * answer, after one retry there. A send is the same signed transaction on every node, so the
+ * chain runs it at most once. The chain's own refusals pass straight through.
+ */
+function sendProvider() {
+  const each = rpcNodes().map((url) => new nearApi.JsonRpcProvider({ url }, { retries: 2, wait: 700, backoff: 1.5 }));
+  class Spare extends nearApi.JsonRpcProvider {
+    async sendJsonRpc(method, params) {
+      let last;
+      for (const p of each) {
+        try { return await p.sendJsonRpc(method, params); } catch (e) { if (!noAnswer(e)) throw e; last = e; }
+      }
+      throw last;
+    }
+  }
+  return new Spare({ url: cfg.rpc });
+}
 async function ask(method, params) {
-  const nodes = [cfg.rpc, ...(qs.get("rpc") ? [] : SPARE_RPC[NETWORK] || []).filter((u) => !same(u, cfg.rpc))];
   let last;
   // Two rounds: a node that said "too many requests" usually answers again a moment later.
-  for (const url of [...nodes, null, ...nodes]) {
+  for (const url of [...rpcNodes(), null, ...rpcNodes()]) {
     if (!url) { await new Promise((r) => setTimeout(r, 1500)); continue; }
     try {
       const r = await fetch(url, {
@@ -243,6 +273,8 @@ async function ask(method, params) {
       });
       if (!r.ok) throw new Error(`${new URL(url).host} answered ${r.status}`);
       const j = await r.json();
+      // A node's own trouble (internal error, timeout, still syncing) is worth asking the next one.
+      if (j.error && NODE_TROUBLE.test(JSON.stringify(j.error))) throw new Error(`${new URL(url).host}: ${JSON.stringify(j.error).slice(0, 120)}`);
       if (j.error) return Promise.reject(new Error(JSON.stringify(j.error)));
       cfg.rpc = url; // stay with the node that answered
       return j.result;
@@ -633,40 +665,66 @@ export async function act(what, d = {}) {
   state.acting = true; bump();
   const tid = toast.loading(key ? `${doing}…` : `${doing}: approve it in your wallet…`);
   let gasless = false;
-  try {
-    if (!key) {
-      await walletCall(contract, method, args, deposit);
+  const sent = (async () => {
+    if (!key) return walletCall(contract, method, args, deposit);
+    nearApi ??= await import(/* @vite-ignore */ NEAR_API);
+    const account = new nearApi.Account(state.actor, sendProvider(), key);
+    if (cfg.dev_key && cfg.relayer && state.gasless && GASLESS.includes(method)) {
+      // NEP-366: the actor signs, the relayer pays the gas. The call still runs as the actor.
+      const { signedDelegate } = await account.createSignedMetaTransaction({
+        receiverId: contract, actions: [nearApi.actions.functionCall(method, args, 100_000_000_000_000n, deposit)],
+      });
+      const res = await fetch(cfg.relayer, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signed_delegate_action: nearApi.base64Encode(nearApi.encodeSignedDelegate(signedDelegate)) }),
+      });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error);
+      gasless = true;
     } else {
-      nearApi ??= await import(/* @vite-ignore */ NEAR_API);
-      const account = new nearApi.Account(state.actor, cfg.rpc, key);
-      if (cfg.dev_key && cfg.relayer && state.gasless && GASLESS.includes(method)) {
-        // NEP-366: the actor signs, the relayer pays the gas. The call still runs as the actor.
-        const { signedDelegate } = await account.createSignedMetaTransaction({
-          receiverId: contract, actions: [nearApi.actions.functionCall(method, args, 100_000_000_000_000n, deposit)],
-        });
-        const res = await fetch(cfg.relayer, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ signed_delegate_action: nearApi.base64Encode(nearApi.encodeSignedDelegate(signedDelegate)) }),
-        });
-        const j = await res.json();
-        if (!j.ok) throw new Error(j.error);
-        gasless = true;
-      } else {
-        await account.callFunction({ contractId: contract, methodName: method, args, deposit, gas: GAS });
-      }
+      return account.callFunctionRaw({ contractId: contract, methodName: method, args, deposit, gas: GAS });
     }
-    hooks.ok?.();
-    toast.success(`${doneText}${gasless ? " The relayer paid the fee." : ""}`, { id: tid });
-    return true;
-  } catch (e) {
-    const msg = String(e.message || e);
-    hooks.fail?.(msg);
-    toast.error(/reject|cancel|denied/i.test(msg) && !key ? "Cancelled in the wallet. Nothing was sent." : `That didn't go through: ${plainError(msg)}`, { id: tid });
-    return false;
-  } finally {
+  })();
+  // A bid the target refuses still lands: the buyer's callback records the refusal. The
+  // target's reason is only in the receipts, so look there and count it as a failure.
+  const outcome = sent.then((out) => {
+    const why = what === "propose" && refusalIn(out);
+    return why ? new Error(`$${sym(d.target)} refused the bid: ${humanize(why)}. No vote opens. Your locked $${sym(coin)} stay held for the vote period anyway: see Your position.`, { cause: "refused" }) : null;
+  }, (e) => e || new Error("failed"));
+  // A node can sit on a call long after the chain has settled it. Past `patience` the page
+  // lets go: the buttons come back and the outcome is told when it arrives. Think lets go
+  // soonest: a refused Think fails within seconds, an accepted one waits for the brain.
+  // A wallet keeps its own pace (the holder may still be reading the request), so no limit there.
+  const patience = !key ? 0 : what === "think" ? 8_000 : 40_000;
+  let timer;
+  const late = patience > 0 && await Promise.race([
+    outcome.then(() => false),
+    new Promise((r) => { timer = setTimeout(() => r(true), patience); }),
+  ]);
+  clearTimeout(timer);
+  if (late) {
+    if (what === "think") toast.success(doneText, { id: tid });
+    else toast.info(`${doing}: the network is slow to confirm. Carry on; the result will show here.`, { id: tid, duration: 8000 });
     state.acting = false; bump();
     refresh();
   }
+  const e = await outcome;
+  if (!e) {
+    hooks.ok?.();
+    if (!late || what !== "think") toast.success(`${doneText}${gasless ? " The relayer paid the fee." : ""}`, late ? {} : { id: tid });
+  } else {
+    const msg = String(e.message || e);
+    hooks.fail?.(msg);
+    const text = e.cause === "refused" ? msg
+      : /reject|cancel|denied/i.test(msg) && !key ? "Cancelled in the wallet. Nothing was sent."
+      : noAnswer(e) ? `${late ? `${doing}: the` : "The"} network didn't answer, so it's unclear whether that went through. Wait a moment and check before trying again.`
+      : late ? `${doing} failed: ${plainError(msg)}` : `That didn't go through: ${plainError(msg)}`;
+    // A late Think the nodes never confirmed is told by the Brains page itself: a decision shows up there or it doesn't.
+    if (!(late && what === "think" && noAnswer(e))) toast.error(text, { ...(late ? {} : { id: tid }), duration: e.cause === "refused" ? 15000 : undefined });
+  }
+  if (!late) { state.acting = false; bump(); }
+  refresh();
+  return !e;
 }
 
 /** Demo only: sign one call as any of the sandbox's demo accounts. */
