@@ -59,9 +59,14 @@ function Offer({ o }) {
   // The target checks a bid when it arrives and turns it away outright if it breaks a rule:
   // then it never priced it (fair rate 0) and no vote was held.
   const refused = st === "Failed" && BigInt(o.fair_rate_ppm || 0) === 0n;
-  const reason = st === "Failed" && (refused ? `refused by $${T}` : o.status.Failed.reason === "vetoed by our holders" ? `vetoed by $${B} holders` : o.status.Failed.reason);
   const veto = BigInt(o.veto || 0), vetoMark = p.veto_bps / 100;
   const blockedByVeto = veto > 0n && veto * 10_000n >= bcirc * BigInt(p.veto_bps);
+  // The contract names one reason. A veto over the line counts only once the vote passes, so
+  // a bid voted down first never says it was vetoed too: add it.
+  const why = st === "Failed" && o.status.Failed.reason;
+  const reason = st === "Failed" && (refused ? `refused by $${T}`
+    : why === "vetoed by our holders" ? `vetoed by $${B} holders`
+    : `${why === "rejected by holders" ? `rejected by $${T} holders` : why}${blockedByVeto ? ` and vetoed by $${B} holders` : ""}`);
   const sayNow = st === "Executed" ? `Done: $${T} holders can convert.`
     : refused ? `$${T} turned it away on arrival, so no vote was held. A coin refuses a bid that breaks its rules: a rate too far from the fair one, more new $${B} than $${B}'s cap allows, a newborn target, a failed bid between the two in the last ${Math.round(p.rebid_cooldown_sec / 60)} min, or another open bid between them.`
     : st === "Failed" ? `It did not go through: ${reason}.`

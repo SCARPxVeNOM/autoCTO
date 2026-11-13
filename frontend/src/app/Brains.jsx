@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Ago, More, Pill, SectionHead, useTick } from "@/components/common";
 import { keyInReport, parseSigned, recoverSigner } from "@/lib/attest";
-import { NETWORK, cfg, describeAction, humanize, selectCoin, state, statusName, sym } from "@/lib/chain";
+import { NETWORK, bidNote, bidOf, cfg, describeAction, humanize, selectCoin, state, statusName, sym } from "@/lib/chain";
 import { useUi } from "./ui";
 
 const Pre = (p) => <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-all rounded-xl border bg-muted/60 px-3 py-2.5 font-mono text-xs leading-normal" {...p} />;
@@ -111,6 +111,7 @@ export default function Brains() {
               seen.add(coin);
               let out = null;
               try { out = JSON.parse(d.output); } catch (_) {}
+              const note = out?.action?.type === "offer" ? bidNote(bidOf(coin, d.id)) : null;
               const st = statusName(d.status);
               const tone = { Applied: "up", Pending: "brand", Refused: "down", NoAnswer: "down" }[st] || "muted";
               return (
@@ -119,7 +120,11 @@ export default function Brains() {
                     <b className="inline-flex items-center gap-1.5 font-display text-[15px] font-semibold"><Brain className="size-4 text-primary" /> ${sym(coin)} <span className="font-normal text-muted-foreground">#{d.id}</span></b>
                     <Pill tone={tone} className="whitespace-normal">{st === "Refused" ? `refused: ${d.status.Refused.reason}` : st === "Applied" ? "done" : st === "NoAnswer" ? "no answer" : st.toLowerCase()}</Pill>
                   </div>
-                  {out ? <><div className="font-medium">{describeAction(coin, out.action)}</div><div className="line-clamp-2 break-words text-muted-foreground" title={humanize(out.thought)}>“{humanize(out.thought)}”</div></>
+                  {out ? <>
+                    <div className="font-medium">{describeAction(coin, out.action)}{note && <span className="font-normal text-muted-foreground"> {note.text}</span>}</div>
+                    <div className="line-clamp-2 break-words text-muted-foreground" title={humanize(out.thought)}>“{humanize(out.thought)}”</div>
+                    {note?.trimmed && <div className="text-[12.5px] text-muted-foreground">The quote is the model's reasoning, written before the brain's code applied the caps.</div>}
+                  </>
                     : st === "Pending" ? <div className="text-muted-foreground">Thinking… OutLayer usually answers within 2 minutes.</div>
                     : st === "NoAnswer" && (
                       <div className="grid gap-2 text-muted-foreground">

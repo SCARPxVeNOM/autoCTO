@@ -199,6 +199,28 @@ export function allOffers() {
   }
   return [...byKey.values()].sort((a, b) => (liveOffer(b) - liveOffer(a)) || Number(BigInt(b.created_at) - BigInt(a.created_at)));
 }
+/** The bid a brain decision became, once sent. */
+export function bidOf(coin, decisionId) {
+  return allOffers().find((o) => o.buyer === coin && o.proposer?.Brain && Number(o.proposer.Brain.decision_id) === Number(decisionId)) || null;
+}
+/**
+ * Where a brain's bid landed against the fair rate. The brain's code takes the model's premium
+ * and keeps it 2 points inside the caps, so the bid can sit lower than the reasoning says.
+ * Null for a bid the target turned away (it never priced it).
+ */
+export function bidNote(o) {
+  if (!o || BigInt(o.fair_rate_ppm || 0) === 0n) return null;
+  const p = state.params, prem = o.premium_bps;
+  const where = prem === 0 ? "at the fair rate" : `${Math.abs(prem / 100).toFixed(1)}% ${prem > 0 ? "above" : "below"} the fair rate`;
+  // The dilution room at the bid, from both snapshots: the sum the brain does.
+  const n = (x) => Number(x || 0);
+  const cap = (n(o.buyer_market?.circulating) + n(o.buyer_market?.owed)) * p.max_dilution_bps / 10_000;
+  const atFair = (n(o.target_market?.circulating) + n(o.target_market?.owed)) * n(o.fair_rate_ppm) / 1e6;
+  const room = atFair > 0 ? Math.floor((cap / atFair - 1) * 10_000) - 200 : Infinity;
+  const why = Math.abs(prem - room) <= 25 ? `, the most $${sym(o.buyer)}'s cap on new tokens allowed after the brain's 2-point safety margin`
+    : Math.abs(prem - (p.max_premium_bps - 200)) <= 25 ? ", the price cap minus the brain's 2-point safety margin" : "";
+  return { text: `Sent ${where}${why}.`, trimmed: !!why };
+}
 export function stanceFor(o) {
   const h = state.history[o.target] || [];
   const s = [...h].reverse().find((e) => e.event === "stance" && e.text.includes(`${o.buyer}#${o.id}`));
