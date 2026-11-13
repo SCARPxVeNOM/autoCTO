@@ -27,7 +27,7 @@
   --drop: 0 1px 1px rgba(0, 0, 0, 0.04), 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 .dark {
-  --background: #0f1012; --foreground: #fafafa;
+  --background: #0b0b0e; --foreground: #fafafa;
   --card: #17181b; --card-foreground: #fafafa;
   --popover: #1b1c20; --popover-foreground: #fafafa;
   --primary: #38bdf8; --primary-foreground: #04202f;

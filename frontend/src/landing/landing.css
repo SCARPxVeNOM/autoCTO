@@ -38,6 +38,11 @@
               radial-gradient(35% 45% at 8% 90%, color-mix(in srgb, var(--up) 9%, transparent), transparent 70%);
   animation: drift 14s ease-in-out infinite alternate;
 }
+/* Dark is obsidian black: the glows stay faint so the page reads black, not navy. */
+.dark .lp-hero::before {
+  background: radial-gradient(45% 55% at 78% 20%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 70%),
+              radial-gradient(35% 45% at 8% 90%, color-mix(in srgb, var(--up) 5%, transparent), transparent 70%);
+}
 @keyframes drift { to { transform: translate3d(-3%, 4%, 0) scale(1.06); } }
 .lp-hero > * { position: relative; }
 .lp-hero-left { display: grid; gap: 22px; justify-items: start; }
