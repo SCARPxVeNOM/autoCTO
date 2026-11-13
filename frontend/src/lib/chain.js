@@ -520,7 +520,7 @@ async function walletCall(contract, method, args, deposit) {
 // What each action is called while it runs and once it is done.
 const SAY = {
   launch: ["Launching your coin", "Your coin is live. It shows up in the market in a moment."],
-  think: ["Waking the brain", "The brain is thinking. Its decision appears under Brains in a few seconds."],
+  think: ["Waking the brain", "The brain is thinking. OutLayer usually answers within 2 minutes; the decision appears under Brains."],
   buy: ["Buying", "Bought. The tokens are in your wallet."],
   sell: ["Selling", "Sold. The NEAR is in your wallet."],
   lock: ["Locking", "Locked. These tokens now count in votes on bids announced from here on."],
@@ -529,6 +529,7 @@ const SAY = {
   reveal: ["Revealing your vote", "Your vote is revealed and counted."],
   veto: ["Sending your veto", "Your veto is in."],
   finalize: ["Counting the votes", "The vote is counted. See the deal for the result."],
+  propose: ["Sending your bid", "Bid sent. If the target accepts it, the vote opens under Deals."],
   accept_counter: ["Accepting the counter-offer", "Counter-offer accepted. A new voting round starts."],
   convert: ["Converting", "Converted. You now hold the winning coin."],
   back_tender: ["Backing the tender", "You backed this tender."],
@@ -558,7 +559,8 @@ export async function act(what, d = {}) {
       const min = BigInt(await view(cfg.launchpad, "min_launch_deposit"));
       return ["launch", { label: f.label, name: f.name.trim(), symbol: f.symbol.toUpperCase(), icon: f.icon || null, persona: f.persona.trim() }, min + YOCTO, cfg.launchpad];
     },
-    think: () => ["think", {}, 10n ** 23n],
+    // Exactly the fee shown next to the button: the contract forwards all of it to OutLayer.
+    think: async () => ["think", {}, BigInt((state.params || await view(coin, "get_params")).brain_fee)],
     // Buy and sell re-quote right before signing and pass min_out, so a moved price is refused by the contract.
     buy: async () => {
       const near = amount(24);
@@ -597,6 +599,7 @@ export async function act(what, d = {}) {
     },
     veto: () => ["veto", { offer_id: Number(id) }, 0n],
     finalize: () => ["finalize", { offer }, 0n],
+    propose: () => ["propose_offer", { target: d.target, rate_ppm: d.rate, pitch: d.pitch }, 0n],
     // The rate on screen: if the counter changes before this lands, the contract refuses.
     accept_counter: () => ["accept_counter", { offer_id: Number(id), rate_ppm: d.rate ?? null }, 0n],
     convert: () => ["convert", {}, 1n],
@@ -691,7 +694,7 @@ export function guideSteps() {
         : { done: !!who, title: wallet ? "Connect a wallet" : "Enter your account", text: wallet ? "A free NEAR testnet wallet. No real money is involved." : "Type your account at the top to see your balances.", go: "who", btn: wallet ? "Connect" : "Enter account" },
     { done: holds, title: "Buy your first coin", text: "Pick any coin, type how much NEAR to spend and press Buy. You can sell back any time.", go: "buy", btn: "Buy a coin" },
     { done: locked, title: "Lock some to get a vote", text: "Locking keeps the tokens yours and makes them count as votes. Do it before a bid shows up.", go: "lock", btn: "Lock tokens" },
-    { done: did(["think"]), title: "Wake a brain", text: `Press Think and the coin's AI looks at its rivals. It may make a bid. Costs ${fee}.`, go: "think", btn: "Show me" },
+    { done: did(["think"]), title: "Wake a brain", text: `Press Think and the coin's AI looks at its rivals. It may make a bid. Costs ${fee}; the answer takes up to 2 minutes.`, go: "think", btn: "Show me" },
     { done: did(["vote", "vote_sealed", "veto", "tender_backed", "tender_veto"]), title: "Have your say on a deal", text: "Open bids appear under Deals. Vote yes or no with what you locked.", go: "deals", btn: "See the deals" },
   ];
   // Once done, a step stays done even when the event scrolls out of the coin's history.

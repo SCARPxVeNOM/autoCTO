@@ -8,7 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Ago, More, Pill, SectionHead, useTick } from "@/components/common";
 import { keyInReport, parseSigned, recoverSigner } from "@/lib/attest";
-import { NETWORK, cfg, describeAction, humanize, state, statusName, sym } from "@/lib/chain";
+import { NETWORK, cfg, describeAction, humanize, selectCoin, state, statusName, sym } from "@/lib/chain";
+import { useUi } from "./ui";
 
 const Pre = (p) => <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-all rounded-xl border bg-muted/60 px-3 py-2.5 font-mono text-xs leading-normal" {...p} />;
 
@@ -93,6 +94,8 @@ export default function Brains() {
   const decisions = [];
   for (const [coin, list] of Object.entries(state.decisions)) for (const d of list) decisions.push({ coin, d });
   decisions.sort((a, b) => Number(BigInt(b.d.requested_at) - BigInt(a.d.requested_at)));
+  const seen = new Set();
+  const { go } = useUi();
   const events = [];
   for (const [coin, h] of Object.entries(state.history)) for (const e of h) events.push({ coin, ...e });
   events.sort((a, b) => Number(BigInt(b.at) - BigInt(a.at)));
@@ -103,6 +106,9 @@ export default function Brains() {
         {!decisions.length ? <p className="px-6 text-muted-foreground max-sm:px-4">No brain has been woken yet.</p> : (
           <div className="grid gap-2.5 px-6 max-sm:px-4">
             {decisions.slice(0, all ? 20 : 5).map(({ coin, d }) => {
+              // Newest first: the first card of each coin is its latest decision.
+              const latest = !seen.has(coin);
+              seen.add(coin);
               let out = null;
               try { out = JSON.parse(d.output); } catch (_) {}
               const st = statusName(d.status);
@@ -111,10 +117,16 @@ export default function Brains() {
                 <Card key={`${coin}|${d.id}`} className="gap-1.5 rounded-2xl px-4 py-3.5 text-sm shadow-none">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <b className="inline-flex items-center gap-1.5 font-display text-[15px] font-semibold"><Brain className="size-4 text-primary" /> ${sym(coin)} <span className="font-normal text-muted-foreground">#{d.id}</span></b>
-                    <Pill tone={tone} className="whitespace-normal">{st === "Refused" ? `refused: ${d.status.Refused.reason}` : st === "Applied" ? "done" : st.toLowerCase()}</Pill>
+                    <Pill tone={tone} className="whitespace-normal">{st === "Refused" ? `refused: ${d.status.Refused.reason}` : st === "Applied" ? "done" : st === "NoAnswer" ? "no answer" : st.toLowerCase()}</Pill>
                   </div>
                   {out ? <><div className="font-medium">{describeAction(coin, out.action)}</div><div className="line-clamp-2 break-words text-muted-foreground" title={humanize(out.thought)}>“{humanize(out.thought)}”</div></>
-                    : st === "Pending" && <div className="text-muted-foreground">Thinking… the answer arrives in a few seconds.</div>}
+                    : st === "Pending" ? <div className="text-muted-foreground">Thinking… OutLayer usually answers within 2 minutes.</div>
+                    : st === "NoAnswer" && (
+                      <div className="grid gap-2 text-muted-foreground">
+                        <span>No answer reached the chain within 2 minutes, usually because OutLayer was busy. The fee came back, minus anything OutLayer used.</span>
+                        {latest && <Button variant="outline" size="sm" className="justify-self-start rounded-full" onClick={() => { selectCoin(coin); go("think"); }}>Wait and retry, or bid by hand</Button>}
+                      </div>
+                    )}
                   <div className="text-[12.5px] text-muted-foreground">
                     <Ago ns={d.requested_at} /> · {out?.attest && <span className="inline-flex items-center gap-1 text-primary"><ShieldCheck className="size-3.5" />signed · </span>}<button type="button" className="text-primary underline underline-offset-2" onClick={() => setPick({ coin, id: d.id })}>proof</button>
                   </div>

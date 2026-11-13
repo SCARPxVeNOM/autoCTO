@@ -1,6 +1,6 @@
 // Market view: first steps, totals, the coin table, and the selected coin with its trade ticket.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { BadgeCheck, Brain, Check, Eye, Lock } from "lucide-react";
+import { BadgeCheck, Brain, Check, CircleAlert, Eye, LoaderCircle, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,9 +9,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { Ago, Avatar, Left, More, Pill, SectionHead, Term } from "@/components/common";
+import { Ago, Avatar, Left, More, Pill, SectionHead, Term, useTick } from "@/components/common";
 import {
-  act, allOffers, available, cfg, coinStatus, curveReal, fetchQuote, fmtNear, fmtPct, fmtPrice, fmtRate, fmtTokens, fmtUnits,
+  NETWORK, act, allOffers, available, cfg, coinStatus, curveReal, fetchQuote, fmtNear, fmtPct, fmtPrice, fmtRate, fmtTokens, fmtUnits,
   guideSteps, hasWallet, isMerged, liveOffer, lockedOf, marketCap, minOut, modeDec, nearNum, now, parseUnits, priceNum, sameCode,
   selectCoin, sessionChange, short, state, statusName, store, sym, tokNum,
 } from "@/lib/chain";
@@ -359,10 +359,153 @@ function Ticket({ a, onQuote }) {
       <Button size="lg" className={cn("btn-big h-[46px] w-full text-base font-semibold", tone)} disabled={!ok || state.acting} onClick={submit}>{MODES[mode][0]} ${s}</Button>
       {note && <p className={cn("text-[12.5px] text-muted-foreground", bad && "text-down")}>{note}</p>}
       <Position a={a} />
+      <BrainBox a={a} />
+    </div>
+  );
+}
+
+// ---------- the coin's brain ----------
+const NS = 1_000_000_000n;
+// NEAR keeps a brain request open for about 2 minutes; an answer after that is refused.
+const ANSWER_SEC = 120;
+const clock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+
+/** OutLayer's recent record from the site's api/outlayer, or null when unknown (local demo, no function). */
+function useOutlayer() {
+  const [h, setH] = useState(null);
+  useEffect(() => {
+    if (NETWORK === "local") return;
+    let live = true;
+    const get = () => fetch(`api/outlayer?network=${NETWORK}`).then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (live) setH(j?.runs > 0 ? j : null); }).catch(() => {});
+    get();
+    const t = setInterval(get, 60_000);
+    return () => { live = false; clearInterval(t); };
+  }, []);
+  return h;
+}
+
+function OutlayerLine({ h }) {
+  if (!h) return null;
+  const share = h.answered / h.runs;
+  return (
+    <p className={share >= 0.9 ? "text-up" : share >= 0.6 ? "text-warn" : "text-down"}>
+      OutLayer {h.network} right now: {h.answered} of {h.runs} runs answered in the last {h.minutes} minutes{h.late ? `; ${h.late} came back too late` : ""}.
+    </p>
+  );
+}
+
+const Choice = ({ title, btn, children, ...rest }) => (
+  <div className="grid gap-1.5 rounded-xl border border-line bg-background/60 p-3">
+    <b className="text-[13.5px] font-semibold text-foreground">{title}</b>
+    <p>{children}</p>
+    <Button size="sm" className="justify-self-start rounded-full" {...rest}>{btn}</Button>
+  </div>
+);
+
+// Think, what the brain is doing now, and when it missed: wait and try again, or bid by hand.
+function BrainBox({ a }) {
+  useTick();
+  const [hand, setHand] = useState(false);
+  const health = useOutlayer();
+  const i = state.info[a], s = i.symbol, p = state.params, t = now();
+  const last = (state.decisions[a] || []).reduce((m, d) => (m && BigInt(m.requested_at) > BigInt(d.requested_at) ? m : d), null);
+  const st = last && statusName(last.status);
+  const age = last ? Number((t - BigInt(last.requested_at)) / NS) : 0;
+  const thinking = st === "Pending";
+  // A miss from the last half hour gets the choice; older ones stay under Brains.
+  const missed = st === "NoAnswer" && age < 1800;
+  const ready = BigInt(i.last_think || 0) + BigInt(p.think_cooldown_sec) * NS;
+  const rest = i.last_think && ready > t ? Number((ready - t) / NS) + 1 : 0;
+  const busy = health && health.answered / health.runs < 0.9;
+  const fee = fmtNear(p.brain_fee);
+  const need = (BigInt(i.circulating) * BigInt(p.proposer_bps)) / 10_000n;
+  const think = () => act("think", { coin: a });
+  const byHand = () => { setHand(true); setTimeout(() => document.getElementById("handbid")?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50); };
+  return (
+    <>
       <div className="flex items-center gap-2.5 border-t border-dashed border-line pt-3.5">
-        <Button id="think" variant="outline" className="flex-none rounded-full" disabled={state.acting} onClick={() => act("think", { coin: a })}><Brain /> Think</Button>
-        <span className="text-[12.5px] text-muted-foreground" title={`Used ${fmtNear(i.brain_spent_today)} of ${fmtNear(state.params.brain_daily_cap)} today`}>Wake ${s}'s AI to look for a deal · {fmtNear(state.params.brain_fee)}</span>
+        <Button id="think" variant="outline" className="flex-none rounded-full" disabled={state.acting || thinking || rest > 0} onClick={think}>
+          {thinking ? <LoaderCircle className="animate-spin" /> : <Brain />} {rest > 0 && !thinking ? `Think · ${rest}s` : "Think"}
+        </Button>
+        <span className="text-[12.5px] text-muted-foreground" title={`Used ${fmtNear(i.brain_spent_today)} of ${fmtNear(p.brain_daily_cap)} today`}>Wake ${s}'s AI to look for a deal · {fee} · up to 2 min</span>
       </div>
+      {thinking && (
+        <div className="grid gap-2 rounded-2xl border border-primary/35 bg-primary/[0.06] p-3.5 text-[12.5px] text-muted-foreground">
+          <b className="font-display text-sm font-semibold text-foreground">${s}'s brain is thinking · {clock(age)} of up to {clock(ANSWER_SEC)}</b>
+          <Progress value={Math.min(100, (age / ANSWER_SEC) * 100)} className="h-1.5" />
+          <p>It runs on OutLayer, in sealed hardware. NEAR waits about 2 minutes for the answer. If none arrives, the request closes and the fee comes back, minus anything OutLayer used.</p>
+          <OutlayerLine h={health} />
+        </div>
+      )}
+      {missed && (
+        <div className="grid gap-2.5 rounded-2xl border border-down/40 bg-down/[0.06] p-3.5 text-[12.5px] text-muted-foreground">
+          <b className="flex items-center gap-1.5 font-display text-sm font-semibold text-foreground"><CircleAlert className="size-4 flex-none text-down" />${s}'s brain didn't answer · decision #{last.id}</b>
+          <p>No answer reached the chain within its 2 minutes, usually because OutLayer was busy. The fee came back, minus anything OutLayer used. Nothing else changed.</p>
+          <OutlayerLine h={health} />
+          <b className="text-[13.5px] font-semibold text-foreground">Your choice</b>
+          <Choice title="Wait and try again" btn={rest > 0 ? `Ready in ${rest}s` : "Think again"} disabled={state.acting || rest > 0} onClick={think}>
+            Ask the AI again for {fee}. If it misses again, the fee comes back the same way. Best when OutLayer answers most runs.
+          </Choice>
+          <Choice title="Bid by hand" btn="Bid by hand" variant="outline" onClick={byHand}>
+            Make the bid yourself, under the same caps the AI works with, and the holders vote on it the same way. Needs {fmtTokens(need)} ${s} locked by you ({p.proposer_bps / 100}% of supply); you have {fmtTokens(lockedOf(a))}.
+          </Choice>
+        </div>
+      )}
+      {!thinking && !missed && busy && (
+        <div className="grid gap-1 text-[12.5px]">
+          <OutlayerLine h={health} />
+          <p className="text-muted-foreground">Think may miss right now; the fee comes back if it does. Bid by hand works either way.</p>
+        </div>
+      )}
+      <HandBid a={a} open={hand} setOpen={setHand} link={!missed} />
+    </>
+  );
+}
+
+// When the brain doesn't answer, a holder can make the same bid by hand: same caps,
+// and it needs proposer_bps of the supply locked in an earlier block.
+const PREMIUMS = [["0", "fair rate"], ["300", "+3%"], ["500", "+5%"], ["1000", "+10%"]];
+function HandBid({ a, open, setOpen, link }) {
+  const [target, setTarget] = useState("");
+  const [prem, setPrem] = useState("300");
+  const [pitch, setPitch] = useState("");
+  const i = state.info[a], s = i.symbol, p = state.params;
+  const targets = state.coins.map((c) => c.account_id).filter((t) => t !== a && state.info[t] && statusName(state.info[t].status) === "Active");
+  if (!targets.length) return null;
+  if (!open) return link && <button type="button" className="justify-self-start text-[12.5px] text-primary underline underline-offset-2" onClick={() => setOpen(true)}>Brain not answering? Bid by hand</button>;
+  const t = targets.includes(target) ? target : targets[0], ti = state.info[t];
+  const den = BigInt(ti.amm_tokens) * BigInt(i.amm_near);
+  const fair = den > 0n ? (BigInt(ti.amm_near) * BigInt(i.amm_tokens) * 1_000_000n) / den : 0n;
+  const rate = (fair * (10_000n + BigInt(prem))) / 10_000n;
+  const need = (BigInt(i.circulating) * BigInt(p.proposer_bps)) / 10_000n;
+  const have = lockedOf(a), lacking = !!state.me.acct && have < need;
+  const pending = allOffers().some((o) => o.buyer === a && o.target === t && liveOffer(o));
+  const said = pitch.trim() || `$${s} bids for $${sym(t)} at ${PREMIUMS.find(([v]) => v === prem)[1]}.`;
+  const send = async () => { if (await act("propose", { coin: a, target: t, rate: rate.toString(), pitch: said })) setOpen(false); };
+  return (
+    <div id="handbid" className="grid gap-2.5 rounded-2xl border border-dashed border-line p-3.5 text-[12.5px] text-muted-foreground">
+      <div className="flex items-center justify-between gap-2">
+        <b className="font-display text-sm font-semibold text-foreground">Bid by hand</b>
+        <Button variant="ghost" size="sm" className="h-7" onClick={() => setOpen(false)}>Close</Button>
+      </div>
+      <p>The same bid ${s}'s brain could make, under the same caps. ${sym(t)}'s holders vote on it.</p>
+      <div className="flex flex-wrap gap-2">
+        <Select value={t} onValueChange={setTarget}>
+          <SelectTrigger size="sm" className="h-8 rounded-full"><SelectValue /></SelectTrigger>
+          <SelectContent>{targets.map((x) => <SelectItem key={x} value={x}>Bid for ${sym(x)}</SelectItem>)}</SelectContent>
+        </Select>
+        <Select value={prem} onValueChange={setPrem}>
+          <SelectTrigger size="sm" className="h-8 rounded-full"><SelectValue /></SelectTrigger>
+          <SelectContent>{PREMIUMS.map(([v, label]) => <SelectItem key={v} value={v}>{label}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div>Rate <b className="font-mono font-medium text-foreground">{fmtRate(rate)}</b> ${s} per ${sym(t)} · fair {fmtRate(fair)}</div>
+      <input value={pitch} onChange={(e) => setPitch(e.target.value)} maxLength={500} placeholder={said} autoComplete="off"
+        className="rounded-full border border-line bg-muted/60 px-3.5 py-1.5 text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring" />
+      <p className={cn(lacking && "text-down")}>Needs {fmtTokens(need)} ${s} locked by you first ({p.proposer_bps / 100}% of supply); you have {fmtTokens(have)}. They stay locked until the vote ends.</p>
+      {pending && <p className="text-down">${s} already has an open bid for ${sym(t)}. It is under Deals.</p>}
+      <Button size="sm" className="justify-self-start rounded-full" disabled={state.acting || lacking || pending || fair === 0n} onClick={send}>Bid for ${sym(t)}</Button>
     </div>
   );
 }

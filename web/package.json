@@ -1,7 +1,7 @@
 {
   "private": true,
   "type": "module",
-  "description": "The hosted app is static; api/guest.js is its one optional function.",
+  "description": "The hosted app is static; api/guest.js (guest accounts) and api/outlayer.js (OutLayer's recent record) are its optional functions.",
   "dependencies": {
     "near-api-js": "7.4.0"
   }
