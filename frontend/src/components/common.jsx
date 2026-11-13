@@ -19,17 +19,17 @@ export const Ago = ({ ns }) => <time>{ago(ns)}</time>;
 export const Left = ({ ns }) => <span>{left(ns)}</span>;
 
 // The mark: a coin wearing a crown, the one that took the others over (rendered, in web/brand/).
-const MARK = new URL("brand/autocto.webp", document.baseURI).href;
+const MARK = new URL("brand/killercoins.webp", document.baseURI).href;
 export const Logo = ({ className }) => (
   <img className={cn("size-[34px] flex-none select-none drop-shadow-sm", className)} src={MARK} width="34" height="34" alt="" draggable="false" />
 );
 // The wordmark: Pixelify Sans 600 at text-xl, rendered as 3D lettering (scripts/lettering.py) into the
-// 82.42 by 20px box the text took, on the same baseline (the box hangs 3.5px below it).
+// 101.42 by 20px box the text took, on the same baseline (the box hangs 3.5px below it).
 export function Wordmark() {
   const dark = useDark();
   return (
-    <span className="relative inline-block h-[1em] w-[4.1211em] flex-none align-[-0.175em] text-xl">
-      <img className="absolute top-0 left-[-2.4265%] h-full w-[104.9477%] max-w-none select-none" src={dark ? WORD_DARK : WORD_LIGHT} alt="AutoCTO" draggable="false" />
+    <span className="relative inline-block h-[1em] w-[5.0711em] flex-none align-[-0.175em] text-xl">
+      <img className="absolute top-0 left-[-1.972%] h-full w-[104.0208%] max-w-none select-none" src={dark ? WORD_DARK : WORD_LIGHT} alt="KillerCoins" draggable="false" />
     </span>
   );
 }

@@ -29,7 +29,7 @@ import { AutoPanel } from "./Autoplay";
 const VIEW_OF = { market: "market", guide: "market", trade: "market", deals: "deals", brains: "brains", feed: "brains", launch: "launch", rules: "rules", sim: "rules", verify: "verify" };
 const VIEWS = { market: Market, deals: Deals, brains: Brains, launch: Launch, rules: Rules, verify: Verify };
 const hashId = () => location.hash.slice(1);
-// "What is AutoCTO" keeps the network the visitor is on.
+// "What is KillerCoins" keeps the network the visitor is on.
 const HOME = `index.html${location.search}`;
 const THEME_ICON = { auto: SunMoon, dark: Moon, light: Sun };
 
@@ -195,7 +195,7 @@ export default function App() {
       <TooltipProvider delayDuration={120}>
         <div className="relative mx-auto grid min-h-dvh max-w-[1560px] border-line lg:grid-cols-[232px_minmax(0,1fr)] min-[1561px]:border-x">
           <aside className="sticky top-0 hidden h-dvh flex-col border-r border-line lg:flex">
-            <a href={HOME} title="What is AutoCTO" className="flex h-[60px] flex-none items-center gap-2.5 border-b border-line px-5"><Logo /><Wordmark /></a>
+            <a href={HOME} title="What is KillerCoins" className="flex h-[60px] flex-none items-center gap-2.5 border-b border-line px-5"><Logo /><Wordmark /></a>
             <nav aria-label="Sections" className="grid content-start gap-0.5 overflow-y-auto p-3">
               {links.map(([href, icon, label, v, count]) => (icon
                 ? <NavLink key={href} href={href} icon={icon} on={view === v} count={count}>{label}</NavLink>
@@ -234,7 +234,7 @@ export default function App() {
                 <p className="px-6 py-16 text-muted-foreground max-sm:px-4">{state.online === false ? "The chain is not answering. If this is the local demo, it may have been stopped." : "Loading the market…"}</p>
               ) : <View />}
             </main>
-            <footer className="border-t border-dashed border-line px-6 py-5 text-[12.5px] text-muted-foreground max-sm:px-4">AutoCTO · <a className="underline underline-offset-2" href="https://github.com/SCARPxVeNOM/autoCTO">Source</a></footer>
+            <footer className="border-t border-dashed border-line px-6 py-5 text-[12.5px] text-muted-foreground max-sm:px-4">KillerCoins · <a className="underline underline-offset-2" href="https://github.com/SCARPxVeNOM/KillerCoins">Source</a></footer>
           </div>
         </div>
         <AutoPanel />

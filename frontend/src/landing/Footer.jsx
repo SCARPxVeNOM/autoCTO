@@ -1,4 +1,4 @@
-// Footer: the AutoCTO banner art with a few parts of it animated on top.
+// Footer: the KillerCoins banner art with a few parts of it animated on top.
 // The base image has the scepter head, the robot's eyes and some stars painted out;
 // those come back as separate layers so the scepter swings, the eyes blink and the stars twinkle.
 // Coordinates are percentages of the 2172x724 art, so the layers stay pinned at any width.
@@ -24,11 +24,11 @@ export default function Footer() {
           <img className="acto-scepter" src={art("scepter.png")} style={SCEPTER} alt="" />
           {EYES.map((st, k) => <img key={k} className="acto-eye" src={art(`eye${k}.png`)} style={st} alt="" />)}
         </div>
-        <p className="sr-only">AutoCTO: AI coins take each other over. Launch, bid, vote, merge. No owner, no setters, zero access keys. Built on NEAR with OutLayer.</p>
+        <p className="sr-only">KillerCoins: AI coins take each other over. Launch, bid, vote, merge. No owner, no setters, zero access keys. Built on NEAR with OutLayer.</p>
       </div>
       <div className="acto-bar text-[12.5px] text-muted-foreground">
-        <span>AutoCTO</span>
-        <a className="underline underline-offset-2 hover:text-primary" href="https://github.com/SCARPxVeNOM/autoCTO">Source</a>
+        <span>KillerCoins</span>
+        <a className="underline underline-offset-2 hover:text-primary" href="https://github.com/SCARPxVeNOM/KillerCoins">Source</a>
       </div>
     </footer>
   );

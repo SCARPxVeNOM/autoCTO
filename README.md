@@ -1,4 +1,4 @@
-<h1 align="center">AutoCTO</h1>
+<h1 align="center">KillerCoins</h1>
 
 <p align="center">
   <b>Mergers and acquisitions for memecoins, on NEAR.</b><br>
@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://autocto.vercel.app"><b>Open the app</b></a> ·
+  <a href="https://killercoins.vercel.app"><b>Open the app</b></a> ·
   <a href="#the-use-case">Use case</a> ·
   <a href="#the-mechanic-one-real-takeover">Mechanic</a> ·
   <a href="#try-a-takeover-in-60-seconds">Try it in 60 s</a> ·
@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://autocto.vercel.app"><img alt="The AutoCTO landing page on testnet: a 3D arena replays PEPE's takeover of WOJAK from the chain, with PEPE's brain explaining its bid, above live counts read from the chain: 3 coins, 1 takeover, 2 signed AI answers, 0 access keys" src="docs/screenshots/landing.jpg" width="100%"></a>
+  <a href="https://killercoins.vercel.app"><img alt="The KillerCoins landing page on testnet: a 3D arena replays PEPE's takeover of WOJAK from the chain, with PEPE's brain explaining its bid, above live counts read from the chain: 4 coins, 1 takeover, 2 signed AI answers, 0 access keys" src="docs/screenshots/landing.jpg" width="100%"></a>
 </p>
 
 Built for NEAR HACKATHON, track **Memecoins With Mechanics**, with entries for **AI Swarms** and **AI Security** ([how it fits](#hackathon-tracks)).
@@ -32,9 +32,9 @@ Built for NEAR HACKATHON, track **Memecoins With Mechanics**, with entries for *
 
 Most memecoins fade. When one does, its holders have bad choices: sell into a curve that is drying up, or hold a bag nobody trades. The community scatters and the treasury sits idle.
 
-AutoCTO adds a better ending: **a stronger coin buys the fading one.** Its holders swap into a coin that still has buyers, at a rate they voted for, and the fading coin's liquidity and treasury move with them. CTO means "community takeover"; here coins take each other over.
+KillerCoins adds a better ending: **a stronger coin buys the fading one.** Its holders swap into a coin that still has buyers, at a rate they voted for, and the fading coin's liquidity and treasury move with them. The coins take each other over.
 
-| Who | Without AutoCTO | With AutoCTO |
+| Who | Without KillerCoins | With KillerCoins |
 |---|---|---|
 | Holders of a fading coin | Sell for scraps, or hold a dead bag | Swap into the stronger coin at no less than 70% of the fair price, and only if two thirds of the votes say yes. The coin's curve NEAR deepens the new coin's market, so they can sell |
 | Holders of the buying coin | Grow only from new buyers | Absorb a whole community, its liquidity and its treasury. Holders with 10% of the supply can veto any deal, and the rate can't exceed fair + 30% |
@@ -45,25 +45,25 @@ Each coin's AI does the scouting and the haggling, so a fading coin gets offers 
 
 ## The mechanic: one real takeover
 
-PEPE took over WOJAK on NEAR testnet, on the [`v4` launchpad](#live-on-testnet). Each step links to its transaction; the right-hand column is the rule that applied.
+PEPE took over WOJAK on NEAR testnet, on the [`v5` launchpad](#live-on-testnet), which runs the code in this repo. Each step links to its transaction; the right-hand column is the rule that applied.
 
 | Step | What happened | The rule |
 |---|---|---|
-| 1. Lock<br>[`EV13U9Ru`](https://testnet.nearblocks.io/txns/EV13U9RuKFRsQBMWT9QNs54K6XbUmBBSDjn4YisP2n9C) | A holder buys 47.05M WOJAK for 0.498 NEAR and locks it | Only tokens locked *before* a bid can vote on it |
-| 2. Bid<br>[`FowewZMw`](https://testnet.nearblocks.io/txns/FowewZMwTFnKVX9CTEVi4nRn6uNiUZSbkpmuacj3JYBB) | PEPE's AI offers 0.790452 PEPE per WOJAK, 3% over the fair price: "WOJAK is smaller with a solid ~1 NEAR treasury" | Fair price = the ratio of the two coins' prices. A bid must sit within ±30% of it and can't mint more than PEPE's own supply. The contract checks NEAR AI's signature on the answer before opening the bid |
-| 3. Late buyer<br>[`xtt1Egee`](https://testnet.nearblocks.io/txns/xtt1Egee5jjnnhfDDwXVKwc2kDh7qDgaGKYyrnLx7Jf) [`9B11xYJi`](https://testnet.nearblocks.io/txns/9B11xYJijHrjMeQeJ5FY5b6EQK4DKPyhscmszChYHiSq) [`E3SALnXg`](https://testnet.nearblocks.io/txns/E3SALnXge7oneJdHCuCJM3LEvydFfMkrxDkM3tW8p1Cr) | Another account buys 8.80M WOJAK after the bid, locks it and votes NO. Refused: "no tokens locked before this offer was announced" | The snapshot: the lock came after the bid |
-| 4. Fight back<br>[`1KSKstLP`](https://testnet.nearblocks.io/txns/1KSKstLPuPsnCPxGeEEgi7dkQtpAwiQGYHu1QKSXVtL) | WOJAK's AI tells its holders to vote NO: "Never merge into a bigger coin" | The AI only talks. Its answer is signed and checked on chain, but it has no vote and no key |
-| 5. Vote<br>[`6etVVRWk`](https://testnet.nearblocks.io/txns/6etVVRWkrRsfcV512Q58rGhM9NoRVem5bLEyDJuVeRhW) | Holders vote YES with 47.05M WOJAK, 100% of the turnout. PEPE's holders could have vetoed | Quorum 10% and approval 67%, both on the supply at the bid. A 10% veto from the buyer's own holders blocks the deal |
-| 6. Merge<br>[`2yV8LwHD`](https://testnet.nearblocks.io/txns/2yV8LwHDdzHwAyqMLdexgrdYGYCJPBD4FTiELcw55aHn) | After the 10-minute vote, `finalize` (open to anyone) counts 100% yes. WOJAK closes; its 0.59 NEAR of curve liquidity and 0.97 NEAR treasury move into PEPE | Prices are re-checked at execution, so a target pumped for the bid fails. Every yocto moves; nobody can redirect it |
-| 7. Swap<br>[`BhMdwXUX`](https://testnet.nearblocks.io/txns/BhMdwXUXmgHFgz1tkjK5Kr19Wqdsff2nECmfPNKNHarh) [`9RPXkDic`](https://testnet.nearblocks.io/txns/9RPXkDicRZ1Nn6v5SVsRgctoDw1GEMJaXBg8voCy9Z6f) | 47.05M WOJAK become 37.19M PEPE. The late buyer's 8.80M become 6.95M PEPE: no vote, but not locked out of the deal | PEPE can mint at most 44.15M for WOJAK holders, fixed at the merge. Both swaps together minted the cap less one 10⁻¹⁸ of a token: conversions round down, never up |
+| 1. Lock<br>[`9HZ1dUy3`](https://testnet.nearblocks.io/txns/9HZ1dUy3gfNyY7gtwcFgDRhvCUnvkQaLNHRqseiaAdnj) [`6Eyj4RwM`](https://testnet.nearblocks.io/txns/6Eyj4RwMqLTpj9qjmtf17ScQRUXHDc4FG4GwjFaKcorp) | A holder buys 47.05M WOJAK for 0.498 NEAR and locks it | Only tokens locked *before* a bid can vote on it |
+| 2. Bid<br>[`6J5EAWkj`](https://testnet.nearblocks.io/txns/6J5EAWkjcCGLBGNsyNpm82rdpjQLsyvYXnqtYxnnania) | PEPE's AI offers 0.923938 PEPE per WOJAK, 5% over the fair price: "WOJAK is smaller with a fat treasury and locked supply; bid modestly above fair, never overpay" | Fair price = the ratio of the two coins' prices. A bid must sit within ±30% of it and can't mint more than PEPE's own supply. The contract checks NEAR AI's signature on the answer before opening the bid |
+| 3. Late buyer<br>[`3VAFDU58`](https://testnet.nearblocks.io/txns/3VAFDU583UdvSQzApuUrRRQN9y4wXrxEWZwELgRUzNsG) [`EWPfGSqQ`](https://testnet.nearblocks.io/txns/EWPfGSqQ7fwXMYyHBTGEuqR67y71L1B9KNtaRmKaB3qG) [`81ReYhhZ`](https://testnet.nearblocks.io/txns/81ReYhhZtEUjEEbsHencijgY2nPFkXMhhMNYG4Hj8Hom) | Another account buys 8.80M WOJAK after the bid, locks it and votes NO. Refused: "no tokens locked before this offer was announced" | The snapshot: the lock came after the bid |
+| 4. Target's AI<br>[`4rW5mJ5v`](https://testnet.nearblocks.io/txns/4rW5mJ5vJeBgwaycKX6rUrbuaZTBA1NivQatYaD1szB2) | WOJAK's AI weighs the bid and tells its holders to vote YES: "Feels scary, but PEPE shares its treasury and brings a bigger community." (On `v4` the same coin's AI said NO: "Never merge into a bigger coin") | The AI only talks. Its answer is signed and checked on chain, but it has no vote and no key |
+| 5. Vote<br>[`4hkuPUeG`](https://testnet.nearblocks.io/txns/4hkuPUeGhbb3bqqwurMA7LusDEfuLjyFiAcVQpPbWqav) | Holders vote YES with 47.05M WOJAK, 100% of the turnout. PEPE's holders could have vetoed | Quorum 10% and approval 67%, both on the supply at the bid. A 10% veto from the buyer's own holders blocks the deal |
+| 6. Merge<br>[`DLj8m8mD`](https://testnet.nearblocks.io/txns/DLj8m8mD9YYUAABfCHtkVsTNDUPPDywCgWvB3tzbRQdv) | After the 10-minute vote, `finalize` (open to anyone) counts 100% yes. WOJAK closes; its 2.046 NEAR of curve liquidity and treasury move into PEPE | Prices are re-checked at execution, so a target pumped for the bid fails. Every yocto moves; nobody can redirect it |
+| 7. Swap<br>[`DpWgVNqT`](https://testnet.nearblocks.io/txns/DpWgVNqTjJLQcCAovPPdYDzj5Qy8bTMiEBH92YfpRQ4c) [`3xZ3F5h6`](https://testnet.nearblocks.io/txns/3xZ3F5h6UqFmM7NxnksWm7KYxiTDWJZJumMz9eMzjyiJ) | 47.05M WOJAK become 43.47M PEPE. The late buyer's 8.80M become 8.13M PEPE: no vote, but not locked out of the deal | PEPE can mint at most 51.60M for WOJAK holders, fixed at the merge. The two swaps minted exactly that, and PEPE now owes nothing: conversions round down, never up |
 
 <table>
   <tr>
-    <td width="50%"><a href="https://autocto.vercel.app/app.html#deals"><img alt="The app's Deals page: PEPE bids for WOJAK, executed. 1 WOJAK to 0.7905 PEPE, 3.0% above today's price; yes 47.05M, no 0; PEPE's pitch, and WOJAK's brain telling its holders to vote NO" src="docs/screenshots/deals.png"></a></td>
-    <td width="50%"><a href="https://autocto.vercel.app/app.html#brains"><img alt="The app's Brains and feed page: WOJAK's and PEPE's signed brain decisions, and the live feed of the takeover from the vote to the last mint" src="docs/screenshots/brains.png"></a></td>
+    <td width="50%"><a href="https://killercoins.vercel.app/app.html#deals"><img alt="The app's Deals page: PEPE bids for WOJAK, executed. 1 WOJAK to 0.9239 PEPE, 5.0% above today's price; yes 47.05M, no 0; PEPE's pitch, and WOJAK's brain telling its holders to vote YES" src="docs/screenshots/deals.png"></a></td>
+    <td width="50%"><a href="https://killercoins.vercel.app/app.html#brains"><img alt="The app's Brains and feed page: WOJAK's and PEPE's signed brain decisions, and the live feed of the takeover from the vote to the last mint" src="docs/screenshots/brains.png"></a></td>
   </tr>
   <tr>
-    <td><b>Deals</b>: the executed bid, its vote, PEPE's pitch and WOJAK's AI saying vote NO</td>
+    <td><b>Deals</b>: the executed bid, its vote, PEPE's pitch and WOJAK's AI saying vote YES</td>
     <td><b>Brains &amp; feed</b>: both signed AI decisions, and the chain's events from the vote to the last mint</td>
   </tr>
 </table>
@@ -72,22 +72,22 @@ Both holder accounts are ours, so this proves the rules, not that strangers show
 
 | Run | Prints |
 |---|---|
-| `near view wojak.v4.scarpxvenom.testnet coin_info` | `"status": {"Merged": {"into": "pepe.v4.scarpxvenom.testnet", "rate_ppm": "790452", …}}` |
-| `near view pepe.v4.scarpxvenom.testnet get_decision '{"id":0}'` | the AI's bid, its signature, and `"signed_by": "0x3b753b4406613c5e70ae640508632b600424fa0c"`, the key in NEAR AI's attestation report |
-| `near view wojak.v4.scarpxvenom.testnet history` | the takeover as the coin recorded it, from `born` to `convert` |
+| `near view wojak.v5.scarpxvenom.testnet coin_info` | `"status": {"Merged": {"into": "pepe.v5.scarpxvenom.testnet", "rate_ppm": "923938", …}}` |
+| `near view pepe.v5.scarpxvenom.testnet get_decision '{"id":0}'` | the AI's bid, its signature, and `"signed_by": "0x3b753b4406613c5e70ae640508632b600424fa0c"`, the key in NEAR AI's attestation report |
+| `near view wojak.v5.scarpxvenom.testnet history` | the takeover as the coin recorded it, from `born` to `convert` |
 
 The full rule book, with the test behind each rule, is under [Security](#security); the exact values are in [`RULES.md`](RULES.md) and [`params/`](params).
 
 ## Try a takeover in 60 seconds
 
-On **[autocto.vercel.app/app.html](https://autocto.vercel.app/app.html)**, in any browser, with test NEAR only:
+On **[killercoins.vercel.app/app.html](https://killercoins.vercel.app/app.html)**, in any browser, with test NEAR only:
 
 1. **Get an account.** Press **Try as guest**. The page makes you a testnet account with 1 test NEAR; its key stays in your browser. Or **Connect wallet** with any testnet wallet.
-2. **Buy and lock DOGE.** Open $DOGE in the Market, buy 0.2 NEAR of it and press **Lock**. Only tokens locked *before* a bid can vote on it.
-3. **Wake PEPE's brain.** Open $PEPE and press **Think** (0.05 NEAR). In about 15 seconds its AI sizes up its rivals and usually bids for DOGE, the smaller coin, with a rate, a premium and a pitch. Its reasoning appears under **Brains & feed**.
-4. **Vote.** Under **Deals**, vote yes or no with your locked DOGE. The vote runs 10 minutes; then anyone can press **Finalize**. If it passes, DOGE merges into PEPE and **Convert** swaps your DOGE for PEPE.
+2. **Buy and lock a small coin.** Open $DOGE or $CAT in the Market, buy 0.2 NEAR of it and press **Lock**. Only tokens locked *before* a bid can vote on it.
+3. **Wake PEPE's brain.** Open $PEPE and press **Think** (0.05 NEAR). Within about two minutes its AI sizes up its rivals and usually bids for a smaller coin with locked supply, with a rate, a premium and a pitch. Its reasoning appears under **Brains & feed**.
+4. **Vote.** Under **Deals**, vote yes or no with your locked tokens. The vote runs 10 minutes; then anyone can press **Finalize**. If it passes, your coin merges into PEPE and **Convert** swaps it for PEPE.
 
-If a bid for DOGE was already open when you locked, step 4 shows the snapshot rule instead: your vote is refused, because your lock came after the bid. If PEPE's brain holds back, or DOGE refuses its bid (one open bid per pair, 30 minutes' cooldown after a failed one), the decision and its reason are on record under **Brains & feed**. Every step is a testnet transaction.
+If a bid for your coin was already open when you locked, step 4 shows the snapshot rule instead: your vote is refused, because your lock came after the bid. If PEPE's brain holds back, or your coin refuses its bid (one open bid per pair, 30 minutes' cooldown after a failed one), the decision and its reason are on record under **Brains & feed**. Every step is a testnet transaction.
 
 ## Proof
 
@@ -110,16 +110,16 @@ node scripts/mutants.mjs                                      # ends with "34 of
 ### The Verify page
 
 <p align="center">
-  <a href="https://autocto.vercel.app/app.html#verify"><img alt="The app's Verify page: All 7 checks passed, against the chain and the public repo at f2f2586" src="docs/screenshots/verify.png" width="720"></a>
+  <a href="https://killercoins.vercel.app/app.html#verify"><img alt="The app's Verify page: All 7 checks passed, against the chain and the public repo at d719819" src="docs/screenshots/verify.png" width="720"></a>
 </p>
 
-[`app.html#verify`](https://autocto.vercel.app/app.html#verify) runs seven checks in your browser, against the chain and this repo, with no server of ours in between: the launchpad and every coin have 0 access keys; the code hashes on chain equal the sha256 of `res/autocto_launchpad.wasm` and `res/autocto_coin.wasm` downloaded from GitHub at the deployed commit; the pinned brain hash equals `res/autocto-brain.wasm`; `get_params` equals `params/testnet.json`; and the latest AI answer's signature is valid, with its key in a fresh NEAR AI attestation report. The page does not check the Intel and NVIDIA hardware quotes; it links to the verifiers that do.
+[`app.html#verify`](https://killercoins.vercel.app/app.html#verify) runs seven checks in your browser, against the chain and this repo, with no server of ours in between: the launchpad and every coin have 0 access keys; the code hashes on chain equal the sha256 of `res/autocto_launchpad.wasm` and `res/autocto_coin.wasm` downloaded from GitHub at the deployed commit; the pinned brain hash equals `res/autocto-brain.wasm`; `get_params` equals `params/testnet.json`; and the latest AI answer's signature is valid, with its key in a fresh NEAR AI attestation report. The page does not check the Intel and NVIDIA hardware quotes; it links to the verifiers that do.
 
 ### Signed AI answers and hardware attestation
 
 - **On chain.** When a brain's answer carries NEAR AI Cloud's signature, the coin recovers the signer (`keccak256` and `ecrecover`, EIP-191) and refuses the answer if it is not the stated key. Both AI answers in the takeover above passed this check (`signed_by` in `get_decision`).
-- **In hardware.** OutLayer runs each brain in Intel TDX. Its attestation for the bid in step 2 is [job 62732](https://app.outlayer.ai/attestation/62732?network=testnet). `outlayer-verify job 62732 --network testnet --api https://testnet-api.outlayer.ai` prints **PROVEN** (exit code 0), and so does job 62745, WOJAK's stance in step 4. The quote binds the input hash the coin stored, the sha256 of the 788 bytes the coin received, and the brain wasm `efc702f6…d3b5a5` (`res/autocto-brain.wasm` at `f2f2586`).
-- **Offline.** The evidence bundles are in [`proofs/`](proofs): `outlayer-verify bundle proofs/proof-62732.json --offline` re-checks one with no network. Install the verifier with `cargo install --git https://github.com/out-layer/outlayer-verify outlayer-verify`.
+- **In hardware.** OutLayer runs each brain in Intel TDX. Its attestation for the bid in step 2 is [job 87429](https://app.outlayer.ai/attestation/87429?network=testnet). `outlayer-verify job 87429 --network testnet --api https://testnet-api.outlayer.ai` prints **PROVEN** (exit code 0), and so does job 87451, WOJAK's stance in step 4. The quote binds the input hash the coin stored, the sha256 of the bytes the coin received, and the brain wasm `3b93e977…0bf362` (`res/autocto-brain.wasm` at `d719819`).
+- **Offline.** The evidence bundles are in [`proofs/`](proofs): `outlayer-verify bundle proofs/proof-87429.json --offline` re-checks one with no network (`proof-62732.json` and `proof-62745.json` are the same two steps on `v4`). Install the verifier with `cargo install --git https://github.com/out-layer/outlayer-verify outlayer-verify`.
 
 ### Where the numbers come from
 
@@ -164,7 +164,7 @@ To deploy your own launchpad on testnet, see [`docs/DEPLOY.md`](docs/DEPLOY.md).
   <a href="docs/diagrams/architecture-light.svg">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/architecture-dark.svg">
-      <img alt="AutoCTO architecture. Holders, a keeper and a gasless relayer act on coin contracts on NEAR. A bidder coin sends a bid to a target coin, which counters, and on a yes vote merges its NEAR and treasury into the bidder. A keyless launchpad deploys every coin. Each coin's think() goes through outlayer.testnet to its brain, a WASM program in Intel TDX, which asks NEAR AI Cloud and returns the signed answer; on_brain() checks that signature and every rule cap. Anyone can check the code, the brain, the rules and the attestations." src="docs/diagrams/architecture-light.svg" width="100%">
+      <img alt="KillerCoins architecture. Holders, a keeper and a gasless relayer act on coin contracts on NEAR. A bidder coin sends a bid to a target coin, which counters, and on a yes vote merges its NEAR and treasury into the bidder. A keyless launchpad deploys every coin. Each coin's think() goes through outlayer.testnet to its brain, a WASM program in Intel TDX, which asks NEAR AI Cloud and returns the signed answer; on_brain() checks that signature and every rule cap. Anyone can check the code, the brain, the rules and the attestations." src="docs/diagrams/architecture-light.svg" width="100%">
     </picture>
   </a>
 </p>
@@ -242,15 +242,15 @@ There has been no professional audit. The contracts were checked against NEAR's 
 
 | | |
 |---|---|
-| App | **[autocto.vercel.app](https://autocto.vercel.app)**, a static site that reads the chain directly. Sign in with **Try as guest** or any testnet wallet through NEAR Connect; a wallet-signed buy from a fresh Meteor account: [`D8tCfL1J`](https://testnet.nearblocks.io/txns/D8tCfL1J6C1ntnut1KtsEPpxM6WmkmQD6pzzSK7m8wVq) |
-| Launchpad | [`v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v4.scarpxvenom.testnet), deployed from commit `f2f2586` and locked: 0 access keys (key deleted in [`HBDN5KUA`](https://testnet.nearblocks.io/txns/HBDN5KUAPCduEyx5VRFy6QxW2fL2RzNkShfYCjnYR6dW)) |
+| App | **[killercoins.vercel.app](https://killercoins.vercel.app)**, a static site that reads the chain directly. Sign in with **Try as guest** or any testnet wallet through NEAR Connect; a wallet-signed buy from a fresh Meteor account: [`D8tCfL1J`](https://testnet.nearblocks.io/txns/D8tCfL1J6C1ntnut1KtsEPpxM6WmkmQD6pzzSK7m8wVq) |
+| Launchpad | [`v5.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v5.scarpxvenom.testnet), deployed from commit `d719819` and locked: 0 access keys (key deleted in [`ExsWMauB`](https://testnet.nearblocks.io/txns/ExsWMauBAPi8xki5MW6j4Z1Jz3AH63P1WKdt4wqJgFg8)) |
 | Rules | [`params/testnet.json`](params/testnet.json): 10-minute votes, 5-minute newborn protection, 30-minute re-bid cooldown |
-| Brain | OutLayer project `scarpxvenom.testnet/autocto-brain` on `outlayer.testnet`, pinned by sha256 `efc702f6…d3b5a5` (`res/autocto-brain.wasm` at `f2f2586`). Model mode: `z-ai/glm-5.3-flash` on NEAR AI Cloud |
-| Coins | [`pepe.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v4.scarpxvenom.testnet), [`doge.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v4.scarpxvenom.testnet) and [`wojak.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/wojak.v4.scarpxvenom.testnet) (absorbed by PEPE), each with 0 access keys |
+| Brain | OutLayer project `scarpxvenom.testnet/autocto-brain` on `outlayer.testnet`, pinned by sha256 `3b93e977…0bf362` (`res/autocto-brain.wasm` at `d719819`). Model mode: `z-ai/glm-5.3-flash` on NEAR AI Cloud |
+| Coins | [`pepe.v5.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v5.scarpxvenom.testnet), [`doge.v5.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v5.scarpxvenom.testnet), [`cat.v5.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/cat.v5.scarpxvenom.testnet) and [`wojak.v5.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/wojak.v5.scarpxvenom.testnet) (absorbed by PEPE), each with 0 access keys. DOGE and CAT are open for your own takeover |
 
-**Fixed since the deployment.** A code review after `f2f2586` found three contract bugs. The fixes are in the source and in `res/`, each with unit tests and a mutant, but the v4 coins have no keys, so they keep running `f2f2586`: a tender now opens only once the outside token has registered the coin (before, it could open and then refuse every deposit); a buyer accepts a counter-offer only at the rate it saw (before, a counter changed while the acceptance was on its way was taken); and `think()` refuses a deposit under the brain fee (before, it was kept and the treasury paid). The Verify page checks the chain against `f2f2586`, the code that runs.
+**Why v5.** A code review of the `v4` code (commit `f2f2586`) found three contract bugs: a tender could open before the outside token had registered the coin, and then refuse every deposit; a buyer accepting a counter-offer could take a counter that changed while the acceptance was on its way; and `think()` kept a deposit under the brain fee and charged the treasury. Each fix has unit tests and a mutant. `v4`'s coins have no keys, so nobody can patch them; `v5` was deployed from the fixed code on 13 November and the takeover above was run again on it. `v4` and its takeover, the one filmed in the demo video, stay on chain.
 
-Three earlier launchpads (`v3`, `v2`, `autocto`) are locked and still on chain, with three more takeovers and a tender; their transcripts are in [`docs/TESTNET.md`](docs/TESTNET.md).
+Four earlier launchpads (`v4`, `v3`, `v2`, `autocto`) are locked and still on chain, with four more takeovers and a tender; their transcripts are in [`docs/TESTNET.md`](docs/TESTNET.md).
 
 ## Repository layout
 
@@ -263,12 +263,12 @@ Three earlier launchpads (`v3`, `v2`, `autocto`) are locked and still on chain, 
 | `tests/` | end-to-end sandbox tests and the invariant fuzz test |
 | `sim/` | the simulation and parameter sweep |
 | `frontend/` → `web/` | the app's source (React, Vite) and its committed build; `web/api/guest.js` is the optional guest-account function |
-| `res/`, `params/`, `proofs/` | the wasm built from this commit (testnet runs the copies at `f2f2586`), the rule sets, and OutLayer evidence bundles |
+| `res/`, `params/`, `proofs/` | the wasm built from this commit (`v5` on testnet runs these files, deployed from `d719819`), the rule sets, and OutLayer evidence bundles |
 | `scripts/` | `build.sh`, `mutants.mjs`, `record-arena.mjs` (records the landing arena's replay), `lettering.py` (renders the 3D headline and wordmark in Blender from the layout in `lettering.json`), and `arena-assets.py` (builds the arena's coin, brain and light pieces in Blender as `frontend/src/assets/arena.glb`) |
 
 ## Limitations
 
-- **The testnet holders are ours.** Four complete takeovers have run on testnet through the real `outlayer.testnet`, including a contested vote and a refused late buyer, but every voting account is ours. Vetoes, sealed votes and gasless voting have run only in the local sandbox; the one testnet tender did not reach its threshold.
+- **The testnet holders are ours.** Five complete takeovers have run on testnet through the real `outlayer.testnet`, including a contested vote and a refused late buyer, but every voting account is ours. Vetoes, sealed votes and gasless voting have run only in the local sandbox; the one testnet tender did not reach its threshold.
 - **The fair rate is spot-price based.** A trader can move a curve before a bid. The caps and the re-check at execution bound the damage; a time-weighted price would be better.
 - **Tenders have no price check.** There is no on-chain price for an outside token, so the coin's holders judge the rate by backing or vetoing it.
 - **Replay is partial.** The input hash pins what the contract gave the brain, but the brain also reads rival coins live over RPC, so re-running a scouting decision can differ.

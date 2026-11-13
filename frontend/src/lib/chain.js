@@ -1,4 +1,4 @@
-// AutoCTO chain layer: reads every coin straight from NEAR RPC and sends actions. No backend.
+// KillerCoins chain layer: reads every coin straight from NEAR RPC and sends actions. No backend.
 // ?network=local   -> config.local.json (written by `cargo run -p autocto-demo`)
 // ?network=testnet -> config.testnet.json (written by `cargo run -p autocto-demo --bin deploy`)
 // Without it: local on localhost, testnet anywhere else. ?rpc=...&launchpad=... override either.

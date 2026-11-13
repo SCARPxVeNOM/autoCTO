@@ -1,4 +1,4 @@
-// Guest accounts: lets a visitor try AutoCTO on testnet without a wallet.
+// Guest accounts: lets a visitor try KillerCoins on testnet without a wallet.
 // The page makes a key pair and sends only the public half. This creates <random>.<GUEST_ACCOUNT>
 // with that key and a little test NEAR from GUEST_ACCOUNT, so every later call is signed in the
 // visitor's browser, never here. Off unless GUEST_ACCOUNT and GUEST_KEY are set in the host's settings.

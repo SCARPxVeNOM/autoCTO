@@ -14,7 +14,7 @@ members = [
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/SCARPxVeNOM/autoCTO"
+repository = "https://github.com/SCARPxVeNOM/KillerCoins"
 
 [workspace.dependencies]
 near-sdk = "5.30.1"

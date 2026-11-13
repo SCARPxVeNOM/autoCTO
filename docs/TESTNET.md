@@ -1,12 +1,35 @@
 # Earlier testnet deployments
 
-The current deployment is `v4`: see [Live on testnet](../README.md#live-on-testnet). Every launchpad below is locked (0 access keys) and still on chain, running the code of the commit named.
+The current deployment is `v5`: see [Live on testnet](../README.md#live-on-testnet). Every launchpad below is locked (0 access keys) and still on chain, running the code of the commit named.
 
 | Launchpad | Code | Brain | What ran |
 |---|---|---|---|
+| [`v4.scarpxvenom.testnet`](#v4-the-takeover-in-the-demo-video) | `f2f2586` | model mode, signatures checked on chain | the takeover filmed in the demo video, with a refused late buyer |
 | [`v3.scarpxvenom.testnet`](#v3-the-first-model-mode-takeovers) | `37ad97c` | model mode, signatures checked by the page only | two model-decided takeovers, one with a contested vote and a late buyer |
 | [`v2.scarpxvenom.testnet`](#v2-rules-mode-brain) | `493e23f` | rules mode | a takeover with an accepted counter; a tender for a meme.cooking token |
 | [`autocto.scarpxvenom.testnet`](#autocto-the-first-launchpad) | `1290ae4` | — | the first brain run through `outlayer.testnet` |
+
+## v4: the takeover in the demo video
+
+`v4` runs the code at commit `f2f2586`. A code review afterwards found three contract bugs (see [Why v5](../README.md#live-on-testnet)); `v4`'s coins have no keys, so they keep that code.
+
+| | |
+|---|---|
+| Launchpad | [`v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/v4.scarpxvenom.testnet), deployed from commit `f2f2586`, locked: 0 access keys (key deleted in [`HBDN5KUA…`](https://testnet.nearblocks.io/txns/HBDN5KUAPCduEyx5VRFy6QxW2fL2RzNkShfYCjnYR6dW)) |
+| Brain | OutLayer project `scarpxvenom.testnet/autocto-brain`, version pinned by sha256 `efc702f6…d3b5a5` (`res/autocto-brain.wasm` at `f2f2586`), model mode |
+| Coins | [`pepe.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/pepe.v4.scarpxvenom.testnet), [`doge.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/doge.v4.scarpxvenom.testnet) and [`wojak.v4.scarpxvenom.testnet`](https://testnet.nearblocks.io/address/wojak.v4.scarpxvenom.testnet) (absorbed by PEPE), each with 0 access keys |
+
+| Step | What happened | Transaction |
+|---|---|---|
+| 1 | A holder buys 47.05M WOJAK for 0.498 NEAR and locks it | [`EV13U9Ru…`](https://testnet.nearblocks.io/txns/EV13U9RuKFRsQBMWT9QNs54K6XbUmBBSDjn4YisP2n9C) |
+| 2 | PEPE's AI offers 0.790452 PEPE per WOJAK, 3% over the fair price: "WOJAK is smaller with a solid ~1 NEAR treasury". OutLayer attestation: job 62732, `proofs/proof-62732.json` | [`FowewZMw…`](https://testnet.nearblocks.io/txns/FowewZMwTFnKVX9CTEVi4nRn6uNiUZSbkpmuacj3JYBB) |
+| 3 | Another account buys 8.80M WOJAK after the bid, locks it and votes NO. Refused: "no tokens locked before this offer was announced" | [`xtt1Egee…`](https://testnet.nearblocks.io/txns/xtt1Egee5jjnnhfDDwXVKwc2kDh7qDgaGKYyrnLx7Jf), [`9B11xYJi…`](https://testnet.nearblocks.io/txns/9B11xYJijHrjMeQeJ5FY5b6EQK4DKPyhscmszChYHiSq), [`E3SALnXg…`](https://testnet.nearblocks.io/txns/E3SALnXge7oneJdHCuCJM3LEvydFfMkrxDkM3tW8p1Cr) |
+| 4 | WOJAK's AI tells its holders to vote NO: "Never merge into a bigger coin". OutLayer attestation: job 62745, `proofs/proof-62745.json` | [`1KSKstLP…`](https://testnet.nearblocks.io/txns/1KSKstLPuPsnCPxGeEEgi7dkQtpAwiQGYHu1QKSXVtL) |
+| 5 | Holders vote YES with 47.05M WOJAK, 100% of the turnout | [`6etVVRWk…`](https://testnet.nearblocks.io/txns/6etVVRWkrRsfcV512Q58rGhM9NoRVem5bLEyDJuVeRhW) |
+| 6 | After the 10-minute vote, `finalize`: WOJAK's 0.59 NEAR of curve liquidity and 0.97 NEAR treasury move into PEPE | [`2yV8LwHD…`](https://testnet.nearblocks.io/txns/2yV8LwHDdzHwAyqMLdexgrdYGYCJPBD4FTiELcw55aHn) |
+| 7 | 47.05M WOJAK become 37.19M PEPE; the late buyer's 8.80M become 6.95M PEPE. Together they minted the 44.15M cap less one 10⁻¹⁸ of a token | [`BhMdwXUX…`](https://testnet.nearblocks.io/txns/BhMdwXUXmgHFgz1tkjK5Kr19Wqdsff2nECmfPNKNHarh), [`9RPXkDic…`](https://testnet.nearblocks.io/txns/9RPXkDicRZ1Nn6v5SVsRgctoDw1GEMJaXBg8voCy9Z6f) |
+
+Both holder accounts are ours. DOGE on `v4` is still live and has no open bid.
 
 ## v3: the first model-mode takeovers
 

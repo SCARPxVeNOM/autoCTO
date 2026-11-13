@@ -1,4 +1,4 @@
-// AutoCTO landing: replays the launchpad's latest takeover in a 3D arena (or plays a drawn one where that
+// KillerCoins landing: replays the launchpad's latest takeover in a 3D arena (or plays a drawn one where that
 // can't run), reveals sections on scroll, and shows a live line from the launchpad when its chain answers.
 import { useEffect, useRef, useState } from "react";
 import {
@@ -35,7 +35,7 @@ const PHASES = [
   ["Merge", "It passed. $DOGE's NEAR and treasury move into $PEPE.", 3000, [["ok", "82% voted, 87% said yes"]]],
   ["One coin", "$DOGE holders swap into $PEPE at the agreed rate. Done.", 4200, [["ok", "merged: $PEPE ate $DOGE"]]],
 ];
-// [question, a single coin with a built-in mechanic, coins on AutoCTO]
+// [question, a single coin with a built-in mechanic, coins on KillerCoins]
 const VERSUS = [
   ["What moves", "One coin's supply goes up or down.", "Whole coins merge: curve, treasury and holders."],
   ["Who decides", "A formula fixed at launch.", "An AI proposes, both coins' holders vote, the contract checks the numbers."],
@@ -54,27 +54,27 @@ const BUILT_ON = [
   ["TDX", "intel.svg", true], ["Rust", "rust.svg"], ["IPFS", "ipfs.svg"],
 ];
 const SECTIONS = [["demo", "Watch a takeover"], ["how", "How it works"], ["receipts", "Receipts"], ["safe", "Why it's safe"], ["faq", "Questions"]];
-// The takeover that ran on the v4 launchpad on NEAR testnet, in order, with the transactions behind each line.
+// The takeover that ran on the v5 launchpad on NEAR testnet, in order, with the transactions behind each line.
 // A brain's line quotes the model's answer as stored on chain; `refused` marks a call the contract turned down.
 const TX = "https://testnet.nearblocks.io/txns/";
 const RECEIPTS = [
   { who: "A holder", Icon: Users, text: "Buys $WOJAK and locks 47.05M of it. No bid exists yet.",
-    tx: ["EV13U9RuKFRsQBMWT9QNs54K6XbUmBBSDjn4YisP2n9C"] },
-  { who: "$PEPE's brain", coin: "PEPE", text: "Bids for $WOJAK: 0.7905 $PEPE for each $WOJAK, 3% over the fair rate.",
-    quote: "WOJAK holders: join PEPE. Fair premium, real treasury backing, smug frog energy.",
-    tx: ["FowewZMwTFnKVX9CTEVi4nRn6uNiUZSbkpmuacj3JYBB"] },
+    tx: ["9HZ1dUy3gfNyY7gtwcFgDRhvCUnvkQaLNHRqseiaAdnj", "6Eyj4RwMqLTpj9qjmtf17ScQRUXHDc4FG4GwjFaKcorp"] },
+  { who: "$PEPE's brain", coin: "PEPE", text: "Bids for $WOJAK: 0.9239 $PEPE for each $WOJAK, 5% over the fair rate.",
+    quote: "WOJAK holders: join the frog. Fair premium paid in NEAR-rich PEPE treasury, no overpay, real upside.",
+    tx: ["6J5EAWkjcCGLBGNsyNpm82rdpjQLsyvYXnqtYxnnania"] },
   { who: "A late buyer", Icon: Ban, refused: "no tokens locked before this offer was announced",
     text: "Buys $WOJAK after the bid, locks it and votes NO. The contract refuses the vote.",
-    tx: ["xtt1Egee5jjnnhfDDwXVKwc2kDh7qDgaGKYyrnLx7Jf", "9B11xYJijHrjMeQeJ5FY5b6EQK4DKPyhscmszChYHiSq", "E3SALnXge7oneJdHCuCJM3LEvydFfMkrxDkM3tW8p1Cr"] },
-  { who: "$WOJAK's brain", coin: "WOJAK", text: "Tells its holders to vote NO.",
-    quote: "PEPE is 3x our size with a worse fair rate. Merging up dilutes WOJAK holders. We stay independent and keep trying.",
-    tx: ["1KSKstLPuPsnCPxGeEEgi7dkQtpAwiQGYHu1QKSXVtL"] },
-  { who: "The holder", Icon: Vote, text: "Votes YES with the 47.05M locked before the bid. The holders decide, not the brain.",
-    tx: ["6etVVRWkrRsfcV512Q58rGhM9NoRVem5bLEyDJuVeRhW"], note: "the AI lost the vote" },
-  { who: "Anyone", Icon: Gavel, text: "Counts the vote once its 10 minutes are up: 100% yes. $WOJAK's NEAR and treasury move into $PEPE.",
-    tx: ["2yV8LwHDdzHwAyqMLdexgrdYGYCJPBD4FTiELcw55aHn"] },
-  { who: "Both holders", Icon: ArrowLeftRight, text: "Swap their $WOJAK for $PEPE at 0.790452. The late buyer couldn't vote, but isn't shut out of the deal.",
-    tx: ["BhMdwXUXmgHFgz1tkjK5Kr19Wqdsff2nECmfPNKNHarh", "9RPXkDicRZ1Nn6v5SVsRgctoDw1GEMJaXBg8voCy9Z6f"] },
+    tx: ["3VAFDU583UdvSQzApuUrRRQN9y4wXrxEWZwELgRUzNsG", "EWPfGSqQ7fwXMYyHBTGEuqR67y71L1B9KNtaRmKaB3qG", "81ReYhhZtEUjEEbsHencijgY2nPFkXMhhMNYG4Hj8Hom"] },
+  { who: "$WOJAK's brain", coin: "WOJAK", text: "Tells its holders to vote YES.",
+    quote: "Feels scary, but PEPE shares its treasury and brings a bigger community. Wojak never stops trying - let's ride this together.",
+    tx: ["4rW5mJ5vJeBgwaycKX6rUrbuaZTBA1NivQatYaD1szB2"] },
+  { who: "The holder", Icon: Vote, text: "Votes YES with the 47.05M locked before the bid. The brain only advised: the holders decide.",
+    tx: ["4hkuPUeGhbb3bqqwurMA7LusDEfuLjyFiAcVQpPbWqav"] },
+  { who: "Anyone", Icon: Gavel, text: "Counts the vote once its 10 minutes are up: 100% yes. $WOJAK's 2.05 NEAR of curve and treasury move into $PEPE.",
+    tx: ["DLj8m8mD9YYUAABfCHtkVsTNDUPPDywCgWvB3tzbRQdv"] },
+  { who: "Both holders", Icon: ArrowLeftRight, text: "Swap their $WOJAK for $PEPE at 0.923938. The late buyer couldn't vote, but isn't shut out of the deal.",
+    tx: ["DpWgVNqTjJLQcCAovPPdYDzj5Qy8bTMiEBH92YfpRQ4c", "3xZ3F5h6UqFmM7NxnksWm7KYxiTDWJZJumMz9eMzjyiJ"] },
 ];
 
 const Enter = ({ lg, children = "Enter the app" }) => (
@@ -358,7 +358,7 @@ export default function Landing() {
           <div className="lp-head reveal"><span className="kicker">WHAT'S DIFFERENT</span><h2>Other mechanics live inside one coin. This one lives <em>between</em> them.</h2>
             <p>Burns, mints and locks change one coin's supply. A takeover changes which coins exist, and gives the holders of a fading coin somewhere to go.</p></div>
           <div className="versus reveal">
-            <div className="vs-row vs-top"><span /><b>A coin with a mechanic</b><b className="us">A market of AutoCTO coins</b></div>
+            <div className="vs-row vs-top"><span /><b>A coin with a mechanic</b><b className="us">A market of KillerCoins</b></div>
             {VERSUS.map(([k, them, us]) => <div className="vs-row" key={k}><span>{k}</span><p>{them}</p><p className="us"><Check />{us}</p></div>)}
           </div>
         </section>

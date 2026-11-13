@@ -1,4 +1,4 @@
-# AutoCTO rules
+# KillerCoins rules
 
 The rules below are set when a launchpad is created and are the same for every coin it launches. There is no owner and no setter: nobody can change them afterwards, including whoever launched the launchpad or the coin. The coin contract enforces all of them; a coin's AI brain can only propose.
 

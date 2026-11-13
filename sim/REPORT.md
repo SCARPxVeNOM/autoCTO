@@ -1,4 +1,4 @@
-# AutoCTO simulation report
+# KillerCoins simulation report
 
 60 days per scenario, seeded (re-run with `node sim/simulate.mjs`).
 

@@ -1,4 +1,4 @@
-//! A whole AutoCTO world in a local NEAR sandbox.
+//! A whole KillerCoins world in a local NEAR sandbox.
 //!
 //! Used by the integration tests and by the `autocto-demo` binary. It deploys
 //! the launchpad and a local OutLayer stand-in, creates holders, and plays the
@@ -239,7 +239,7 @@ impl World {
         Ok(format!("{label}.{}", self.launchpad).parse()?)
     }
 
-    /// Deploy a plain NEP-141 token that knows nothing about AutoCTO, with the
+    /// Deploy a plain NEP-141 token that knows nothing about KillerCoins, with the
     /// whole supply at `owner`. `keyless` deletes its access key, like a token
     /// whose developer has given up control.
     pub async fn deploy_token(

@@ -11,7 +11,7 @@ near account create-account sponsor-by-faucet-service <you>.testnet autogenerate
 #    OutLayer fetches the brain from any https URL and checks its sha256, so the
 #    copy committed in res/ works; pin the URL to a commit.
 cargo run -p autocto-demo --bin deploy -- --owner <you>.testnet \
-  --brain-url https://raw.githubusercontent.com/SCARPxVeNOM/autoCTO/<commit>/res/autocto-brain.wasm --lock
+  --brain-url https://raw.githubusercontent.com/SCARPxVeNOM/KillerCoins/<commit>/res/autocto-brain.wasm --lock
 
 # 3. Open the app on testnet
 python3 -m http.server 8080 -d web   # http://localhost:8080/?network=testnet

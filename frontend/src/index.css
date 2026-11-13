@@ -3,7 +3,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* AutoCTO: a framed, monochrome trading desk. Sky blue is the brand, green and red are only ever up and down. */
+/* KillerCoins: a framed, monochrome trading desk. Sky blue is the brand, green and red are only ever up and down. */
 :root {
   --radius: 0.75rem;
   --background: #ffffff; --foreground: #18181b;

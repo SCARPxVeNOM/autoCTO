@@ -1,99 +1,106 @@
 {
- "launchpad": "v4.scarpxvenom.testnet",
- "winner": "pepe.v4.scarpxvenom.testnet",
- "target": "wojak.v4.scarpxvenom.testnet",
+ "launchpad": "v5.scarpxvenom.testnet",
+ "winner": "pepe.v5.scarpxvenom.testnet",
+ "target": "wojak.v5.scarpxvenom.testnet",
  "coins": [
   {
-   "id": "pepe.v4.scarpxvenom.testnet",
+   "id": "pepe.v5.scarpxvenom.testnet",
    "symbol": "PEPE",
    "name": "Pepe",
-   "cap": 3.299837,
-   "before": 2.624725
+   "cap": 2.077701,
+   "before": 1.3978029999999997
   },
   {
-   "id": "doge.v4.scarpxvenom.testnet",
+   "id": "doge.v5.scarpxvenom.testnet",
    "symbol": "DOGE",
    "name": "Doge",
-   "cap": 0.626515,
-   "before": 0.626515
+   "cap": 0,
+   "before": 0
   },
   {
-   "id": "wojak.v4.scarpxvenom.testnet",
+   "id": "wojak.v5.scarpxvenom.testnet",
    "symbol": "WOJAK",
    "name": "Wojak",
    "cap": 0,
-   "before": 0.675112
+   "before": 0.679898
+  },
+  {
+   "id": "cat.v5.scarpxvenom.testnet",
+   "symbol": "CAT",
+   "name": "Cat",
+   "cap": 0,
+   "before": 0
   }
  ],
  "beats": [
   {
    "kind": "lock",
-   "coin": "wojak.v4.scarpxvenom.testnet",
+   "coin": "wojak.v5.scarpxvenom.testnet",
    "amount": "47.05M",
    "text": "A holder locks 47.05M $WOJAK before the bid. Only tokens locked before a bid can vote on it."
   },
   {
    "kind": "think",
-   "coin": "pepe.v4.scarpxvenom.testnet",
+   "coin": "pepe.v5.scarpxvenom.testnet",
    "by": "$PEPE's brain",
-   "quote": "WOJAK is smaller with a solid ~1 NEAR treasury; bidding at a modest premium keeps it fair without overpaying.",
+   "quote": "WOJAK is smaller with a fat treasury and locked supply; bid modestly above fair, never overpay.",
    "fee": "0.05 NEAR",
    "text": "Someone pays 0.05 NEAR to wake $PEPE's brain. It sizes up its rivals."
   },
   {
    "kind": "offer",
-   "coin": "pepe.v4.scarpxvenom.testnet",
+   "coin": "pepe.v5.scarpxvenom.testnet",
    "by": "$PEPE's brain",
-   "quote": "WOJAK holders: join PEPE. Fair premium, real treasury backing, smug frog energy. Pays fair, never overpays.",
-   "rate": 0.790452,
-   "bps": 300,
-   "text": "$PEPE bids for $WOJAK: 0.7905 $PEPE per $WOJAK, 3.0% over the fair rate."
+   "quote": "WOJAK holders: join the frog. Fair premium paid in NEAR-rich PEPE treasury, no overpay, real upside.",
+   "rate": 0.923938,
+   "bps": 499,
+   "text": "$PEPE bids for $WOJAK: 0.9239 $PEPE per $WOJAK, 5.0% over the fair rate."
   },
   {
    "kind": "late",
-   "coin": "wojak.v4.scarpxvenom.testnet",
+   "coin": "wojak.v5.scarpxvenom.testnet",
    "count": 1,
    "amount": "8.8M",
    "text": "A late buyer locks 8.8M $WOJAK after the bid. The contract won't count those tokens on it."
   },
   {
    "kind": "stance",
-   "coin": "wojak.v4.scarpxvenom.testnet",
+   "coin": "wojak.v5.scarpxvenom.testnet",
    "by": "$WOJAK's brain",
-   "quote": "PEPE is 3x our size with a worse fair rate. Merging up dilutes WOJAK holders. We stay independent and keep trying.",
-   "no": true,
-   "say": "NO",
-   "text": "Someone wakes $WOJAK's brain. It tells its holders to vote NO."
+   "quote": "Feels scary, but PEPE shares its treasury and brings a bigger community. Wojak never stops trying - let's ride this together.",
+   "no": false,
+   "say": "YES",
+   "text": "Someone wakes $WOJAK's brain. It tells its holders to vote YES."
   },
   {
    "kind": "vote",
-   "coin": "wojak.v4.scarpxvenom.testnet",
+   "coin": "wojak.v5.scarpxvenom.testnet",
    "yes": true,
    "voters": 1,
    "yesTokens": "47.05M",
    "noTokens": "0",
    "yesShare": 1,
    "approval": 0.67,
-   "text": "A holder votes YES with 47.05M tokens locked before the bid. The holders decide, not the brain."
+   "text": "A holder votes YES with 47.05M tokens locked before the bid."
   },
   {
    "kind": "passed",
-   "coin": "wojak.v4.scarpxvenom.testnet",
+   "coin": "wojak.v5.scarpxvenom.testnet",
    "text": "Time's up and the vote has passed. Anyone can now tell $PEPE to carry it out."
   },
   {
    "kind": "merge",
-   "coin": "pepe.v4.scarpxvenom.testnet",
-   "near": 1.557,
-   "text": "$PEPE swallows $WOJAK. 1.56 NEAR of $WOJAK's curve and treasury moves into $PEPE."
+   "coin": "pepe.v5.scarpxvenom.testnet",
+   "near": 2.046,
+   "text": "$PEPE swallows $WOJAK. 2.05 NEAR of $WOJAK's curve and treasury moves into $PEPE."
   },
   {
    "kind": "swap",
-   "coin": "wojak.v4.scarpxvenom.testnet",
+   "coin": "wojak.v5.scarpxvenom.testnet",
    "count": 2,
    "amount": "55.85M",
-   "rate": 0.7905,
-   "text": "2 holders swap 55.85M $WOJAK for $PEPE at 0.7905. $WOJAK lives on inside $PEPE."
+   "rate": 0.9239,
+   "text": "2 holders swap 55.85M $WOJAK for $PEPE at 0.9239. $WOJAK lives on inside $PEPE."
   }
  ]
 }

@@ -252,7 +252,7 @@ async fn main() -> Result<()> {
         println!("  {who} converted → {} PEPE", tokens(&minted));
     }
 
-    say("An outside token: WOJAK's holders nominate two old memecoins that know nothing about AutoCTO");
+    say("An outside token: WOJAK's holders nominate two old memecoins that know nothing about KillerCoins");
     let supply = 1_000_000_000 * autocto_demo::ONE_TOKEN;
     let rugcat = w.deploy_token("rugcat", &erin, supply, false).await?;
     let oldcat = w.deploy_token("oldcat", &erin, supply, true).await?;

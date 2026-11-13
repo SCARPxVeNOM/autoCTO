@@ -1,4 +1,4 @@
-//! A gasless relayer for AutoCTO (NEP-366): holders sign lock, vote, veto and
+//! A gasless relayer for KillerCoins (NEP-366): holders sign lock, vote, veto and
 //! claim calls, this service pays the gas. It has no special rights and
 //! cannot alter a request; it only forwards a short list of zero-deposit
 //! calls to coins of one launchpad (see `autocto_demo::gasless`).

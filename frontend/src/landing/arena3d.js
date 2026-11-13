@@ -287,8 +287,9 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
     T.base.set(...(tall ? [0.95, -0.95, 0.5] : [2.0, 0.05, 0.45]));
     others.forEach((c, k, rest) => {
       const u = (k + 0.5) / rest.length;
-      if (tall) c.base.set(k % 2 ? -1.3 : 1.25, k % 2 ? -2.0 : 1.5, -3 - k * 0.4);
-      else c.base.set(rest.length === 1 ? 0.15 : -3.4 + u * 7.4, -0.6 + 0.3 * Math.sin(k * 2.1), -3.4 - (k % 2) * 1.2);
+      if (tall) c.base.set(k % 2 ? -1.5 : 1.25, k % 2 ? 2.5 : 1.5, -3 - k * 0.4);
+      // In the gap between the two, so none hides behind either.
+      else c.base.set(rest.length === 1 ? 0.15 : -1.0 + u * 1.8, -0.6 + 0.3 * Math.sin(k * 2.1), -3.4 - (k % 2) * 1.2);
     });
     FLOOR = Math.min(...coins.map((c) => c.base.y - radius(Math.max(c.before, c.cap)))) - 0.6;
     floor.position.y = FLOOR;

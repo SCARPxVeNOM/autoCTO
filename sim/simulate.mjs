@@ -1,4 +1,4 @@
-// AutoCTO community simulation: 60 days, five scenarios, one parameter sweep.
+// KillerCoins community simulation: 60 days, five scenarios, one parameter sweep.
 //
 //   node sim/simulate.mjs            -> prints the report, writes web/data/sim.json and sim/REPORT.md
 //
@@ -378,7 +378,7 @@ const CHOSEN = { ...PARAMS, quorumBps: best.quorumBps, approvalBps: best.approva
 const scenarios = [friendly(CHOSEN), hostile(CHOSEN), attack(CHOSEN), chain(CHOSEN), biddingWar(CHOSEN)];
 
 const lines = [];
-lines.push(`# AutoCTO simulation report`, ``, `${DAYS} days per scenario, seeded (re-run with \`node sim/simulate.mjs\`).`, ``);
+lines.push(`# KillerCoins simulation report`, ``, `${DAYS} days per scenario, seeded (re-run with \`node sim/simulate.mjs\`).`, ``);
 lines.push(`## Scenarios with the chosen parameters (circulating supply in millions, day 0 → day 60)`, ``);
 for (const s of scenarios) {
   lines.push(`### ${s.title}`);

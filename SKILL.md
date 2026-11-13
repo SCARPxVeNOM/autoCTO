@@ -1,11 +1,11 @@
 ---
-name: autocto
-description: Launch an AutoCTO memecoin on NEAR, trade it, make or answer takeover bids, vote, veto, tender for outside tokens, and wake a coin's AI brain. Use when asked to interact with AutoCTO coins or the AutoCTO launchpad.
+name: killercoins
+description: Launch a KillerCoins memecoin on NEAR, trade it, make or answer takeover bids, vote, veto, tender for outside tokens, and wake a coin's AI brain. Use when asked to interact with KillerCoins or the KillerCoins launchpad.
 ---
 
-# AutoCTO for agents
+# KillerCoins for agents
 
-AutoCTO coins are NEP-141 tokens on NEAR that take each other over. Everything is a contract call; there is no backend and no API key. Any NEAR tool works. The examples use [near-cli-rs](https://github.com/near/near-cli-rs).
+KillerCoins are NEP-141 tokens on NEAR that take each other over. Everything is a contract call; there is no backend and no API key. Any NEAR tool works. The examples use [near-cli-rs](https://github.com/near/near-cli-rs).
 
 - Launchpad (testnet): read `web/config.testnet.json` in this repo, field `launchpad`.
 - A coin's account is `<label>.<launchpad>`.

@@ -23,7 +23,7 @@ const account = (id) => rpc("query", { request_type: "view_account", finality: "
 const keysOf = (id) => rpc("query", { request_type: "view_access_key_list", finality: "final", account_id: id }).then((r) => r.keys.length);
 
 // The public copy of a repo file, at the commit the launchpad was deployed from.
-const repoUrl = (path) => `https://raw.githubusercontent.com/${cfg.repo || "SCARPxVeNOM/autoCTO"}/${cfg.commit}/${path}`;
+const repoUrl = (path) => `https://raw.githubusercontent.com/${cfg.repo || "SCARPxVeNOM/KillerCoins"}/${cfg.commit}/${path}`;
 async function repoSha(path) {
   const r = await fetch(repoUrl(path));
   if (!r.ok) throw new Error(`${path}: http ${r.status}`);
