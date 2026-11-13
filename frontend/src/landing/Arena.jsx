@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDown, Check, ChevronLeft, ChevronRight, Pause, Play, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { iconUrl, useIcons } from "@/lib/icons";
+import { durationOf } from "./replay";
 
 const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const STEP = { lock: "Lock", think: "Brain wakes", offer: "Bid", late: "Late lock", stance: "Rival's brain", vote: "Vote", passed: "Passed", merge: "Merge", swap: "Swap" };
@@ -92,20 +93,26 @@ export default function Arena({ replay, where, recorded, launchpad, app, onFail 
   const host = useRef(null), bubble = useRef(null), hud = useRef(null), labels = useRef(new Map()), api = useRef(null);
   const B = replay.beats;
   const iMerge = B.findIndex((b) => b.kind === "merge");
-  const [k, setK] = useState(calm ? Math.max(0, B.findIndex((b) => b.kind === "offer")) : 0);
-  const [playing, setPlaying] = useState(!calm);
+  const [k, setK] = useState(0);
+  // Nothing plays until the visitor asks: a still of the coins and a play button, which comes back at the end.
+  const [started, setStarted] = useState(false), [ended, setEnded] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const [ready, setReady] = useState(false);
   const icons = useIcons();
   const beat = B[k];
   const sym = (id) => `$${replay.coins.find((c) => c.id === id)?.symbol}`;
+  const secs = Math.round(B.reduce((s, b, n) => s + durationOf(b, n === B.length - 1), 0) / 1000);
   // Opening a coin: the app shows whichever coin was picked last.
   const remember = (id) => { try { localStorage.setItem(`autocto:coin:${launchpad}`, id); } catch (_) {} };
-  const go = (n) => { setPlaying(false); api.current?.setBeat((n + B.length) % B.length); };
-  const replayAll = () => { api.current?.setBeat(0); setPlaying(!calm); };
+  const go = (n) => { setStarted(true); setPlaying(false); api.current?.setBeat((n + B.length) % B.length); };
+  // Before it has started, the arrows start it at the first step.
+  const step = (d) => go(started ? k + d : 0);
+  const play = () => { api.current?.setBeat(0); setStarted(true); setPlaying(!calm); };
+  const toggle = () => (started ? setPlaying(!playing) : play());
   const keys = (e) => {
-    if (e.key === "ArrowLeft") { e.preventDefault(); go(k - 1); }
-    else if (e.key === "ArrowRight") { e.preventDefault(); go(k + 1); }
-    else if (e.key === " " && e.target === e.currentTarget && !calm) { e.preventDefault(); setPlaying(!playing); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); step(1); }
+    else if (e.key === " " && e.target === e.currentTarget && !(calm && started)) { e.preventDefault(); toggle(); }
   };
 
   useEffect(() => {
@@ -114,7 +121,8 @@ export default function Arena({ replay, where, recorded, launchpad, app, onFail 
     io.observe(host.current);
     import("./arena3d.js")
       .then(({ createArena }) => (dead ? null : createArena(host.current, replay, {
-        calm, start: k, labels: labels.current, bubble: bubble.current, hud: hud.current, onBeat: setK, iconOf: iconUrl,
+        calm, start: 0, intro: true, labels: labels.current, bubble: bubble.current, hud: hud.current, onBeat: setK, iconOf: iconUrl,
+        onEnd: () => { setStarted(false); setPlaying(false); setEnded(true); },
         onPick: (id) => { remember(id); location.href = `${app}#trade`; },
         theme: { colors: palette(host.current) },
       })))
@@ -132,19 +140,26 @@ export default function Arena({ replay, where, recorded, launchpad, app, onFail 
   useEffect(() => { api.current?.loadIcons(); }, [icons, ready]);
 
   return (
-    <div className={cn("arena dark", ready && "ready")} ref={host} role="region" tabIndex={0} onKeyDown={keys}
+    <div className={cn("arena dark", ready && "ready", started && "started")} ref={host} role="region" tabIndex={0} onKeyDown={keys}
       aria-label={`A replay of the latest takeover on ${where}. Left and right arrows step through it.`}>
       <canvas aria-hidden="true" />
       <div className="ar-top">
         <span className="ar-live"><i /><span>{recorded ? `Recorded from ${where}` : <>Replayed from {where}<span className="ar-when">, read just now</span></>}</span></span>
         <span className="ar-size">coin size = market cap</span>
         <div className="ar-nav">
-          <button type="button" onClick={() => go(k - 1)} aria-label="Previous step"><ChevronLeft /></button>
-          {!calm && <button type="button" onClick={() => setPlaying(!playing)} aria-label={playing ? "Pause the replay" : "Play the replay"}>{playing ? <Pause /> : <Play />}</button>}
-          <button type="button" onClick={() => go(k + 1)} aria-label="Next step"><ChevronRight /></button>
-          <button type="button" onClick={replayAll} aria-label="Replay from the start"><RotateCcw /></button>
+          <button type="button" onClick={() => step(-1)} aria-label="Previous step"><ChevronLeft /></button>
+          {!calm && <button type="button" onClick={toggle} aria-label={playing ? "Pause the replay" : "Play the replay"}>{playing ? <Pause /> : <Play />}</button>}
+          <button type="button" onClick={() => step(1)} aria-label="Next step"><ChevronRight /></button>
+          <button type="button" onClick={play} aria-label="Replay from the start"><RotateCcw /></button>
         </div>
       </div>
+      {!started && (
+        <button type="button" className="ar-play" onClick={play}>
+          <span className="ar-play-ic" aria-hidden="true"><Play /></span>
+          <b>{ended ? "Watch it again" : `Watch ${sym(replay.winner)} take over ${sym(replay.target)}`}</b>
+          <small>{calm ? `${B.length} steps, at your own pace` : `${B.length} steps · about ${secs} seconds`}</small>
+        </button>
+      )}
       {replay.coins.map((c) => {
         // The target shows its size before it went. The winner shows its size from before the merge until the
         // target lands in it (arena3d.js marks that moment with .landed), then its size after.
@@ -158,8 +173,8 @@ export default function Arena({ replay, where, recorded, launchpad, app, onFail 
           </a>
         );
       })}
-      <figure className={cn("ar-bubble", beat.quote && "on", beat.no && "no")} ref={bubble} aria-hidden={!beat.quote}>
-        {beat.quote && <><figcaption>{beat.by}</figcaption><blockquote>“{beat.quote}”</blockquote></>}
+      <figure className={cn("ar-bubble", started && beat.quote && "on", beat.no && "no")} ref={bubble} aria-hidden={!started || !beat.quote}>
+        {started && beat.quote && <><figcaption>{beat.by}</figcaption><blockquote>“{beat.quote}”</blockquote></>}
       </figure>
       <div className="ar-hud" ref={hud} data-kind={beat.kind}>
         <Readout key={k} beat={beat} W={sym(replay.winner)} T={sym(replay.target)} locked={B.find((b) => b.kind === "lock")?.amount} />
@@ -171,8 +186,8 @@ export default function Arena({ replay, where, recorded, launchpad, app, onFail 
       </div>
       <ol className="ar-steps">
         {B.map((b, n) => (
-          <li key={n} className={n === k ? "on" : n < k ? "past" : ""}>
-            <button type="button" aria-label={`Step ${n + 1}: ${STEP[b.kind]}`} aria-current={n === k ? "step" : undefined}
+          <li key={n} className={!started ? "" : n === k ? "on" : n < k ? "past" : ""}>
+            <button type="button" aria-label={`Step ${n + 1}: ${STEP[b.kind]}`} aria-current={started && n === k ? "step" : undefined}
               onClick={() => go(n)}><span>{STEP[b.kind]}</span></button>
           </li>
         ))}

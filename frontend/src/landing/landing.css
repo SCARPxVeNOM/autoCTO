@@ -394,6 +394,29 @@
 .ar-nav button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; color: var(--foreground); background: none; box-shadow: none; cursor: pointer; transition: background .2s; }
 .ar-nav button:hover { background: var(--muted); }
 .ar-nav svg { width: 15px; height: 15px; }
+/* the play button, under the still of the coins until the visitor starts the replay (and again at its end) */
+.ar-play {
+  position: absolute; left: 50%; bottom: 66px; z-index: 4; translate: -50% 0; display: grid; justify-items: center; gap: 4px;
+  width: max-content; max-width: calc(100% - 32px); padding: 0; border: 0; border-radius: 0; color: var(--foreground); background: none; box-shadow: none;
+  text-align: center; cursor: pointer;
+}
+.ar-play-ic {
+  display: grid; place-items: center; width: 84px; height: 84px; margin-bottom: 10px; border-radius: 50%; color: var(--primary-foreground); background: var(--primary);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 22%, transparent), 0 18px 48px rgba(0, 0, 0, .5);
+  transition: scale .25s var(--ease); animation: ar-call 2.4s var(--ease) infinite;
+}
+.ar-play-ic svg { width: 34px; height: 34px; margin-left: 5px; fill: currentColor; }
+.ar-play:hover .ar-play-ic { scale: 1.07; }
+.ar-play:focus-visible { outline: none; }
+.ar-play:focus-visible .ar-play-ic { outline: 2px solid var(--ring); outline-offset: 6px; }
+.ar-play b { font: 600 21px/1.2 var(--font-display); text-wrap: balance; }
+.ar-play small { font: 500 12px var(--font-mono); color: var(--muted-foreground); }
+@keyframes ar-call {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 50%, transparent), 0 18px 48px rgba(0, 0, 0, .5); }
+  to { box-shadow: 0 0 0 26px transparent, 0 18px 48px rgba(0, 0, 0, .5); }
+}
+/* the button stands where the caption goes, so the caption waits for it */
+.arena:not(.started) .ar-cap :is(.ar-n, p) { visibility: hidden; }
 .ar-label { position: absolute; left: 0; top: 0; z-index: 2; display: grid; justify-items: center; gap: 1px; color: var(--foreground); text-decoration: none; opacity: 0; transition: opacity .3s; will-change: transform; white-space: nowrap; }
 .ar-label b { font: 600 15px var(--font-display); transition: color .2s; }
 .ar-label small { font: 500 11.5px var(--font-mono); color: var(--muted-foreground); }
@@ -482,6 +505,10 @@
   .ar-bubble::after { display: none; }
   .ar-bubble blockquote { font-size: 16.5px; }
   .ar-cap { bottom: 25px; padding: 40px 16px 12px; }
+  .ar-play { bottom: 40px; }
+  .ar-play-ic { width: 68px; height: 68px; margin-bottom: 8px; }
+  .ar-play-ic svg { width: 28px; height: 28px; }
+  .ar-play b { font-size: 17.5px; }
   .ar-n { grid-column: 1; }
   .ar-cap a { grid-row: 1; grid-column: 2; font-size: 12.5px; }
   .ar-cap p { grid-column: 1 / -1; }
@@ -500,4 +527,4 @@
   .hud-opts li { padding: 2px 6px; }
   .hud-bars { flex-basis: 100%; margin: 0; }
 }
-@media (prefers-reduced-motion: reduce) { .arena canvas { transition: none; } .arena.wait p { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .arena canvas { transition: none; } .arena.wait p, .ar-play-ic { animation: none; } }

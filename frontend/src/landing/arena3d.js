@@ -70,10 +70,11 @@ function drawFace(canvas, symbol, img) {
 /**
  * Builds the scene in `host` (which holds a <canvas>) and starts playing `replay` at beat `start`.
  * labels: Map of coin id -> HTML element placed under that coin. bubble: element placed over the speaking coin.
- * hud: element placed beside the beat's subject (its content is the page's). Resolves once the assets have
- * loaded; rejects if WebGL isn't available.
+ * hud: element placed beside the beat's subject (its content is the page's). With `intro`, it waits on a still of
+ * every coin until setBeat; played to the end, it goes back to that still and calls onEnd. Resolves once the
+ * assets have loaded; rejects if WebGL isn't available.
  */
-export async function createArena(host, replay, { calm, start = 0, labels, bubble, hud, onBeat, onPick, iconOf, theme }) {
+export async function createArena(host, replay, { calm, start = 0, intro: waiting = false, labels, bubble, hud, onBeat, onEnd, onPick, iconOf, theme }) {
   const G = await loadAssets();
   const canvas = host.querySelector("canvas");
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
@@ -171,7 +172,7 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
       img.onload = () => { drawFace(faceCanvas, c.symbol, img); tex.needsUpdate = true; invalidate(); };
       img.src = src;
     };
-    return { ...c, h, group, spin, halo, parts, paint, faceCanvas, mats, plain, metal, dis, base: V(), s: radius(c.before), sv: 0, phase: n * 1.7, presence: 0.4, hover: 0, hue: new THREE.Color(`hsl(${h}, 62%, 58%)`) };
+    return { ...c, h, group, spin, halo, parts, paint, faceCanvas, mats, plain, metal, dis, base: V(), s: radius(c.before), sv: 0, back: 0, phase: n * 1.7, presence: 0.4, hover: 0, hue: new THREE.Color(`hsl(${h}, 62%, 58%)`) };
   });
   coins.forEach((c) => c.paint());
   const byId = new Map(coins.map((c) => [c.id, c]));
@@ -285,12 +286,39 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
     tall = isTall;
     W.base.set(...(tall ? [-0.85, 0.75, 0] : [-1.95, 0.3, 0]));
     T.base.set(...(tall ? [0.95, -0.95, 0.5] : [2.0, 0.05, 0.45]));
-    others.forEach((c, k, rest) => {
-      const u = (k + 0.5) / rest.length;
-      if (tall) c.base.set(k % 2 ? -1.5 : 1.25, k % 2 ? 2.5 : 1.5, -3 - k * 0.4);
-      // In the gap between the two, so none hides behind either.
-      else c.base.set(rest.length === 1 ? 0.15 : -1.0 + u * 1.8, -0.6 + 0.3 * Math.sin(k * 2.1), -3.4 - (k % 2) * 1.2);
-    });
+    // Everyone else stands a step back, each spaced by its own size, so none covers another or either coin in
+    // the deal, and the middle stays clear for the bid. The biggest stand nearest the two.
+    const size = (c) => 2 * radius(Math.max(c.before, c.cap)), GAP = 1.2;
+    const rest = [...others].sort((a, b) => size(b) - size(a));
+    if (tall) {
+      // A phone has height to spare: rows above the two, the biggest in the middle, a full row starting another
+      // above it, with room between them for the names.
+      const SIDE = 1.4, NAME = 1.1, rows = [[]];
+      let used = 0;
+      for (const c of rest) {
+        if (rows.at(-1).length && used + SIDE + size(c) > 5.2) { rows.push([]); used = 0; }
+        used += (rows.at(-1).length ? SIDE : 0) + size(c);
+        rows.at(-1).push(c);
+      }
+      let y = 2.4;
+      for (const row of rows) {
+        const line = [], tallest = Math.max(...row.map(size));
+        row.forEach((c, i) => (i % 2 ? line.unshift(c) : line.push(c)));
+        let x = -(line.reduce((s, c) => s + size(c), 0) + SIDE * (line.length - 1)) / 2;
+        for (const c of line) { c.base.set(x + size(c) / 2, y + NAME + tallest / 2, -3); x += size(c) + SIDE; }
+        y += NAME + tallest;
+      }
+    } else {
+      // A wide screen has width to spare: out to either side of the two, past the readout that sits beside them.
+      // Being further back, they're also spread wider, so they stay clear of the two as the camera sees them.
+      const BACK = 3.5, wider = 1 + BACK / 10, PAST = 3;
+      const edge = { [-1]: (W.base.x - size(W) / 2) * wider - PAST, [1]: (T.base.x + size(T) / 2) * wider + PAST };
+      rest.forEach((c, i) => {
+        const side = i % 2 ? 1 : -1;
+        c.base.set(edge[side] + (side * size(c)) / 2, 0.6 + 0.2 * Math.sin(i * 2.1), -BACK - 0.4 * Math.floor(i / 2));
+        edge[side] += side * (size(c) + GAP);
+      });
+    }
     FLOOR = Math.min(...coins.map((c) => c.base.y - radius(Math.max(c.before, c.cap)))) - 0.6;
     floor.position.y = FLOOR;
     const mid = V().addVectors(W.base, T.base).multiplyScalar(0.5);
@@ -334,7 +362,9 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
   // ---------- the clock: the beat, the time into it, and how long ago any earlier beat began ----------
   const durs = B.map((b, n) => durationOf(b, n === last) / 1000);
   const starts = durs.map((_, n) => durs.slice(0, n).reduce((a, b) => a + b, 0));
-  let k = Math.min(Math.max(start, 0), last), t = 0, time = 0, playing = !calm, fired = new Set();
+  let k = Math.min(Math.max(start, 0), last), t = 0, time = 0, playing = !calm, fired = new Set(), lastDt = 0;
+  // The still before the replay: every coin in view and named, none of the deal shown yet, the camera easing in.
+  let intro = waiting, introT = 0;
   const since = (kind) => (I[kind] >= 0 && k >= I[kind] ? starts[k] + t - starts[I[kind]] : -1e9);
   const now = (kind) => k === I[kind];
   const once = (name, when, fn) => { if (!calm && t >= when && !fired.has(name)) { fired.add(name); fn(); } };
@@ -345,6 +375,13 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
     cam.fromPos.copy(cam.pos); cam.fromLook.copy(cam.look);
     if (n === 0) { sparks.clear(); W.s = radius(W.before); W.sv = 0; }
     onBeat?.(k); invalidate();
+  }
+  // Played to the end: back to the still, under the dimmed picture.
+  function toIntro() {
+    enter(0);
+    intro = true; introT = 0; t = 0;
+    measure();
+    onEnd?.();
   }
 
   // Effects that start at a moment in a beat (none with reduced motion).
@@ -377,6 +414,7 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
 
   // ---------- camera: each beat frames its subjects, and every move eases out of wherever the last one left off ----------
   const insets = { top: 60, bottom: 150 };
+  let playInset = 0; // in the still, the coins are framed above the page's play button
   // A coin and the room round it, with its name underneath.
   const subject = (c, room = 1.25) => ({ p: c.group.position.clone().add(V(0, -0.22, 0)), r: Math.max(c.s, 0.45) * room + 0.22 });
   const brainSpot = (c) => ({ p: c.group.position.clone().add(V(0, c.s + 0.8, 0)), r: 0.6 });
@@ -403,6 +441,7 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
   }
   const mix = (a, b, x) => ({ pos: a.pos.clone().lerp(b.pos, x), look: a.look.clone().lerp(b.look, x) });
   function shot() {
+    if (intro) return [fit(coins.map((c) => subject(c, 1.15)), 0.1, 0.14, 1.05), W];
     const kind = B[k].kind, u = clamp01(t / durs[k]);
     const two = [subject(W), subject(T)];
     // Beside the readout's spot, as much room as the readout takes (none on a phone, where it is pinned).
@@ -412,11 +451,13 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
       if (side) room.push({ p: at.add(V(side * (hw + 24) / ppu, 0, 0)), r: 0.1 });
     }
     const frame = (subjects, ...a) => fit([...subjects, ...room], ...a);
+    // Everyone else, in the shots that take them in; a phone is too narrow to fit them and still read the two.
+    const rest = narrow ? [] : others.map((c) => subject(c, 1.1));
     switch (kind) {
       case "lock": return [frame([subject(T, 1.65), { p: T.group.position.clone().add(V(0, T.s * 1.95 + 0.25, 0)), r: 0.3 }], lerp(0.3, 0.18, u), 0.14, 1.05), T];
-      case "think": return [mix(frame([subject(W, 1.3), brainSpot(W)], lerp(0.3, 0.22, u), 0.12), frame([subject(W), brainSpot(W), subject(T), ...others.map((c) => subject(c, 1.1))], 0.08, 0.24, 1.0), span(t, 3.4, 5.4)), W];
+      case "think": return [mix(frame([subject(W, 1.3), brainSpot(W)], lerp(0.3, 0.22, u), 0.12), frame([subject(W), brainSpot(W), subject(T), ...rest], 0.08, 0.24, 1.0), span(t, 3.4, 5.4)), W];
       case "offer": return [frame([...two, brainSpot(W)], lerp(-0.08, 0.06, u), 0.13), t < 2.6 ? W : T];
-      case "late": return [frame([...two, ...others.map((c) => subject(c, 1.1)), { p: buyer(), r: 0.3 }], lerp(0.16, 0.06, u), 0.3, 1.0), T];
+      case "late": return [frame([...two, ...rest, { p: buyer(), r: 0.3 }], lerp(0.16, 0.06, u), 0.3, 1.0), T];
       case "stance": return [frame([subject(T, 1.7), brainSpot(T), { p: curve.getPoint(0.9), r: 0.3 }], lerp(0.34, 0.2, u), 0.13), T];
       case "vote": return [frame([subject(T, 1.8), ...voters().map((p) => ({ p, r: 0.35 }))], lerp(0.12, 0.24, u), 0.26), T];
       case "passed": return [frame([...two, { p: T.group.position.clone().add(V(0, T.s + 0.9, 0)), r: 0.5 }], lerp(-0.1, 0.04, u), 0.04, 1.05), T];
@@ -437,21 +478,24 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
 
   function frame(dt) {
     // Paused, a beat still plays through once and then holds on its last frame.
-    if (!calm) {
+    lastDt = dt;
+    if (intro) introT += dt;
+    else if (!calm) {
       t += dt;
-      if (t >= durs[k]) { if (playing) enter(k === last ? 0 : k + 1); else t = durs[k]; }
+      if (t >= durs[k]) { if (playing && k < last) enter(k + 1); else if (playing) toIntro(); else t = durs[k]; }
     }
     host.style.setProperty("--beat", Math.min(t / durs[k], 1).toFixed(3));
     time += calm ? 0 : dt;
     const toward = (cur, to, rate) => (calm ? to : damp(cur, to, rate, dt));
-    moments();
+    if (!intro) moments();
     const kind = B[k].kind;
     const sMerge = since("merge"), merging = now("merge");
     const burned = I.merge >= 0 && (k > I.merge || (merging && t >= M.burn[1]));
     const landed = I.merge >= 0 && (k > I.merge || (merging && t >= M.impact));
 
     // --- coins: size by market cap, a slow sway, and how lit each one is in this beat ---
-    const lead = { lock: [T], think: [W], offer: [W, T], late: [W, T, ...others], stance: [T], vote: [T], passed: [W, T], merge: [W, T], swap: [W] }[kind] || coins;
+    const lead = intro ? coins : { lock: [T], think: [W], offer: [W, T], late: [W, T, ...others], stance: [T], vote: [T], passed: [W, T], merge: [W, T], swap: [W] }[kind] || coins;
+    const entering = now("lock") && !intro;
     for (const c of coins) {
       let target = radius(c === W && landed ? c.cap : c.before);
       if (calm) c.s = target;
@@ -466,15 +510,20 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
       let ry = calm ? -0.2 : Math.sin(time * 0.5 + c.phase) * 0.35;
       ry = lerp(ry, c === W ? 0.32 : c === T ? -0.32 : ry, aligned);
       c.spin.rotation.x = calm ? 0.05 : Math.sin(time * 0.37 + c.phase) * 0.1 * (1 - aligned);
-      // The lock: the target comes in out of the dark, spinning, and stops as the field closes on it.
-      if (c === T && now("lock")) { c.group.position.z -= (1 - ease(t / 1.8)) * 2.6; ry += (1 - ease(t / 2.2)) * 7; }
+      // The lock: the target steps back into the dark, then comes in out of it, spinning, and stops as the field
+      // closes on it. (It eases back rather than jumping, as it is in plain view in the still before.)
+      if (c === T) {
+        c.back = toward(c.back, entering ? (1 - ease(t / 1.8)) * 2.6 : 0, 9);
+        c.group.position.z -= c.back;
+        if (entering) ry += (1 - ease(t / 2.2)) * 7;
+      }
       // The merge: the winner draws back, leans in, and settles after the target lands in it.
       if (c === W && merging) c.group.position.lerp(T.base, 0.26 * span(t, M.lean[0], M.lean[1]) - 0.05 * span(t, 0.2, M.lean[0]) - 0.26 * span(t, M.impact, M.impact + 1.2));
       // The swap: the winner turns once as the holders swap.
       if (c === W && now("swap")) ry += ease((t - 1.1) / 2.4) * Math.PI * 2;
       c.spin.rotation.y = ry;
       const bright = lead.includes(c) ? 1 : kind === "think" && scanned(c) ? 0.85 : 0.42;
-      c.presence = toward(c.presence, (c === T && now("lock") ? 0.15 + 0.85 * span(t, 0, 1.4) : bright) * (c === W && landed && merging ? 1 + 0.5 * (1 - span(t, M.impact, durs[k])) : 1), 3);
+      c.presence = toward(c.presence, (c === T && entering ? 0.15 + 0.85 * span(t, 0, 1.4) : bright) * (c === W && landed && merging ? 1 + 0.5 * (1 - span(t, M.impact, durs[k])) : 1), 3);
       c.mats.face.color.setScalar(c.presence);
       for (const m of Object.values(c.mats)) m.envMapIntensity = 0.25 + 0.75 * Math.min(c.presence, 1);
       c.mats.rim.color.copy(c.metal).multiplyScalar(c.presence);
@@ -491,7 +540,7 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
 
     // --- the lock: a field of light closes round the target, with a padlock that snaps shut ---
     const sLock = since(I.lock >= 0 ? "lock" : "offer");
-    const fieldOn = sLock >= 0 && !burned;
+    const fieldOn = sLock >= 0 && !burned && !intro;
     lockField.visible = fieldOn;
     if (fieldOn) {
       const a = I.lock >= 0 ? span(sLock, 0.5, 1.7) : 1;
@@ -583,7 +632,7 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
 
     // --- the bid: a targeting beam, the reticle closing on the target, the path, and the bid riding it ---
     const sOffer = since("offer"), sPassed = since("passed");
-    const live = sOffer >= 0 && !burned;
+    const live = sOffer >= 0 && !burned && !intro;
     const beamOn = now("offer") ? span(t, 0.2, 0.6) * (1 - span(t, 1.3, 1.9)) : 0;
     beam.visible = beamOn > 0.01;
     if (beam.visible) { const u = beam.material.uniforms; u.uDraw.value = span(t, 0.2, 0.7); u.uOpacity.value = beamOn; u.uColor.value.copy(C.primary); u.uTime.value = time; }
@@ -752,7 +801,7 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
       user.yaw += user.vyaw * dt; user.vyaw = damp(user.vyaw, 0, 3, dt);
       if (performance.now() - user.touched > 4000) { user.yaw = damp(user.yaw, 0, 0.8, dt); user.pitch = damp(user.pitch, 0, 0.8, dt); }
     }
-    const blend = calm ? 1 : ease(t / 1.7);
+    const blend = calm ? 1 : ease((intro ? introT : t) / 1.7);
     cam.pos.copy(cam.fromPos).lerp(pose.pos, blend);
     cam.look.copy(cam.fromLook).lerp(pose.look, blend);
     camera.position.copy(cam.pos);
@@ -834,9 +883,12 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
       v.y -= Math.max(c.s, 0.3, c === T ? ringT : 0) + 0.2;
       v.project(camera);
       el.style.transform = `translate3d(${((v.x + 1) / 2) * hostW}px, ${((1 - v.y) / 2) * hostH}px, 0) translateX(-50%)`;
-      const seen = kind === "think" ? c === W || scanned(c) : lead.includes(c);
+      // On a phone, everyone else is named only in the still, as the other shots leave them out.
+      const aside = narrow && others.includes(c);
+      const seen = intro || (kind === "think" ? c === W || (!aside && scanned(c)) : lead.includes(c) && !aside);
       const leaving = c === T && ((now("merge") && t > M.burn[0]) || (I.merge >= 0 && k > I.merge));
-      el.style.opacity = c.group.visible && c.s > 0.2 && seen && !leaving ? "1" : "0";
+      c.named = c.group.visible && c.s > 0.2 && seen && !leaving;
+      el.style.opacity = c.named ? "1" : "0";
       el.classList.toggle("hot", hovered === c);
       el.classList.toggle("landed", c === W && landed);
     }
@@ -850,6 +902,7 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
         const x = ((v.x + 1) / 2) * hostW, y = ((1 - v.y) / 2) * hostH;
         const left = Math.min(Math.max(x - bw / 2, 12), hostW - bw - 12);
         const top = Math.max(y - bh - 14, 56);
+        bubbleAt = [left, top];
         bubble.style.transform = `translate3d(${left}px, ${top}px, 0)`;
         bubble.style.setProperty("--tail", `${Math.min(Math.max(x - left, 22), bw - 22)}px`);
       }
@@ -858,35 +911,62 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
   }
 
   // The readout sits beside the beat's subject, and shows once there is something to read.
-  // Where the readout goes in each beat: a point beside the subject, which side of it, and from when.
+  // Where the readout goes in each beat: a point beside the subject, which side of it, from when, and the subject.
   function hudSpot(kind) {
     const tp = T.group.position, wp = W.group.position;
     switch (kind) {
-      case "lock": return [tp.clone().add(V(T.s * 1.75, T.s * 0.3, 0)), 1, 1.6];
-      case "think": return [wp.clone().add(V(-W.s * 1.45, -0.15, 0)), -1, 1.2];
-      case "offer": return [tp.clone().add(V(T.s * 1.75, -T.s * 0.2, 0)), 1, 3.0];
-      case "late": return [tp.clone().add(V(T.s * 1.6, -T.s * 0.6, 0)), 1, 0.6];
-      case "stance": return [tp.clone().add(V(-T.s * 1.85, 0, 0)), -1, 1.0];
-      case "vote": return [tp.clone().add(V(T.s * 1.95, 0.1, 0)), 1, 0.8];
-      case "passed": return [tp.clone().add(V(T.s * 1.3 + 0.45, T.s + 0.95, 0)), 1, 0.9];
-      case "merge": return [wp.clone().add(V(W.s * 1.5, -W.s * 0.4, 0)), 1, M.impact + 0.3];
-      case "swap": return [wp.clone().add(V(-W.s * 1.55, 0, 0)), -1, 1.4];
-      default: return [wp.clone(), 1, 0];
+      case "lock": return [tp.clone().add(V(T.s * 1.75, T.s * 0.3, 0)), 1, 1.6, T];
+      case "think": return [wp.clone().add(V(-W.s * 1.45, -0.15, 0)), -1, 1.2, W];
+      case "offer": return [tp.clone().add(V(T.s * 1.75, -T.s * 0.2, 0)), 1, 3.0, T];
+      case "late": return [tp.clone().add(V(T.s * 1.6, -T.s * 0.6, 0)), 1, 0.6, T];
+      case "stance": return [tp.clone().add(V(-T.s * 1.85, 0, 0)), -1, 1.0, T];
+      case "vote": return [tp.clone().add(V(T.s * 1.95, 0.1, 0)), 1, 0.8, T];
+      case "passed": return [tp.clone().add(V(T.s * 1.3 + 0.45, T.s + 0.95, 0)), 1, 0.9, T];
+      case "merge": return [wp.clone().add(V(W.s * 1.5, -W.s * 0.4, 0)), 1, M.impact + 0.3, W];
+      case "swap": return [wp.clone().add(V(-W.s * 1.55, 0, 0)), -1, 1.4, W];
+      default: return [wp.clone(), 1, 0, W];
     }
   }
+  // Beside its subject first, level with it, then lower or higher; if all of those would cover a coin, its name
+  // or the bubble, the same on the other side, then a top corner. Once showing, it glides from one to the next.
+  const hudAt = { left: 0, top: 0, pick: -1 }, camUp = V();
+  let bubbleAt = null; // where place() last put the bubble
   function placeHud() {
     const kind = B[k].kind;
-    const [at, side, from] = hudSpot(kind);
-    hud.style.opacity = calm || t >= from ? "1" : "0";
+    const [at, side, from, who] = hudSpot(kind);
+    const on = !intro && (calm || t >= from);
+    hud.style.opacity = on ? "1" : "0";
     hud.dataset.stage = stage();
     if (kind === "vote") hud.style.setProperty("--fill", span(t, 1.2, 3.0).toFixed(3));
     if (narrow) { hud.style.transform = `translate3d(12px, ${capTop - hh - 10}px, 0)`; return; }
-    at.project(camera);
-    const x = ((at.x + 1) / 2) * hostW, y = ((1 - at.y) / 2) * hostH;
-    let left = side > 0 ? x + 10 : side < 0 ? x - hw - 10 : x - hw / 2;
-    left = Math.min(Math.max(left, 12), hostW - hw - 12);
-    const top = Math.min(Math.max(y - hh / 2, insets.top), hostH - insets.bottom - hh);
-    hud.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+    const beside = (p, s) => {
+      p.project(camera);
+      const x = ((p.x + 1) / 2) * hostW, y = ((1 - p.y) / 2) * hostH;
+      const left = Math.min(Math.max(s > 0 ? x + 10 : x - hw - 10, 12), hostW - hw - 12);
+      return [0, 0.6, -0.6].map((d) => [left, Math.min(Math.max(y - hh / 2 + d * hh, insets.top), hostH - insets.bottom - hh)]);
+    };
+    const spots = [...beside(at.clone(), side), ...beside(at.clone().setX(2 * who.group.position.x - at.x), -side), [12, 58], [hostW - hw - 12, 58]];
+    // What it mustn't cover: each coin in view with its name under it, and the bubble.
+    const keepClear = [];
+    camera.matrixWorld.extractBasis(v, camUp, v);
+    for (const c of coins) {
+      if (!c.group.visible || c.s < 0.2) continue;
+      const p = c.group.position.clone().project(camera), q = c.group.position.clone().addScaledVector(camUp, c.s).project(camera);
+      if (p.z > 1) continue;
+      const x = ((p.x + 1) / 2) * hostW, y = ((1 - p.y) / 2) * hostH, r = Math.abs(q.y - p.y) * hostH / 2;
+      keepClear.push([x - r, y - r, x + r, y + r]);
+      if (c.named) keepClear.push([x - Math.max(r, 38), y + r, x + Math.max(r, 38), y + r + 42]);
+    }
+    if (bubbleAt && bubble.classList.contains("on")) keepClear.push([bubbleAt[0], bubbleAt[1], bubbleAt[0] + bw, bubbleAt[1] + bh + 10]);
+    const covered = ([l, tp]) => keepClear.reduce((s, [x0, y0, x1, y1]) => s + Math.max(0, Math.min(l + hw, x1) - Math.max(l, x0)) * Math.max(0, Math.min(tp + hh, y1) - Math.max(tp, y0)), 0);
+    // It stays where it is while that's still clear, so it doesn't hop as the coins sway.
+    const cost = spots.map(covered);
+    if (!on || cost[hudAt.pick] !== 0) hudAt.pick = cost.indexOf(0) >= 0 ? cost.indexOf(0) : cost.indexOf(Math.min(...cost));
+    const [toLeft, toTop] = spots[hudAt.pick];
+    // Not showing yet: it goes straight there.
+    const glide = (cur, to) => (!on || calm ? to : damp(cur, to, 7, lastDt));
+    hudAt.left = glide(hudAt.left, toLeft); hudAt.top = glide(hudAt.top, toTop);
+    hud.style.transform = `translate3d(${hudAt.left}px, ${hudAt.top}px, 0)`;
   }
   // Which of the rival brain's answers is lit.
   function stage() {
@@ -957,6 +1037,9 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
     insets.top = bubble?.classList.contains("on") ? 64 + bh : 58;
     // On a phone the readout sits over the caption, so the coins are framed above it too.
     insets.bottom = hostH - capTop + 8 + (narrow && hh ? hh + 10 : 0);
+    const play = host.querySelector(".ar-play");
+    if (play) playInset = hostH - play.offsetTop + 14;
+    if (intro) { insets.top = 58; insets.bottom = Math.max(insets.bottom, playInset); }
     camera.setViewOffset(hostW, hostH, 0, -(insets.top - insets.bottom) / 2, hostW, hostH);
     camera.updateProjectionMatrix();
   }
@@ -984,7 +1067,7 @@ export async function createArena(host, replay, { calm, start = 0, labels, bubbl
 
   return {
     setVisible(on) { visible = on; run(); },
-    setBeat(n) { sparks.clear(); enter(n); },
+    setBeat(n) { intro = false; sparks.clear(); enter(n); measure(); },
     setPlaying(on) { playing = on && !calm; },
     setTheme({ colors }) { setTheme(colors); },
     loadIcons() { coins.forEach((c) => c.paint()); },
