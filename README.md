@@ -264,7 +264,7 @@ Three earlier launchpads (`v3`, `v2`, `autocto`) are locked and still on chain, 
 | `sim/` | the simulation and parameter sweep |
 | `frontend/` → `web/` | the app's source (React, Vite) and its committed build; `web/api/guest.js` is the optional guest-account function |
 | `res/`, `params/`, `proofs/` | the wasm built from this commit (testnet runs the copies at `f2f2586`), the rule sets, and OutLayer evidence bundles |
-| `scripts/` | `build.sh`, `mutants.mjs`, `record-arena.mjs` (records the landing arena's replay), and `lettering.py` (renders the 3D headline and wordmark in Blender from the layout in `lettering.json`) |
+| `scripts/` | `build.sh`, `mutants.mjs`, `record-arena.mjs` (records the landing arena's replay), `lettering.py` (renders the 3D headline and wordmark in Blender from the layout in `lettering.json`), and `arena-assets.py` (builds the arena's coin, brain and light pieces in Blender as `frontend/src/assets/arena.glb`) |
 
 ## Limitations
 

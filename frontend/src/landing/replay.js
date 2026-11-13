@@ -15,7 +15,7 @@ const fmtNear = (n) => `${+n.toFixed(n < 1 ? 3 : 2)} NEAR`;
 
 // How long each beat stays on screen: long enough to read what was said. The last beat holds a little
 // longer before the replay starts again.
-const BEAT_MS = { lock: 3400, think: 4600, offer: 5200, late: 3800, stance: 5200, vote: 3800, passed: 3200, merge: 4800, swap: 4200 };
+const BEAT_MS = { lock: 4200, think: 4600, offer: 5600, late: 4600, stance: 6200, vote: 5400, passed: 3800, merge: 6600, swap: 5400 };
 export const durationOf = (b, last) => Math.max(BEAT_MS[b.kind] || 3500, b.quote ? 2400 + b.quote.length * 40 : 0) + (last ? 2600 : 0);
 
 /** A query against one node, given up after 8 seconds. */
@@ -63,7 +63,8 @@ export async function readReplay(view, coins, infos, params) {
 }
 
 // Turns the two logs into beats, told around the one bid that went through. Each beat:
-// { kind, coin (who acts), text, quote?, by? }. Repeated locks and votes are told as one beat.
+// { kind, coin (who acts), text, quote?, by?, ...its numbers for the arena's readouts }. Repeated locks
+// and votes are told as one beat.
 function beats(w, t, hw, ht, params) {
   const W = `$${w.symbol}`, T = `$${t.symbol}`;
   const fee = params?.brain_fee ? fmtNear(Number(BigInt(params.brain_fee)) / YOCTO) : null;
@@ -87,29 +88,29 @@ function beats(w, t, hw, ht, params) {
 
   const lock = lastBefore(ht, offerAt, (e) => e.event === "lock");
   if (lock && (m = lock.text.match(/locked (\d+) tokens/))) {
-    add(lock, { kind: "lock", coin: t.account_id, text: `A holder locks ${tokens(m[1])} ${T} before the bid. Only tokens locked before a bid can vote on it.` });
+    add(lock, { kind: "lock", coin: t.account_id, amount: tokens(m[1]), text: `A holder locks ${tokens(m[1])} ${T} before the bid. Only tokens locked before a bid can vote on it.` });
   }
   const thought = lastBefore(hw, offerAt, (e) => e.event === "thought");
   if (thought) {
     const woke = lastBefore(hw, at(thought), (e) => e.event === "think");
-    add(thought, { kind: "think", coin: w.account_id, by: `${W}'s brain`, quote: thought.text,
+    add(thought, { kind: "think", coin: w.account_id, by: `${W}'s brain`, quote: thought.text, fee: woke ? fee : null,
       text: `${woke ? `Someone ${fee ? `pays ${fee} to wake` : "wakes"}` : "Then"} ${W}'s brain. It sizes up its rivals.` });
   }
   if ((m = offer.text.match(/at ([\d.]+) per token \(([+-]?\d+) bps vs fair\): "(.*)"$/s))) {
     const bps = Number(m[2]);
-    add(offer, { kind: "offer", coin: w.account_id, by: `${W}'s brain`, quote: m[3],
+    add(offer, { kind: "offer", coin: w.account_id, by: `${W}'s brain`, quote: m[3], rate: +m[1], bps,
       text: `${W} bids for ${T}: ${(+m[1]).toFixed(4)} ${W} per ${T}, ${(Math.abs(bps) / 100).toFixed(1)}% ${bps >= 0 ? "over" : "under"} the fair rate.` });
   } else return [];
   const late = between(ht, offerAt, passedAt, (e) => e.event === "lock");
   if (late.length) {
-    add(late[0], { kind: "late", coin: t.account_id,
+    add(late[0], { kind: "late", coin: t.account_id, count: late.length, amount: tokens(sum(late, /locked (\d+) tokens/)),
       text: `${late.length === 1 ? "A late buyer locks" : `${late.length} late buyers lock`} ${tokens(sum(late, /locked (\d+) tokens/))} ${T} after the bid. The contract won't count those tokens on it.` });
   }
   const stance = between(ht, offerAt, passedAt, (e) => e.event === "stance" && e.text.includes(`on ${bid}:`)).pop();
   const said = stance?.text.match(/vote (YES|NO) on \S+: "(.*)"$/s);
   if (said) {
     const woke = between(ht, offerAt, at(stance), (e) => e.event === "think").length > 0;
-    add(stance, { kind: "stance", coin: t.account_id, by: `${T}'s brain`, quote: said[2], no: said[1] === "NO",
+    add(stance, { kind: "stance", coin: t.account_id, by: `${T}'s brain`, quote: said[2], no: said[1] === "NO", say: said[1],
       text: `${woke ? "Someone wakes" : "Then"} ${T}'s brain. It tells its holders to vote ${said[1]}.` });
   }
   const votes = between(ht, offerAt, passedAt, (e) => e.event === "vote" && e.text.includes(`on ${bid} with`));
@@ -117,19 +118,20 @@ function beats(w, t, hw, ht, params) {
     const yes = sum(votes.filter((e) => e.text.includes("voted YES")), /with (\d+) tokens/), no = sum(votes.filter((e) => e.text.includes("voted NO")), /with (\d+) tokens/);
     // Worth saying when the holders went against their own coin's brain.
     const overruled = said && (said[1] === "NO") === yes > no ? " The holders decide, not the brain." : "";
-    add(votes[0], { kind: "vote", coin: t.account_id, yes: yes >= no,
+    add(votes[0], { kind: "vote", coin: t.account_id, yes: yes >= no, voters: votes.length, yesTokens: tokens(yes), noTokens: tokens(no),
+      yesShare: yes + no > 0n ? Number((yes * 10000n) / (yes + no)) / 10000 : 0, approval: params?.approval_bps ? params.approval_bps / 10000 : null,
       text: votes.length === 1
         ? `A holder votes ${yes ? "YES" : "NO"} with ${tokens(yes || no)} tokens locked before the bid.${overruled}`
         : `${votes.length} holders vote: ${tokens(yes)} YES${no ? `, ${tokens(no)} NO` : ""}, all with tokens locked before the bid.${overruled}` });
   }
   add(passed, { kind: "passed", coin: t.account_id, text: `Time's up and the vote has passed. Anyone can now tell ${W} to carry it out.` });
   if ((m = absorb.text.match(/absorbed ([\d.]+) NEAR/))) {
-    add(absorb, { kind: "merge", coin: w.account_id, text: `${W} swallows ${T}. ${fmtNear(+m[1])} of ${T}'s curve and treasury moves into ${W}.` });
+    add(absorb, { kind: "merge", coin: w.account_id, near: +m[1], text: `${W} swallows ${T}. ${fmtNear(+m[1])} of ${T}'s curve and treasury moves into ${W}.` });
   } else return [];
   const swaps = ht.filter((e) => e.event === "convert" && at(e) >= mergedAt - 1n);
   if (swaps.length) {
     const rate = (Number(w.absorbed.find(([a]) => a === t.account_id)[1].rate_ppm) / 1e6).toFixed(4);
-    add(swaps[0], { kind: "swap", coin: t.account_id,
+    add(swaps[0], { kind: "swap", coin: t.account_id, count: swaps.length, amount: tokens(sum(swaps, /converted (\d+) tokens/)), rate: +rate,
       text: `${swaps.length === 1 ? "Its holder swaps" : `${swaps.length} holders swap`} ${tokens(sum(swaps, /converted (\d+) tokens/))} ${T} for ${W} at ${rate}. ${T} lives on inside ${W}.` });
   }
   return out.sort((a, b) => (BigInt(a.at) < BigInt(b.at) ? -1 : 1)).map(({ at: _, ...b }) => b);
