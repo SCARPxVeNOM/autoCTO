@@ -17,8 +17,8 @@ const YOCTO = 10n ** 24n;
 const toYocto = (near) => { const [i, f = ""] = String(near).split("."); return BigInt(i) * YOCTO + BigInt(f.padEnd(24, "0").slice(0, 24) || "0"); };
 // Kept back for the funder's own gas, so it never empties itself.
 const RESERVE = YOCTO / 2n;
-// One guest per address per 20 minutes, remembered while this instance stays warm.
-const AGAIN_MS = 20 * 60 * 1000;
+// One guest per address per 4 minutes, remembered while this instance stays warm.
+const AGAIN_MS = 4 * 60 * 1000;
 const lastFrom = new Map();
 
 export default async function handler(req, res) {
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   if (!/^ed25519:[1-9A-HJ-NP-Za-km-z]{43,44}$/.test(pk)) return res.status(400).json({ error: "public_key must be an ed25519 key" });
   const ip = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").split(",")[0].trim();
   const now = Date.now();
-  if (now - (lastFrom.get(ip) || 0) < AGAIN_MS) return res.status(429).json({ error: "One guest account per visitor every 20 minutes. Use the one you have, or connect a wallet." });
+  if (now - (lastFrom.get(ip) || 0) < AGAIN_MS) return res.status(429).json({ error: "One guest account per visitor every 4 minutes. Use the one you have, or connect a wallet." });
   // Claimed before any await, so requests sent in parallel from one address cannot all pass.
   lastFrom.set(ip, now);
 

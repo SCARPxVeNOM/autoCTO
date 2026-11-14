@@ -31,6 +31,6 @@ If the launchpad account runs short of balance for its code storage, the deploy 
 
 ## Guest accounts
 
-A visitor with no wallet presses **Try as guest**. The page makes an ed25519 key pair and sends only the public key to [`web/api/guest.js`](../web/api/guest.js), a Vercel function that creates `<random>.<GUEST_ACCOUNT>` with that key and 1 test NEAR. The private key stays in the browser's storage, and every later call is signed there with near-api-js, so the function never sees or holds a guest's key. It hands out one guest per visitor every 20 minutes and keeps a reserve so the funding account never empties.
+A visitor with no wallet presses **Try as guest**. The page makes an ed25519 key pair and sends only the public key to [`web/api/guest.js`](../web/api/guest.js), a Vercel function that creates `<random>.<GUEST_ACCOUNT>` with that key and 1 test NEAR. The private key stays in the browser's storage, and every later call is signed there with near-api-js, so the function never sees or holds a guest's key. It hands out one guest per visitor every 4 minutes and keeps a reserve so the funding account never empties.
 
 It is off unless the host sets `GUEST_ACCOUNT` (a funded testnet account) and `GUEST_KEY` (a full-access key for it); `GUEST_NEAR` changes the amount. Without them, or on a plain static host, the page shows **Connect wallet** only. A guest gets less NEAR than a launch takes, so launching a coin still needs a wallet.
