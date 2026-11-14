@@ -1,12 +1,15 @@
-// Judges view: KillerCoins in three lines, each track's asks next to what answers them, and the
-// README's claims (the takeover, the refused attacks, the keys and the code) checked live by this page.
-import { ArrowUpRight, Gavel, RotateCw } from "lucide-react";
+// Judges view: KillerCoins in three lines, each track's asks next to what answers them, the
+// README's claims (the takeover, the refused attacks, the keys and the code) checked live by this
+// page, and attacks the visitor can send themselves.
+import { useState } from "react";
+import { ArrowUpRight, CircleAlert, Gavel, LoaderCircle, Minus, RotateCw, ShieldCheck, Swords, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHead, Pill } from "@/components/common";
 import { recoverSigner } from "@/lib/attest";
-import { NETWORK, cfg, fmtTokens, short, state, sym, view } from "@/lib/chain";
-import { CHECKS as VERIFY, GROUPS, CheckRow, STATUS, Tally, useChecks } from "./Verify";
+import { NETWORK, cfg, fmtTokens, probe, probeSigner, short, startGuest, state, statusName, sym, useChain, view } from "@/lib/chain";
+import { cn } from "@/lib/utils";
+import { CHECKS as VERIFY, DISC, GROUPS, CheckRow, STATUS, Tally, useChecks } from "./Verify";
 
 const REPO = "https://github.com/SCARPxVeNOM/killerCoins";
 const TX = "https://testnet.nearblocks.io/txns/";
@@ -111,6 +114,52 @@ const REFUSALS = [
     "B7vUuNZWRcS2eGXJGNBVCLSpV9WZHwUKvnBCQ269U1ub", "tester.scarpxvenom.testnet", "these tokens back a vote that has not ended"),
 ];
 
+// Calls anyone can send, each refused by the contract itself. `send(coin, me)` is [contract, method, args];
+// `said` is the refusal the code gives. The args are well formed, so the guard is what stops them.
+const ATTACKS = [
+  {
+    id: "mint", title: (c) => `Mint $${sym(c)} for yourself`,
+    why: (c) => `$${sym(c)} mints new tokens only when a coin it absorbed asks, for that coin's holders, up to the supply fixed at the merge.`,
+    send: (c, me) => [c, "mint_converted", { account_id: me, amount: "1000000000000000000000000" }],
+    said: ["only coins we absorbed"],
+  },
+  {
+    id: "brain", title: (c) => `Hand $${sym(c)} a forged AI answer`,
+    why: () => "An AI answer reaches a coin only as the reply to the coin's own request to OutLayer. Sent by anyone else, it is refused before it is read.",
+    send: (c) => [c, "on_brain", { decision_id: 0 }],
+    said: ["Method on_brain is private"],
+  },
+  {
+    id: "bid", title: (c) => `Bid for $${sym(c)} as if you were a coin`,
+    why: () => "Only a direct sub-account of the launchpad can bid, and only the launchpad can create those: with the coin code and no keys.",
+    send: (c, me) => [c, "receive_offer", {
+      id: 0, rate_ppm: "1000000", pitch: "test from the judges page", proposer: { Holder: { account_id: me } },
+      buyer_market: { amm_near: "1", amm_tokens: "1", circulating: "1", owed: "0" },
+    }],
+    said: ["only coins from the same launchpad can bid"],
+  },
+  {
+    id: "passed", title: (c) => `Tell $${sym(c)} its bid passed the vote`,
+    why: () => "Only the coin a bid was made for can report that its holders approved it.",
+    send: (c) => [c, "execute_takeover", { id: 0, target_circulating: "1", target_market: { amm_near: "1", amm_tokens: "1", circulating: "1", owed: "0" } }],
+    said: ["unknown offer", "not your offer"],
+  },
+  {
+    id: "refund", title: () => "Claim a 1 NEAR launch refund from the launchpad",
+    why: () => "The launchpad refunds a launch only in its own callback, after a deploy it started fails. Asked by anyone else, it refuses before reading the request.",
+    send: (c, me) => [cfg.launchpad, "on_launched", { account_id: me, creator: me, deposit: "1000000000000000000000000" }],
+    said: ["Method on_launched is private"],
+  },
+];
+// The coin they aim at: PEPE where the README's takeover ran, else a coin that still trades.
+const markCoin = () => (onReadmeChain() ? PEPE : coins().find((a) => statusName(state.info[a]?.status) === "Active") || coins()[0]);
+const TRIED = {
+  refused: [ShieldCheck, "up", "refused"],
+  through: [CircleAlert, "down", "went through"],
+  other: [Minus, "muted", "other refusal"],
+  unsent: [Minus, "muted", "not sent"],
+};
+
 const NEP141 = {
   id: "nep141",
   run: async () => {
@@ -200,7 +249,7 @@ const OWN = TRACKS.flatMap(([, asks]) => asks.map((q) => q.check).filter(Boolean
 const ALL = [...OWN, ...TAKEOVER, ...REFUSALS, ...VERIFY];
 const INDEX = Object.fromEntries(ALL.map((c, i) => [c.id, i]));
 
-const goTo = (id) => document.getElementById(`check-${id}`)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+const goTo = (id, block = "center") => document.getElementById(`check-${id}`)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block });
 
 function AskRow({ q, res }) {
   const ids = [q.check?.id, ...(q.refs || [])].filter(Boolean);
@@ -237,12 +286,77 @@ function AskRow({ q, res }) {
   );
 }
 
-const Group = ({ title, children }) => (
-  <div className="grid gap-2.5">
+const Group = ({ id, title, children }) => (
+  <div id={id} className="grid scroll-mt-32 gap-2.5">
     <h2 className="font-mono text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{title}</h2>
     {children}
   </div>
 );
+
+function AttackRow({ a, coin, r, can, onTry }) {
+  const [Icon, tone, label] = r?.busy ? [LoaderCircle, "brand", "sending"] : r ? TRIED[r.kind] : [Swords, "muted", null];
+  return (
+    <Card className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3.5 gap-y-2.5 rounded-2xl p-4 shadow-none sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <span className={cn("grid size-8 place-items-center rounded-full", DISC[tone])}><Icon className={cn("size-4", r?.busy && "animate-spin")} /></span>
+      <div className="grid gap-1">
+        <b className="font-display text-[15.5px] font-semibold leading-snug">{a.title(coin)}</b>
+        <p className="text-[13.5px] text-muted-foreground">{a.why(coin)}</p>
+      </div>
+      <div className="flex items-center gap-2 self-start max-sm:col-start-2">
+        {label && !r.busy && <Pill tone={tone}>{label}</Pill>}
+        <Button size="sm" variant="outline" className="rounded-full" disabled={!can || r?.busy} onClick={onTry}>{r && !r.busy ? "Again" : "Send it"}</Button>
+      </div>
+      {r && !r.busy && (
+        <p className="col-start-2 break-words rounded-lg bg-muted/60 px-2.5 py-1.5 font-mono text-[12px] text-muted-foreground sm:col-span-2">
+          {r.detail}
+          {r.hash && (NETWORK === "testnet"
+            ? <> · <a className="text-primary underline underline-offset-2" href={TX + r.hash} target="_blank" rel="noopener">{r.hash.slice(0, 8)} on nearblocks</a></>
+            : <> · tx {r.hash.slice(0, 8)}</>)}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+// One real transaction per attack, from the demo holder or this browser's guest, never a wallet.
+function Attacks() {
+  useChain();
+  const [res, setRes] = useState({});
+  const coin = markCoin(), me = probeSigner();
+  const can = !!(coin && me) && !Object.values(res).some((r) => r.busy);
+  const send = async (a) => {
+    setRes((s) => ({ ...s, [a.id]: { busy: true } }));
+    let r;
+    try {
+      const [contract, method, args] = a.send(coin, me);
+      const p = await probe(contract, method, args);
+      r = !p.error ? { kind: "through", hash: p.hash, detail: "nothing refused it" }
+        : a.said.some((s) => p.error.includes(s)) ? { kind: "refused", hash: p.hash, detail: `${p.by} refused it: "${p.error}"` }
+        : { kind: "other", hash: p.hash, detail: `${p.by} refused it for another reason: "${p.error}"` };
+    } catch (e) {
+      r = { kind: "unsent", detail: `not sent: ${String(e.message || e).slice(0, 160)}` };
+    }
+    setRes((s) => ({ ...s, [a.id]: r }));
+  };
+  const sendAll = async () => { for (const a of ATTACKS) await send(a); };
+  return (
+    <Group id="check-attacks" title="Try to break it yourself">
+      <Card className="flex-row flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl p-4 shadow-none">
+        <p className="min-w-0 flex-[1_1_320px] text-[13.5px] text-muted-foreground">
+          Each button sends one real transaction with no NEAR attached, {cfg.dev_key
+            ? <>as <b className="font-mono text-foreground">{short(me)}</b>, the demo holder picked at the top.</>
+            : me ? <>from your guest account <b className="font-mono text-foreground">{short(me)}</b>; it pays only the gas.</>
+            : <>from a guest account this page makes for you. Your wallet is never asked.</>}
+          {" "}The contract's own check refuses it, and the refusal shows here with the transaction.
+        </p>
+        {me ? <Button className="rounded-full" disabled={!can} onClick={sendAll}><Swords /> Send all {ATTACKS.length}</Button>
+          : state.guestOffer ? <Button className="rounded-full" disabled={state.acting} onClick={startGuest}><UserRound /> Get a guest account</Button>
+          : <p className="text-[13px] text-muted-foreground">This host doesn't hand out guest accounts. Run the local demo to try them.</p>}
+      </Card>
+      {ATTACKS.map((a) => <AttackRow key={a.id} a={a} coin={coin} r={res[a.id]} can={can} onTry={() => send(a)} />)}
+    </Group>
+  );
+}
 
 export default function Judges() {
   const { res, at, run, all } = useChecks(ALL);
@@ -262,12 +376,13 @@ export default function Judges() {
             <li>The rival's holders vote with tokens locked before the bid: 10% of the supply must vote, and two thirds must say yes.</li>
             <li>If it passes, the rival's liquidity and treasury move into the buyer and its holders swap at the agreed rate. No one holds a key, so the rules can't change.</li>
           </ol>
-          <p className="text-[13.5px] text-muted-foreground">Try one yourself from the <a className="text-primary underline underline-offset-2" href="#market">Market</a> with a guest account, or read the <a className="text-primary underline underline-offset-2" href={REPO} target="_blank" rel="noopener">README</a>.</p>
+          <p className="text-[13.5px] text-muted-foreground">Try one yourself from the <a className="text-primary underline underline-offset-2" href="#market">Market</a> with a guest account, <button type="button" className="text-primary underline underline-offset-2" onClick={() => goTo("attacks", "start")}>send the attacks below</button>, or read the <a className="text-primary underline underline-offset-2" href={REPO} target="_blank" rel="noopener">README</a>.</p>
         </Card>
         <Tally total={ALL.length} res={res} at={at} />
         {asks(memecoins)}
         <Group title="The takeover in the README">{TAKEOVER.map(row)}</Group>
         <Group title="Try to break it: each refusal, read from the chain">{REFUSALS.map(row)}</Group>
+        <Attacks />
         {GROUPS.map((g, k) => <Group key={g} title={g}>{VERIFY.filter((c) => c.group === k).map(row)}</Group>)}
         {others.map(asks)}
         <p className="max-w-[72ch] text-[13px] text-muted-foreground">

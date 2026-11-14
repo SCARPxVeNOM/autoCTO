@@ -131,9 +131,10 @@ export function humanize(text) {
   for (const { account_id: a } of state.coins) if (state.info[a]) t = t.split(a).join(`$${state.info[a].symbol}`);
   return t;
 }
-// The reason inside a contract panic, without the wrapping.
+// The reason inside a contract panic, without the wrapping. An `expect` puts "panicked at file:line:col:"
+// and a newline before its message.
 function plainError(msg) {
-  const m = /Smart contract panicked: ([^"\\]+)/.exec(msg) || /"ExecutionError":"([^"]+)"/.exec(msg);
+  const m = /Smart contract panicked: (?:panicked at [^"\\]*:(?:\\n|\n))?([^"\\]+)/.exec(msg) || /"ExecutionError":"([^"]+)"/.exec(msg);
   return (m ? m[1] : String(msg)).trim().slice(0, 180);
 }
 // The panic of a receipt that failed inside a transaction that itself went through.
@@ -754,6 +755,23 @@ export async function devCall(as, contract, method, args = {}, deposit = 0n) {
   if (!cfg.dev_key) throw new Error("Only the local demo can sign for its holders.");
   nearApi ??= await import(/* @vite-ignore */ NEAR_API);
   return new nearApi.Account(as, cfg.rpc, cfg.dev_key).callFunction({ contractId: contract, methodName: method, args, deposit, gas: GAS });
+}
+
+/** Who `probe` signs as: the demo's chosen holder, or this browser's guest. Never a wallet. */
+export const probeSigner = () => (cfg.dev_key ? state.actor : guest?.account) || null;
+/**
+ * The judges page's attacks: send one call with no deposit and keep the outcome even when the
+ * contract refuses it. Resolves { hash, signer, by, error }, `error` null if nothing refused it.
+ */
+export async function probe(contract, method, args) {
+  const signer = probeSigner();
+  if (!signer) throw new Error("no account this page can sign for");
+  nearApi ??= await import(/* @vite-ignore */ NEAR_API);
+  const out = await new nearApi.Account(signer, sendProvider(), cfg.dev_key || guest.key).signAndSendTransaction({
+    receiverId: contract, actions: [nearApi.actions.functionCall(method, args, GAS, 0n)], throwOnFailure: false,
+  });
+  const f = out.receipts_outcome.find((r) => r.outcome.status.Failure);
+  return { hash: out.transaction_outcome.id, signer, by: f?.outcome.executor_id, error: f ? plainError(JSON.stringify(f.outcome.status.Failure)) : null };
 }
 
 // ---------- first steps ----------

@@ -38,7 +38,7 @@ Built for NEAR HACKATHON, track **Memecoins With Mechanics**, with entries for *
 
 | Do | See |
 |---|---|
-| Open **[killercoins.vercel.app/judges](https://killercoins.vercel.app/judges)** | Each track's asks next to what answers them, and 17 checks your browser runs against testnet and this repo: the takeover below, the refused attacks, zero keys, the code on chain and the AI signatures |
+| Open **[killercoins.vercel.app/judges](https://killercoins.vercel.app/judges)** | Each track's asks next to what answers them, and 17 checks your browser runs against testnet and this repo: the takeover below, the refused attacks, zero keys, the code on chain and the AI signatures. Then five attacks you send yourself from a guest account, each refused by the contract |
 | Open **[killercoins.vercel.app](https://killercoins.vercel.app)** and press the play button | The latest takeover a coin's AI started, replayed from the chain (today [PEPE's takeover of WOJAK](#the-mechanic-one-real-takeover)): a lock, PEPE's AI bids, a late vote the contract refuses, WOJAK's AI advises its holders, the vote, the merge and the swap |
 | `node scripts/verify.mjs` (Node 18 or newer, nothing to install, about 3 s) | Seven checks against testnet and this repo, ending `OK: 7 of 7 checks passed`: zero access keys; the code, the brain and the rules on chain are the ones in this repo; the latest AI answer's signature is valid |
 | `cargo test` | All 117 tests pass. [CI](https://github.com/SCARPxVeNOM/killerCoins/actions/workflows/ci.yml) runs them on every push, with the [34 mutants](#tests) |
