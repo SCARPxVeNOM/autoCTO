@@ -12,6 +12,8 @@ import {
 const Proposer = ({ pr }) => (pr.Brain
   ? <span className="inline-flex items-center gap-1"><Brain className="size-3.5" /> brain decision #{pr.Brain.decision_id}</span>
   : <span className="inline-flex items-center gap-1"><Hand className="size-3.5" /> {pr.Holder?.account_id}</span>);
+// Whose words a pitch is: the coin's brain, or a holder who made the bid by hand.
+const pitchFrom = (pr, C) => (pr?.Brain ? `$${C}'s brain` : `a $${C} holder`);
 
 const TermCell = ({ label, children }) => (
   <span className="inline-block text-[13px] text-muted-foreground"><small className="block text-[11.5px]">{label}</small>{children}</span>
@@ -130,7 +132,7 @@ function Offer({ o }) {
           <TermCell label="round"><Num>{o.round}</Num></TermCell>
           <TermCell label="proposed by"><Proposer pr={o.proposer} /></TermCell>
         </div>
-        <Pitch who={`pitch from $${B}'s brain · an ad, not a fact`}>“{humanize(o.pitch)}”</Pitch>
+        <Pitch who={`pitch from ${pitchFrom(o.proposer, B)} · an ad, not a fact`}>“{humanize(o.pitch)}”</Pitch>
         {o.counter && <Pitch who={`counter from $${T}: ${fmtRate(o.counter.rate_ppm)}`}>“{humanize(o.counter.pitch)}”</Pitch>}
         {stance && <Pitch brain who={`what $${T}'s brain tells its holders`}>{humanize(stance)}</Pitch>}
         {veto === 0n && !refused && <VetoBar B={B} veto={veto} pct={0} mark={vetoMark} />}
@@ -178,7 +180,7 @@ function Tender({ coin, t }) {
       </div>
       <More label="Pitch and backing">
         <div className="text-[12.5px] text-muted-foreground"><Proposer pr={t.proposer} /> · <Ago ns={t.created_at} /></div>
-        <Pitch who={`pitch from $${C}'s brain`}>“{humanize(t.pitch)}”</Pitch>
+        <Pitch who={`pitch from ${pitchFrom(t.proposer, C)}`}>“{humanize(t.pitch)}”</Pitch>
         <div>
           <BarLabel left={<>${C} holders <Term k="backing" /> {fmtTokens(backing)}</>} right={`needs ${p.quorum_bps / 100}% of ${fmtTokens(bsupply)}`} />
           <Meter parts={[[pct(backing, bsupply), "bg-up"]]} mark={p.quorum_bps / 100} />
