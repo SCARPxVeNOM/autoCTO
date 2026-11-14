@@ -1,4 +1,4 @@
-// The arena's script, read from the chain: the latest takeover on the launchpad, told through the
+// The arena's script, read from the chain: the latest takeover a coin's brain started, told through the
 // two coins' own history logs. No React and no browser-only APIs, so scripts/record-arena.mjs can run
 // it to record web/data/arena-<network>.json, the copy the landing falls back to when the chain doesn't answer.
 
@@ -39,14 +39,24 @@ export function reader(rpc) {
 }
 
 /**
- * The latest takeover as a list of beats, plus every coin with its size before and after.
+ * The latest takeover a coin's brain started (or the latest of any kind, if every bid so far was made
+ * by hand) as a list of beats, plus every coin with its size before and after.
  * `coins` is list_coins (Live ones), `infos` their coin_info in the same order.
  * Returns null when no coin has absorbed another yet.
  */
 export async function readReplay(view, coins, infos, params) {
-  let last = null;
-  infos.forEach((w) => w.absorbed.forEach(([target, rec]) => { if (!last || BigInt(rec.at) > BigInt(last.rec.at)) last = { w, target, rec }; }));
-  if (!last) return null;
+  const takeovers = infos.flatMap((w) => w.absorbed.map(([target, rec]) => ({ w, target, rec })))
+    .sort((a, b) => (BigInt(b.rec.at) > BigInt(a.rec.at) ? 1 : -1));
+  if (!takeovers.length) return null;
+  // Who proposed the bid that went through, from the winner's own record of it.
+  const offers = {};
+  const byBrain = async ({ w, target }) => {
+    offers[w.account_id] ??= await view(w.account_id, "list_offers").catch(() => []);
+    return offers[w.account_id].some((o) => o.target === target && o.status === "Executed" && o.proposer?.Brain);
+  };
+  let last = null, brain = false;
+  for (const k of takeovers) if ((brain = await byBrain(k))) { last = k; break; }
+  last ??= takeovers[0];
   const { w, rec } = last;
   const t = infos.find((i) => i.account_id === last.target);
   if (!t) return null;
@@ -59,13 +69,13 @@ export async function readReplay(view, coins, infos, params) {
     const before = i === w ? Math.max(cap - taken, cap * 0.2) : i === t ? taken : cap;
     return { id: i.account_id, symbol: i.symbol, name: i.name, cap: i === t ? 0 : cap, before };
   });
-  return { winner: w.account_id, target: t.account_id, coins: all, beats: beats(w, t, hw, ht, params) };
+  return { winner: w.account_id, target: t.account_id, coins: all, beats: beats(w, t, hw, ht, params, brain) };
 }
 
 // Turns the two logs into beats, told around the one bid that went through. Each beat:
 // { kind, coin (who acts), text, quote?, by?, ...its numbers for the arena's readouts }. Repeated locks
-// and votes are told as one beat.
-function beats(w, t, hw, ht, params) {
+// and votes are told as one beat. `brain` says whether the winner's brain made the bid or a holder did.
+function beats(w, t, hw, ht, params, brain) {
   const W = `$${w.symbol}`, T = `$${t.symbol}`;
   const fee = params?.brain_fee ? fmtNear(Number(BigInt(params.brain_fee)) / YOCTO) : null;
   const at = (e) => BigInt(e.at);
@@ -90,7 +100,7 @@ function beats(w, t, hw, ht, params) {
   if (lock && (m = lock.text.match(/locked (\d+) tokens/))) {
     add(lock, { kind: "lock", coin: t.account_id, amount: tokens(m[1]), text: `A holder locks ${tokens(m[1])} ${T} before the bid. Only tokens locked before a bid can vote on it.` });
   }
-  const thought = lastBefore(hw, offerAt, (e) => e.event === "thought");
+  const thought = brain && lastBefore(hw, offerAt, (e) => e.event === "thought");
   if (thought) {
     const woke = lastBefore(hw, at(thought), (e) => e.event === "think");
     add(thought, { kind: "think", coin: w.account_id, by: `${W}'s brain`, quote: thought.text, fee: woke ? fee : null,
@@ -98,8 +108,8 @@ function beats(w, t, hw, ht, params) {
   }
   if ((m = offer.text.match(/at ([\d.]+) per token \(([+-]?\d+) bps vs fair\): "(.*)"$/s))) {
     const bps = Number(m[2]);
-    add(offer, { kind: "offer", coin: w.account_id, by: `${W}'s brain`, quote: m[3], rate: +m[1], bps,
-      text: `${W} bids for ${T}: ${(+m[1]).toFixed(4)} ${W} per ${T}, ${(Math.abs(bps) / 100).toFixed(1)}% ${bps >= 0 ? "over" : "under"} the fair rate.` });
+    add(offer, { kind: "offer", coin: w.account_id, by: brain ? `${W}'s brain` : `A ${W} holder`, quote: m[3], rate: +m[1], bps,
+      text: `${brain ? W : `A ${W} holder, by hand,`} bids for ${T}: ${(+m[1]).toFixed(4)} ${W} per ${T}, ${(Math.abs(bps) / 100).toFixed(1)}% ${bps >= 0 ? "over" : "under"} the fair rate.` });
   } else return [];
   const late = between(ht, offerAt, passedAt, (e) => e.event === "lock");
   if (late.length) {

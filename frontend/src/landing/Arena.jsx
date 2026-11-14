@@ -1,4 +1,4 @@
-// The live 3D arena at the top of the landing: the latest takeover on the launchpad, replayed from the
+// The live 3D arena at the top of the landing: the latest takeover a coin's brain started, replayed from the
 // chain. The page draws the words (labels, the brain's bubble, the beat's readout, the caption, the steps);
 // arena3d.js films the coins with three.js and moves the words over them. The arena is always dark.
 import { useEffect, useRef, useState } from "react";

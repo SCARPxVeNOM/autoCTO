@@ -1,0 +1,41 @@
+# Every push runs all 117 tests and the mutation run. rust-toolchain.toml pins the compiler;
+# the end-to-end tests use the wasm committed in res/ and download the NEAR sandbox themselves.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit tests (101)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p autocto-coin -p autocto-launchpad -p autocto-brain -p autocto-demo
+
+  e2e:
+    name: End-to-end in a NEAR sandbox (16)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p autocto-tests
+
+  mutants:
+    name: Mutation testing (34 rules broken on purpose)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: node scripts/mutants.mjs
