@@ -2,13 +2,14 @@
 
 <p align="center">
   <b>Mergers and acquisitions for memecoins, on NEAR.</b><br>
-  Each coin's AI makes an offer, the rival's AI haggles, holders vote, and the two coins merge.<br>
-  No team holds the keys, so nobody can rug.
+  A coin's AI bids to take over a rival coin, at no more than 30% above the fair price.<br>
+  The rival's holders vote with tokens locked before the bid: 10% of the supply must vote, and two thirds must say yes.<br>
+  If it passes, the rival's liquidity and treasury move into the buyer and its holders swap at the agreed rate. No one holds a key, so the rules can't change.
 </p>
 
 <p align="center">
   <a href="https://github.com/SCARPxVeNOM/killerCoins/actions/workflows/ci.yml"><img alt="CI: 117 tests and 34 mutants on every push" src="https://github.com/SCARPxVeNOM/killerCoins/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/SCARPxVeNOM/killerCoins/actions/workflows/verify.yml"><img alt="Verify testnet: the deployment matches this repo, checked daily" src="https://github.com/SCARPxVeNOM/killerCoins/actions/workflows/verify.yml/badge.svg"></a>
+  <a href="https://github.com/SCARPxVeNOM/killerCoins/actions/workflows/verify.yml"><img alt="Verify testnet: the deployment matches this repo, checked hourly" src="https://github.com/SCARPxVeNOM/killerCoins/actions/workflows/verify.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <a href="#live-on-testnet"><img alt="Live on NEAR testnet" src="https://img.shields.io/badge/NEAR_testnet-live-00c08b"></a>
 </p>
@@ -16,6 +17,7 @@
 <p align="center">
   <a href="https://killercoins.vercel.app"><b>Open the app</b></a> ·
   <a href="#check-it-in-one-minute">Check it in 1 min</a> ·
+  <a href="#hackathon-tracks">Tracks</a> ·
   <a href="#the-use-case">Use case</a> ·
   <a href="#the-mechanic-one-real-takeover">Mechanic</a> ·
   <a href="#try-a-takeover-in-60-seconds">Try it in 60 s</a> ·
@@ -36,10 +38,37 @@ Built for NEAR HACKATHON, track **Memecoins With Mechanics**, with entries for *
 
 | Do | See |
 |---|---|
+| Open **[killercoins.vercel.app/judges](https://killercoins.vercel.app/judges)** | Each track's asks next to what answers them, and 17 checks your browser runs against testnet and this repo: the takeover below, the refused attacks, zero keys, the code on chain and the AI signatures |
 | Open **[killercoins.vercel.app](https://killercoins.vercel.app)** and press the play button | The latest takeover a coin's AI started, replayed from the chain (today [PEPE's takeover of WOJAK](#the-mechanic-one-real-takeover)): a lock, PEPE's AI bids, a late vote the contract refuses, WOJAK's AI advises its holders, the vote, the merge and the swap |
 | `node scripts/verify.mjs` (Node 18 or newer, nothing to install, about 3 s) | Seven checks against testnet and this repo, ending `OK: 7 of 7 checks passed`: zero access keys; the code, the brain and the rules on chain are the ones in this repo; the latest AI answer's signature is valid |
 | `cargo test` | All 117 tests pass. [CI](https://github.com/SCARPxVeNOM/killerCoins/actions/workflows/ci.yml) runs them on every push, with the [34 mutants](#tests) |
 | [Try to break it](#try-to-break-it) | Eight ways to cheat, each with the contract's refusal and the transaction or test that shows it |
+
+## Hackathon tracks
+
+**Memecoins With Mechanics**, the track's prompt point by point:
+
+| The prompt asks for | In KillerCoins |
+|---|---|
+| An NEP-141 token with the mechanic in the contract, not in a backend somebody could switch off | Each coin is an NEP-141 contract ([`contracts/coin`](contracts/coin)) with its own bonding curve, locks, votes and takeovers. The keeper and the relayer are optional and call only methods anyone can call |
+| All parameters set at launch and readable by anyone, with no admin key that can change them | The rules are fixed when the launchpad is deployed ([`params/testnet.json`](params/testnet.json), [`RULES.md`](RULES.md)) and anyone can read them with `get_params`. No owner, no setters, zero access keys; `node scripts/verify.mjs` checks the keys and that the values on chain equal the file |
+| Sybil resistance good enough for a demo, with its limits written plainly | Votes count tokens locked before the bid, not accounts, so extra accounts or a late buy add no weight ([refused on testnet](#try-to-break-it)). A bid by hand needs 1% of the buyer's supply locked in an earlier block. Limits: a holder who bought before the bid votes with all of it, and where sealed votes are on (not on testnet), one holder can split tokens across accounts and vote both ways |
+| A page with the current state and a log of every mint and burn | The app's Market (price and supply) and Brains & feed (each coin's on-chain history, which keeps the last 64 entries). The full log is the chain's: every mint and burn emits a standard `ft_mint` or `ft_burn` event |
+| 60 days simulated first, with supply over time under a few scenarios | [`sim/simulate.mjs`](sim/simulate.mjs): five 60-day scenarios and a sweep of 27 settings, which chose the rules ([`sim/REPORT.md`](sim/REPORT.md), [Where the numbers come from](#where-the-numbers-come-from)) |
+
+**AI Swarms.** Each coin is its own sub-account of the launchpad, with its own brain. Brains bid, counter and advise their holders through contract calls; rules mode runs the whole market with no model calls.
+
+**AI Security & Defense.** The AI holds no key and can only propose. The contract clamps every number and checks the model's signature, and the brain runs in attested hardware ([Security](#security)).
+
+The judging criteria NEAR hackathons use, and where to look:
+
+| Criterion | Where to look |
+|---|---|
+| Technical implementation | Two Rust contracts (near-sdk 5.30) and a brain run in Intel TDX; the coin checks NEAR AI's signature on chain; 117 tests and 34 mutants in [CI](https://github.com/SCARPxVeNOM/killerCoins/actions/workflows/ci.yml) ([Proof](#proof)) |
+| Design | The [app](https://killercoins.vercel.app/app.html) needs no wallet (**Try as guest**) and reads the chain directly; the landing replays the latest AI takeover from the chain; the Rules page states every limit in plain words |
+| Impact | A fading memecoin gets an exit: its holders swap into a coin that still trades, at a rate they voted for ([The use case](#the-use-case)). On testnet so far the voters are ours or guests, and one outside account launched a coin ([Limitations](#limitations)) |
+| Originality | Memecoins that take each other over: one coin's AI bids, the rival's AI advises its holders, the holders vote and the contract merges the two. The AIs negotiate but hold no key |
+| Sustainability | No owner, no keys and no server: the site is static, the keeper and relayer are optional and anyone can run them, and brain fees are paid by the caller or a capped treasury. Not audited; known gaps under [Limitations](#limitations) |
 
 ## The use case
 
@@ -145,7 +174,7 @@ node scripts/mutants.mjs                                      # ends with "34 of
 
 [`app.html#verify`](https://killercoins.vercel.app/app.html#verify) runs seven checks in your browser, against the chain and this repo, with no server of ours in between: the launchpad and every coin have 0 access keys; the code hashes on chain equal the sha256 of `res/autocto_launchpad.wasm` and `res/autocto_coin.wasm` downloaded from GitHub at the deployed commit; the pinned brain hash equals `res/autocto-brain.wasm`; `get_params` equals `params/testnet.json`; and the latest AI answer's signature is valid, with its key in a fresh NEAR AI attestation report. The page does not check the Intel and NVIDIA hardware quotes; it links to the verifiers that do.
 
-The same seven checks run in a terminal, with nothing to install: `node scripts/verify.mjs` prints PASS or FAIL for each and exits 0 only if all pass. It recovers the AI answer's signer itself (keccak-256 and secp256k1, written out in the script) rather than trusting the contract's `signed_by`. A [daily workflow](.github/workflows/verify.yml) runs it against testnet.
+The same seven checks run in a terminal, with nothing to install: `node scripts/verify.mjs` prints PASS or FAIL for each and exits 0 only if all pass. It recovers the AI answer's signer itself (keccak-256 and secp256k1, written out in the script) rather than trusting the contract's `signed_by`. An [hourly workflow](.github/workflows/verify.yml) runs it against testnet and checks that the site answers.
 
 ### Signed AI answers and hardware attestation
 
@@ -296,7 +325,7 @@ Four earlier launchpads (`v4`, `v3`, `v2`, `autocto`) are locked and still on ch
 | `sim/` | the simulation and parameter sweep |
 | `frontend/` → `web/` | the app's source (React, Vite) and its committed build; `web/api/guest.js` is the optional guest-account function |
 | `res/`, `params/`, `proofs/` | the wasm built from this commit (`v5` on testnet runs these files, deployed from `d719819`), the rule sets, and OutLayer evidence bundles |
-| `.github/workflows/` | `ci.yml` (the 117 tests and the mutants, on every push) and `verify.yml` (`scripts/verify.mjs` against testnet, daily) |
+| `.github/workflows/` | `ci.yml` (the 117 tests and the mutants, on every push) and `verify.yml` (`scripts/verify.mjs` against testnet and a check that the site answers, hourly) |
 | `scripts/` | `build.sh`, `mutants.mjs`, `verify.mjs` (the Verify page's seven checks, from a terminal), `record-arena.mjs` (records the landing arena's replay), `lettering.py` (renders the 3D headline and wordmark in Blender from the layout in `lettering.json`), and `arena-assets.py` (builds the arena's coin, brain and light pieces in Blender as `frontend/src/assets/arena.glb`) |
 
 ## Limitations
@@ -307,12 +336,6 @@ Four earlier launchpads (`v4`, `v3`, `v2`, `autocto`) are locked and still on ch
 - **Replay is partial.** The input hash pins what the contract gave the brain, but the brain also reads rival coins live over RPC, so re-running a scouting decision can differ.
 - **Known gaps.** A sealed voter who splits tokens across two accounts can commit both ways and reveal one side late. Finished bids and tenders are never pruned, so after several hundred records a coin's `think()` could run out of gas. Storage for votes and decisions is paid by the coin. A long vote can fail at execution if prices drift past the premium cap. A paid `think()` that OutLayer refuses outright leaves its fee with the coin: the contract can't tell whether OutLayer already refunded the payer, so a refund from the coin could pay twice.
 - **Not built yet.** Graduation from the bonding curve to a DEX, swaps on Rhea, enclave-counted votes and sealed bids, and cross-chain takeovers.
-
-## Hackathon tracks
-
-- **Memecoins With Mechanics** (NEP-141, token mechanics). The mechanic is the takeover, enforced in the coin contract, not a backend. No admin key can change a rule later: a coin has zero keys and no setters. Every mint and burn is a NEP-297 event.
-- **AI Swarms** (multi-agent systems, sub-accounts). Each coin is its own sub-account of the launchpad with its own brain. Brains bid, counter and advise their holders through contract calls; rules mode runs the whole market with no model calls.
-- **AI Security & Defense** (TEE attestation, function-call keys). The AI holds no key and can only propose; the contract clamps every number and checks the model's signature, and the brain runs in attested hardware. The demo shows a prompt-injected pitch being stopped.
 
 ## License
 

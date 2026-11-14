@@ -32,9 +32,10 @@ async function repoSha(path) {
 const SKIP_REPO = { ok: null, detail: "This network has no pinned commit to compare with (the local demo is built from your own checkout). Open the testnet to run this check." };
 
 /** Each check returns { ok: true | false | null (not applicable), detail }. `group` is what it proves. */
-const GROUPS = ["Nobody controls it", "It runs the published code", "The AI's answers are genuine"];
-const CHECKS = [
+export const GROUPS = ["Nobody controls it", "It runs the published code", "The AI's answers are genuine"];
+export const CHECKS = [
   {
+    id: "launchpad-keys",
     group: 0,
     title: "Nobody owns the launchpad",
     why: "An account with no access keys cannot be signed for by anyone, so its code and rules can never change.",
@@ -47,6 +48,7 @@ const CHECKS = [
     },
   },
   {
+    id: "launchpad-code",
     group: 1,
     title: "The launchpad runs the code in the repo",
     why: "The page downloads the contract file from GitHub, hashes it, and compares it with the hash of the code on chain.",
@@ -57,6 +59,7 @@ const CHECKS = [
     },
   },
   {
+    id: "coin-code",
     group: 1,
     title: "Every coin runs the same code, and it is the code in the repo",
     why: "Coins are created by the launchpad from one fixed contract. No coin can be a special case.",
@@ -70,6 +73,7 @@ const CHECKS = [
     },
   },
   {
+    id: "coin-keys",
     group: 0,
     title: "No coin has a key",
     why: "Not the launchpad, not the person who launched it, not us: no one can move a coin's funds or mint its tokens by hand.",
@@ -81,6 +85,7 @@ const CHECKS = [
     },
   },
   {
+    id: "brain-pin",
     group: 1,
     title: "The brain cannot be swapped",
     why: "The launchpad stores the sha256 of the brain program. OutLayer refuses to run anything else for these coins.",
@@ -94,6 +99,7 @@ const CHECKS = [
     },
   },
   {
+    id: "params",
     group: 1,
     title: "The rules are the published rules",
     why: "The limits on price, votes and brain spending that the launchpad enforces are the ones in the repo's params file.",
@@ -106,6 +112,7 @@ const CHECKS = [
     },
   },
   {
+    id: "signature",
     group: 2,
     title: "The latest model answer is signed by its enclave",
     why: "In model mode the answer carries NEAR AI Cloud's signature. The page recovers the signer and looks the key up in a fresh attestation report.",
@@ -124,64 +131,80 @@ const CHECKS = [
 ];
 
 // [icon, tone, label] for a passed, failed, not applicable and still running check.
-const STATUS = {
+export const STATUS = {
   true: [Check, "up", "passed"],
   false: [CircleAlert, "down", "failed"],
   null: [Minus, "muted", "not applicable"],
   wait: [LoaderCircle, "brand", "checking"],
 };
-const DISC = { up: "bg-up/15 text-up", down: "bg-down/15 text-down", muted: "bg-muted text-muted-foreground", brand: "bg-primary/15 text-primary" };
+export const DISC = { up: "bg-up/15 text-up", down: "bg-down/15 text-down", muted: "bg-muted text-muted-foreground", brand: "bg-primary/15 text-primary" };
 
-function CheckRow({ c, r }) {
+export function CheckRow({ c, r }) {
   const [Icon, tone, label] = STATUS[r ? String(r.ok) : "wait"];
   return (
-    <Card className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3.5 gap-y-2.5 rounded-2xl p-4 shadow-none sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+    <Card id={c.id && `check-${c.id}`} className="grid scroll-mt-32 grid-cols-[auto_minmax(0,1fr)] gap-x-3.5 gap-y-2.5 rounded-2xl p-4 shadow-none sm:grid-cols-[auto_minmax(0,1fr)_auto]">
       <span className={cn("grid size-8 place-items-center rounded-full", DISC[tone])}><Icon className={cn("size-4", !r && "animate-spin")} strokeWidth={r?.ok ? 3 : 2} /></span>
       <div className="grid gap-1">
         <b className="font-display text-[15.5px] font-semibold leading-snug">{c.title}</b>
         <p className="text-[13.5px] text-muted-foreground">{c.why}</p>
       </div>
       <Pill tone={tone} className="self-start max-sm:col-start-2 max-sm:justify-self-start">{label}</Pill>
-      <p className="col-start-2 break-words rounded-lg bg-muted/60 px-2.5 py-1.5 font-mono text-[12px] text-muted-foreground sm:col-span-2">{r ? r.detail : "asking the chain…"}</p>
+      <p className="col-start-2 break-words rounded-lg bg-muted/60 px-2.5 py-1.5 font-mono text-[12px] text-muted-foreground sm:col-span-2">
+        {r ? r.detail : "asking the chain…"}
+        {c.href && <> · <a className="text-primary underline underline-offset-2" href={c.href} target="_blank" rel="noopener">{c.hrefLabel || "see it"}</a></>}
+      </p>
+    </Card>
+  );
+}
+
+/** Runs every check at once; `res[i]` is check i's answer, `run` starts them all again. */
+export function useChecks(checks) {
+  const [res, setRes] = useState({});
+  const [at, setAt] = useState(null);
+  const run = useCallback(() => {
+    setRes({}); setAt(null);
+    let left = checks.length;
+    checks.forEach((c, i) => c.run().catch((e) => ({ ok: null, detail: `could not check: ${e.message}` })).then((r) => {
+      setRes((s) => ({ ...s, [i]: r }));
+      if (--left === 0) setAt(new Date());
+    }));
+  }, [checks]);
+  useEffect(run, [run]);
+  return { res, at, run, all: Object.keys(res).length === checks.length };
+}
+
+/** The headline card: how many checks passed, against what, and when. */
+export function Tally({ total, res, at }) {
+  const done = Object.values(res), all = done.length === total;
+  const passed = done.filter((r) => r.ok === true).length, failed = done.filter((r) => r.ok === false).length, skipped = done.filter((r) => r.ok === null).length;
+  const [Big, tone] = !all ? [LoaderCircle, "brand"] : failed ? [CircleAlert, "down"] : [ShieldCheck, "up"];
+  const headline = !all ? `Checking… ${done.length} of ${total}`
+    : failed ? `${failed} of ${total} checks failed`
+    : skipped ? `${passed} checks passed, ${skipped} not applicable here` : `All ${passed} checks passed`;
+  const against = cfg.commit ? <>the chain and the public repo at <code className="font-mono text-foreground">{cfg.commit.slice(0, 7)}</code></> : "the chain";
+  return (
+    <Card className={cn("gap-3.5 rounded-2xl p-5 shadow-none", all && (failed ? "border-down/40 bg-down/[0.05]" : "border-up/40 bg-up/[0.05]"))} role="status">
+      <div className="flex items-center gap-4">
+        <span className={cn("grid size-12 flex-none place-items-center rounded-full", DISC[tone])}><Big className={cn("size-6", !all && "animate-spin")} /></span>
+        <div className="grid gap-0.5">
+          <b className="font-display text-xl font-semibold">{headline}</b>
+          <span className="text-[13.5px] text-muted-foreground">{at ? <>Checked at {at.toLocaleTimeString()} against {against}.</> : <>Asking {against}…</>}</span>
+        </div>
+      </div>
+      <Progress value={(done.length / total) * 100} className={cn("h-1.5", all && (failed ? "[&>*]:bg-down" : "[&>*]:bg-up"))} />
     </Card>
   );
 }
 
 export default function Verify() {
-  const [res, setRes] = useState({});
-  const [at, setAt] = useState(null);
-  const run = useCallback(() => {
-    setRes({}); setAt(null);
-    let left = CHECKS.length;
-    CHECKS.forEach((c, i) => c.run().catch((e) => ({ ok: null, detail: `could not check: ${e.message}` })).then((r) => {
-      setRes((s) => ({ ...s, [i]: r }));
-      if (--left === 0) setAt(new Date());
-    }));
-  }, []);
-  useEffect(run, [run]);
-  const done = Object.values(res), all = done.length === CHECKS.length;
-  const passed = done.filter((r) => r.ok === true).length, failed = done.filter((r) => r.ok === false).length, skipped = done.filter((r) => r.ok === null).length;
-  const [Big, tone] = !all ? [LoaderCircle, "brand"] : failed ? [CircleAlert, "down"] : [ShieldCheck, "up"];
-  const headline = !all ? `Checking… ${done.length} of ${CHECKS.length}`
-    : failed ? `${failed} of ${CHECKS.length} checks failed`
-    : skipped ? `${passed} checks passed, ${skipped} not applicable here` : `All ${passed} checks passed`;
-  const against = cfg.commit ? <>the chain and the public repo at <code className="font-mono text-foreground">{cfg.commit.slice(0, 7)}</code></> : "the chain";
+  const { res, at, run, all } = useChecks(CHECKS);
   return (
     <>
       <PageHead icon={ShieldCheck} title="Verify" lede="Don't take our word for it. Your browser checks each claim below against the chain and the public code, right now. No server of ours is involved.">
         <Button variant="outline" className="rounded-full" onClick={run} disabled={!all}><RotateCw /> Run again</Button>
       </PageHead>
       <section id="verify" className="grid gap-6 px-6 pb-8 pt-6 max-sm:px-4">
-        <Card className={cn("gap-3.5 rounded-2xl p-5 shadow-none", all && (failed ? "border-down/40 bg-down/[0.05]" : "border-up/40 bg-up/[0.05]"))} role="status">
-          <div className="flex items-center gap-4">
-            <span className={cn("grid size-12 flex-none place-items-center rounded-full", DISC[tone])}><Big className={cn("size-6", !all && "animate-spin")} /></span>
-            <div className="grid gap-0.5">
-              <b className="font-display text-xl font-semibold">{headline}</b>
-              <span className="text-[13.5px] text-muted-foreground">{at ? <>Checked at {at.toLocaleTimeString()} against {against}.</> : <>Asking {against}…</>}</span>
-            </div>
-          </div>
-          <Progress value={(done.length / CHECKS.length) * 100} className={cn("h-1.5", all && (failed ? "[&>*]:bg-down" : "[&>*]:bg-up"))} />
-        </Card>
+        <Tally total={CHECKS.length} res={res} at={at} />
         {GROUPS.map((g, k) => (
           <div key={g} className="grid gap-2.5">
             <h2 className="font-mono text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{g}</h2>

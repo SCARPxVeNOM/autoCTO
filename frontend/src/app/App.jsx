@@ -1,6 +1,6 @@
 // The app's shell: sidebar, top bar, one view at a time (picked by the address hash) and the dialogs.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Brain, CircleHelp, Copy, LayoutDashboard, LogOut, Moon, Rocket, Scale, ShieldCheck, Sun, SunMoon, Swords, UserRound, Wallet } from "lucide-react";
+import { Brain, CircleHelp, Copy, Gavel, LayoutDashboard, LogOut, Moon, Rocket, Scale, ShieldCheck, Sun, SunMoon, Swords, UserRound, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,11 +23,12 @@ import Brains from "./Brains";
 import Launch from "./Launch";
 import Rules from "./Rules";
 import Verify from "./Verify";
+import Judges from "./Judges";
 import { AutoPanel } from "./Autoplay";
 
 // Which view each address hash belongs to.
-const VIEW_OF = { market: "market", guide: "market", trade: "market", deals: "deals", brains: "brains", feed: "brains", launch: "launch", rules: "rules", sim: "rules", verify: "verify" };
-const VIEWS = { market: Market, deals: Deals, brains: Brains, launch: Launch, rules: Rules, verify: Verify };
+const VIEW_OF = { market: "market", guide: "market", trade: "market", deals: "deals", brains: "brains", feed: "brains", launch: "launch", rules: "rules", sim: "rules", verify: "verify", judges: "judges" };
+const VIEWS = { market: Market, deals: Deals, brains: Brains, launch: Launch, rules: Rules, verify: Verify, judges: Judges };
 const hashId = () => location.hash.slice(1);
 // "What is KillerCoins" keeps the network the visitor is on.
 const HOME = `index.html${location.search}`;
@@ -187,7 +188,7 @@ export default function App() {
   const links = [
     ["Trade"], ["#market", LayoutDashboard, "Market", "market"], ["#deals", Swords, "Deals", "deals", deals], ["#brains", Brain, "Brains & feed", "brains"],
     ["Create"], ["#launch", Rocket, "Launch a coin", "launch"],
-    ["Trust"], ["#rules", Scale, "Rules", "rules"], ["#verify", ShieldCheck, "Verify", "verify"],
+    ["Trust"], ["#rules", Scale, "Rules", "rules"], ["#verify", ShieldCheck, "Verify", "verify"], ["#judges", Gavel, "Judges", "judges"],
   ];
 
   return (

@@ -1,12 +1,13 @@
 # Checks the live testnet deployment against this repo: zero keys, code and brain hashes, rules,
-# and the latest signed AI answer. Read-only. Runs on every push and once a day.
+# and the latest signed AI answer; then that the site answers. Read-only. Runs on every push and
+# every hour.
 name: Verify testnet
 
 on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 6 * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -20,3 +21,10 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/verify.mjs
+      # Retries cover a push whose site deployment is still under way.
+      - name: The site answers
+        run: |
+          for page in "" app.html judges/; do
+            curl -fsS -o /dev/null --retry 8 --retry-delay 30 --retry-all-errors "https://killercoins.vercel.app/$page"
+            echo "https://killercoins.vercel.app/$page answers"
+          done
